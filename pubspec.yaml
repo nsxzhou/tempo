@@ -1,0 +1,68 @@
+name: tempo
+description: "Tempo — 智能待办 App + 思源笔记集成"
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.11.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  table_calendar: ^3.1.2
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # Routing
+  go_router: ^14.8.1
+
+  # Local Database
+  drift: ^2.22.1
+  sqlite3_flutter_libs: ^0.5.28
+
+  # Network
+  dio: ^5.7.0
+  supabase_flutter: ^2.8.3
+
+  # Utilities
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+  uuid: ^4.5.1
+  intl: ^0.19.0
+  shared_preferences: ^2.3.4
+  flutter_local_notifications: ^18.0.1
+  path: ^1.9.0
+  path_provider: ^2.1.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+  # Code Generation
+  build_runner: ^2.4.14
+  drift_dev: ^2.22.1
+  freezed: ^2.5.8
+  json_serializable: ^6.9.3
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
+
+  # fonts:
+  #   - family: Geist
+  #     fonts:
+  #       - asset: fonts/Geist-Regular.ttf
+  #       - asset: fonts/Geist-Medium.ttf
+  #         weight: 500
+  #       - asset: fonts/Geist-SemiBold.ttf
+  #         weight: 600

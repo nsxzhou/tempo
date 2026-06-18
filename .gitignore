@@ -6,3 +6,32 @@
 .qoder
 .trellis
 AGENTS.md
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+*.mocks.dart
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# Platform
+ios/Flutter/.last_build_id
+ios/.symlinks/
+ios/Pods/
+android/.gradle/
+android/local.properties
+android/key.properties
+*.jks
+
+# OS
+.DS_Store
+Thumbs.db

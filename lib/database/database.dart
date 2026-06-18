@@ -18,7 +18,6 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   /// 测试用构造函数（可注入自定义 executor）。
-  @visibleForTesting
   AppDatabase.forTesting(super.e);
 
   @override

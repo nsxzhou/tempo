@@ -478,6 +478,7 @@
     <li><span class="label label-chg">扩充</span> 风险章节：新增市场/技能/成本/竞品/跨平台 5 个盲点风险</li>
     <li><span class="label label-chg">重排</span> 分期路线图：Phase 1(6-8周) → 1.5(2-3周反馈) → 2 → 3 → 4</li>
     <li><span class="label label-new">新增</span> Phase 1 App 内反馈入口 + 简单 onboarding</li>
+    <li><span class="label label-move">调整</span> 下一步优先验证语音创建任务技术 Spike；计划页 / AI 排期暂不进入近期实现</li>
   </ul>
 </div>
 
@@ -517,7 +518,7 @@
       <tr>
         <td><span class="tag tag-orange">重要</span></td>
         <td>H4：火山引擎 ASR 真实环境识别准确率达标</td>
-        <td>Phase 1 启动时技术 Spike（1-2 天）</td>
+        <td>下一步技术 Spike（Flutter 按住说话 → 后端代理 → 本地创建）</td>
       </tr>
       <tr>
         <td><span class="tag tag-orange">重要</span></td>
@@ -682,7 +683,7 @@
       <tr><td>精力曲线设置页</td><td><span class="tag tag-blue">→ 简化为默认配置</span></td><td>Phase 2 用默认模式（上高/中中/下低），手动设置在验证通过后做</td></tr>
       <tr><td>每日摘要推送</td><td><span class="tag tag-red">砍掉</span></td><td>验证排期质量前，推送不准确的排期损害用户信任</td></tr>
       <tr><td>完整离线优先</td><td><span class="tag tag-blue">→ 简化为本地缓存+在线优先</span></td><td>保留 Drift 本地缓存，完整的冲突解决逻辑延后到 Phase 2</td></tr>
-      <tr><td>语音创建任务</td><td><span class="tag tag-orange">→ Phase 2</span></td><td>在验证"用户是否愿意用 App"之前，语音入口 ROI 不确定</td></tr>
+      <tr><td>语音创建任务</td><td><span class="tag tag-accent">→ 下一步 Spike</span></td><td>不做完整语音产品化，先验证火山 ASR + 豆包解析 + 无感创建是否可行</td></tr>
       <tr><td>思源双向同步 & Widget</td><td><span class="tag tag-purple">→ Phase 3</span></td><td>单向同步即足够验证"笔记↔任务"价值假设</td></tr>
       <tr><td>子任务 & 标签 & 重复规则</td><td><span class="tag tag-orange">→ Phase 2</span></td><td>基础 CRUD 已够 MVP 验证，高级组织功能延后</td></tr>
     </tbody>
@@ -691,7 +692,7 @@
   <h3>P1 — Phase 2 AI 差异化（Phase 1 验证通过后启动）</h3>
   <div style="margin: 8px 0;">
     <span class="tag tag-purple">AI 智能排期</span>
-    <span class="tag tag-purple">语音创建任务</span>
+    <span class="tag tag-purple">语音创建产品化（Spike 通过后）</span>
     <span class="tag tag-purple">日视图 + 拖拽排期</span>
     <span class="tag tag-purple">系统日历订阅</span>
     <span class="tag tag-purple">精力曲线（默认配置版）</span>
@@ -753,11 +754,11 @@
       </div>
       <div class="arch-box">
         <strong>LLM API</strong>
-        <small>Phase 2 接入</small>
+        <small>语音 Spike 用于文本解析</small>
       </div>
       <div class="arch-box" style="background: var(--red-light); border-color: #fecaca;">
         <strong>火山引擎 ASR</strong>
-        <small>Phase 2 接入</small>
+        <small>语音 Spike 接入</small>
       </div>
     </div>
   </div>
@@ -856,7 +857,7 @@
   <h2>AI 排期设计（Phase 2 交付，Phase 0 前置验证）</h2>
 
   <div class="highlight-box purple">
-    <strong>⚠️ 前置条件：</strong>AI 排期不进入 Phase 1 代码开发。Phase 0 先通过 Wizard-of-Oz 实验（见第 10 节）验证"用户真的想要 AI 排期"，Phase 1.5 根据用户反馈决定是否启动 Phase 2 开发。
+    <strong>⚠️ 前置条件：</strong>AI 排期不进入 Phase 1 代码开发，计划页也不进入近期实现。当前唯一前置 AI 工程验证是语音创建任务 Spike；AI 排期保留为后续独立验证项。
   </div>
 
   <h3>排期算法流程（设计保留，Phase 2 实现）</h3>
@@ -886,7 +887,25 @@
   <span class="section-number">07</span>
   <h2>分期路线图（v2.0 重构）</h2>
   <div class="lead">
-    相比 v1.1，新增 Phase 0（零代码验证）和 Phase 1.5（反馈期），Phase 1 范围收窄约 30%。
+    相比 v1.1，新增 Phase 0（零代码验证）和 Phase 1.5（反馈期），Phase 1 范围收窄约 30%。当前执行顺序调整为：先完成语音创建任务技术 Spike，计划页 / AI 排期暂不进入近期实现。
+  </div>
+
+  <div class="phase pre-dev">
+    <div class="phase-title">Next Spike — AI 语音创建任务技术验证</div>
+    <div class="phase-duration">预估 2-4 天，技术 Spike</div>
+    <div class="card" style="margin-top: 8px;">
+      <ul class="feature-list">
+        <li>Flutter App：按住麦克风录音，松手提交，滑开取消</li>
+        <li>后端代理：App 不存密钥，由 Supabase Edge Function 调火山 ASR + 豆包文本模型</li>
+        <li>LLM 解析核心字段：标题、描述、截止时间、优先级、置信度、原始转写</li>
+        <li>无感创建：高置信度自动写入本地 Drift，低置信度进入可编辑草稿</li>
+        <li>5 秒撤回：自动创建后可撤销，避免误识别污染任务库</li>
+      </ul>
+      <div style="margin-top: 12px;">
+        <span class="tag tag-accent">近期唯一 AI 工程验证</span>
+        <span class="tag tag-blue">计划页暂缓</span>
+      </div>
+    </div>
   </div>
 
   <div class="phase pre-dev">
@@ -956,9 +975,8 @@
         <li>AI 日计划排期（精力曲线默认配置 + 日历空闲）</li>
         <li>日视图时间线 + 拖拽排期</li>
         <li>系统日历订阅（iOS/Android）</li>
-        <li>火山引擎豆包 ASR 流式语音识别</li>
-        <li>悬浮麦克风 FAB（Push-to-talk）+ 实时文字展示</li>
-        <li>语音 → NLP 自动创建任务 + 5 秒撤回</li>
+        <li>语音创建产品化：基于 Spike 结果决定是否做流式字幕、快捷入口和使用率优化</li>
+        <li>计划页验证：AI 日计划排期需另行验证，不作为近期实现范围</li>
         <li>子任务、标签、重复规则</li>
       </ul>
       <div style="margin-top: 12px;">
@@ -1038,7 +1056,7 @@
     <div class="highlight-box red">
       <strong>🔴 单人技能广度风险</strong>
       项目需同时精通 Flutter + Supabase + TypeScript（思源插件）+ LLM Prompt 工程 + 火山引擎 ASR。单人同时覆盖 5 个领域，容易每个模块都做 60 分。<br>
-      应对：Phase 1 砍掉 LLM 和 ASR 两个领域，专注 Flutter + Supabase + TypeScript 三个核心栈。
+      应对：Phase 1 不做完整 LLM / ASR 产品化；仅把语音创建任务作为短周期技术 Spike，验证通过后再决定是否产品化。
     </div>
     <div class="highlight-box orange">
       <strong>🟠 LLM API 成本随使用增长</strong>
@@ -1058,7 +1076,7 @@
     <div class="highlight-box blue">
       <strong>🟡 火山引擎 ASR 网络依赖 + 无 Flutter SDK</strong>
       流式识别需稳定网络；可能需通过 platform channel 或 WebSocket 直连。<br>
-      应对：Phase 2 启动时先做 1-2 天技术 Spike 验证 WebSocket 对接可行性。
+      应对：下一步先做 Flutter 按住说话 + Supabase Edge Function 代理 Spike；真实凭据只放后端，App 不直连火山或豆包。
     </div>
   </div>
 </div>
@@ -1092,6 +1110,17 @@
         <td>可触达用户 ≥500 人</td>
         <td><200 人 → 重新评估产品形态（纯插件？）</td>
       </tr>
+    </tbody>
+  </table>
+
+  <h3>Next Spike 验收指标（语音创建任务）</h3>
+  <table>
+    <thead><tr><th>指标</th><th>目标</th><th>度量方式</th></tr></thead>
+    <tbody>
+      <tr><td>核心字段正确率</td><td>10 条中文真实口述任务中 ≥8 条 title / due_date / priority 正确</td><td>手工验收：对照口述任务意图与创建结果</td></tr>
+      <tr><td>创建延迟</td><td>松手到任务出现在列表 ≤5 秒</td><td>Flutter 端计时：录音结束 → 本地 Drift 插入完成</td></tr>
+      <tr><td>误识别保护</td><td>高置信度自动创建并提供 5 秒撤回；低置信度进入草稿确认</td><td>Widget 测试 + 手工验证</td></tr>
+      <tr><td>密钥边界</td><td>App 不包含火山 / 豆包密钥</td><td>代码审查：仅 Edge Function 读取环境变量</td></tr>
     </tbody>
   </table>
 
@@ -1303,7 +1332,7 @@
 <!-- ==================== FOOTER ==================== -->
 <div class="doc-footer">
   <p>Tempo MVP 实验设计 · v2.0 · 2026-06-18</p>
-  <p style="margin-top: 4px;">v2.0 基于 OPC MVP 实验设计方法论全面重构。核心变化：新增 Phase 0 零代码验证、收窄 Phase 1 范围约 30%、补充假设风险矩阵、失败标准与 Pivot 方向、用户获取策略。</p>
+  <p style="margin-top: 4px;">v2.0 基于 OPC MVP 实验设计方法论全面重构。当前执行调整：近期先做语音创建任务技术 Spike，计划页 / AI 排期暂缓；Phase 0、Phase 1.5 与后续路线仍保留为方向验证框架。</p>
   <p style="margin-top: 8px; font-size: 11px; color: var(--accent);">审查方：OPC 一人公司专家团 · MVP 实验设计师 验真</p>
 </div>
 

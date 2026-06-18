@@ -37,3 +37,11 @@ android/key.properties
 # OS
 .DS_Store
 Thumbs.db
+
+# Secrets — never commit
+.env
+.env.*.local
+
+# Supabase CLI runtime cache
+supabase/.temp
+supabase/.branches

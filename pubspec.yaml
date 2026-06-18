@@ -29,6 +29,7 @@ dependencies:
   # Network
   dio: ^5.7.0
   supabase_flutter: ^2.8.3
+  flutter_dotenv: ^5.2.1
 
   # Utilities
   freezed_annotation: ^2.4.4
@@ -62,6 +63,7 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    - .env
 
   # fonts:
   #   - family: Geist

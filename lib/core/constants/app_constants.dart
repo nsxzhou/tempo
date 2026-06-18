@@ -1,5 +1,7 @@
 // 应用级常量
 
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 class AppConstants {
   AppConstants._();
 
@@ -40,20 +42,25 @@ class AppConstants {
   static const int defaultPageSize = 20;
 
   // ── Supabase 配置 ──
-  /// Supabase 项目 URL。
-  /// 部署时需替换为实际项目 URL，或通过 --dart-define 注入。
-  static const String supabaseUrl = String.fromEnvironment(
-    'SUPABASE_URL',
-    defaultValue: 'http://127.0.0.1:54321',
-  );
+  // 解析顺序:运行时 dart-define > .env > 本地 supabase start 兜底。
+  // 字段必须为 getter,无法保留 const,因为 dotenv 在启动期才可读。
+  static const String _localSupabaseUrl = 'http://127.0.0.1:54321';
+  static const String _localAnonKey =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
 
-  /// Supabase Anon Key（公开密钥，非 service role key）。
-  /// 部署时需替换为实际项目 anon key，或通过 --dart-define 注入。
-  static const String supabaseAnonKey = String.fromEnvironment(
-    'SUPABASE_ANON_KEY',
-    defaultValue:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0',
-  );
+  /// Supabase 项目 URL。
+  static String get supabaseUrl => const String.fromEnvironment(
+        'SUPABASE_URL',
+      ).isNotEmpty
+      ? const String.fromEnvironment('SUPABASE_URL')
+      : (dotenv.env['SUPABASE_URL'] ?? _localSupabaseUrl);
+
+  /// Supabase Anon Key(公开密钥,非 service_role key)。
+  static String get supabaseAnonKey => const String.fromEnvironment(
+        'SUPABASE_ANON_KEY',
+      ).isNotEmpty
+      ? const String.fromEnvironment('SUPABASE_ANON_KEY')
+      : (dotenv.env['SUPABASE_ANON_KEY'] ?? _localAnonKey);
 
   // ── Deep Link ──
   /// Custom URL scheme（方案 B 降级，公开测试前迁移到 Universal Links / App Links）。
@@ -62,16 +69,20 @@ class AppConstants {
 
   // ── Edge Function 端点 ──
   /// parse-task 统一解析端点（语音 + 文本共用）。
-  static const String parseTaskEndpoint = String.fromEnvironment(
-    'TEMPO_PARSE_TASK_ENDPOINT',
-    defaultValue: 'http://127.0.0.1:54321/functions/v1/parse-task',
-  );
+  static String get parseTaskEndpoint => const String.fromEnvironment(
+        'TEMPO_PARSE_TASK_ENDPOINT',
+      ).isNotEmpty
+      ? const String.fromEnvironment('TEMPO_PARSE_TASK_ENDPOINT')
+      : (dotenv.env['TEMPO_PARSE_TASK_ENDPOINT'] ??
+          'http://127.0.0.1:54321/functions/v1/parse-task');
 
   /// siyuan-pairing 配对码交换端点。
-  static const String siyuanPairingEndpoint = String.fromEnvironment(
-    'TEMPO_SIYUAN_PAIRING_ENDPOINT',
-    defaultValue: 'http://127.0.0.1:54321/functions/v1/siyuan-pairing',
-  );
+  static String get siyuanPairingEndpoint => const String.fromEnvironment(
+        'TEMPO_SIYUAN_PAIRING_ENDPOINT',
+      ).isNotEmpty
+      ? const String.fromEnvironment('TEMPO_SIYUAN_PAIRING_ENDPOINT')
+      : (dotenv.env['TEMPO_SIYUAN_PAIRING_ENDPOINT'] ??
+          'http://127.0.0.1:54321/functions/v1/siyuan-pairing');
 
   // ── SharedPreferences Keys ──
   static const String prefOnboardingCompleted = 'onboarding_completed';

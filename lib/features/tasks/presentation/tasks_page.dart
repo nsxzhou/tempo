@@ -1,14 +1,22 @@
+// ============================================================
+// TasksPage — 任务列表页（Phase 1 核心页面）
+// 顶部 inline 输入框 + Checkbox 切换 + 左滑删除 + 语音 FAB
+// ============================================================
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app_providers.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/empty_state.dart';
 import '../data/voice_task_parse_result.dart';
 import '../domain/task.dart';
+import 'widgets/inline_task_input.dart';
+import 'widgets/task_tile.dart';
 
 enum _VoiceCaptureStatus { idle, recording, processing }
 
@@ -24,6 +32,7 @@ class _TasksPageState extends ConsumerState<TasksPage> {
   _VoiceCaptureStatus _voiceStatus = _VoiceCaptureStatus.idle;
   VoiceTaskParseResult? _voiceDraft;
   String? _voiceError;
+  Task? _lastDeletedTask;
 
   bool get _isRecording => _voiceStatus == _VoiceCaptureStatus.recording;
   bool get _isProcessing => _voiceStatus == _VoiceCaptureStatus.processing;
@@ -34,17 +43,54 @@ class _TasksPageState extends ConsumerState<TasksPage> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Tempo')),
-      body: tasks.when(
-        data: (items) => _TaskListBody(
-          tasks: items,
-          voiceStatus: _voiceStatus,
-          voiceDraft: _voiceDraft,
-          voiceError: _voiceError,
-          onCreateDraft: _createDraftTask,
-          onDismissDraft: () => setState(() => _voiceDraft = null),
-        ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => _LoadError(message: error.toString()),
+      body: Column(
+        children: [
+          // inline 输入框
+          InlineTaskInput(
+            onTaskCreated: (task) {
+              if (task != null && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    duration: const Duration(seconds: 3),
+                    content: Text('已创建：${task.title}'),
+                    action: SnackBarAction(
+                      label: '撤回',
+                      onPressed: () {
+                        unawaited(
+                          ref.read(taskRepositoryProvider).deleteTask(task.id),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              }
+            },
+          ),
+          // 语音状态 Banner
+          if (_voiceStatus != _VoiceCaptureStatus.idle || _voiceError != null)
+            _VoiceStatusBanner(status: _voiceStatus, error: _voiceError),
+          // 语音草稿卡片
+          if (_voiceDraft != null)
+            _VoiceDraftCard(
+              result: _voiceDraft!,
+              onCreate: _createDraftTask,
+              onCancel: () => setState(() => _voiceDraft = null),
+            ),
+          const SizedBox(height: 4),
+          // 任务列表
+          Expanded(
+            child: tasks.when(
+              data: (items) => _TaskListBody(
+                tasks: items,
+                onToggle: _toggleTask,
+                onTap: _navigateToDetail,
+                onDelete: _deleteTask,
+              ),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) => Center(child: Text('加载失败：$error')),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: GestureDetector(
         key: const ValueKey('voice-fab'),
@@ -68,10 +114,77 @@ class _TasksPageState extends ConsumerState<TasksPage> {
     };
   }
 
-  Future<void> _startVoiceCapture() async {
-    if (_isProcessing) {
-      return;
+  /// 切换任务完成状态。
+  Future<void> _toggleTask(Task task) async {
+    try {
+      final repository = ref.read(taskRepositoryProvider);
+      final updated = await repository.toggleComplete(task.id);
+
+      // 完成时取消通知，取消完成时重新调度
+      final notificationService = ref.read(notificationServiceProvider);
+      if (updated.isCompleted) {
+        await notificationService.cancelTaskReminders(task.id);
+      } else {
+        await notificationService.scheduleTaskReminder(updated);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('操作失败：$error')),
+      );
     }
+  }
+
+  /// 跳转到任务详情页。
+  void _navigateToDetail(Task task) {
+    context.push('/tasks/${task.id}');
+  }
+
+  /// 删除任务（带撤回）。
+  Future<void> _deleteTask(Task task) async {
+    _lastDeletedTask = task;
+    try {
+      await ref.read(taskRepositoryProvider).deleteTask(task.id);
+
+      // 取消通知
+      final notificationService = ref.read(notificationServiceProvider);
+      await notificationService.cancelTaskReminders(task.id);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 5),
+          content: Text('已删除：${task.title}'),
+          action: SnackBarAction(
+            label: '撤回',
+            onPressed: () {
+              if (_lastDeletedTask != null) {
+                unawaited(
+                  ref.read(taskRepositoryProvider).createTask(
+                        title: _lastDeletedTask!.title,
+                        description: _lastDeletedTask!.description,
+                        dueDate: _lastDeletedTask!.dueDate,
+                        priority: _lastDeletedTask!.priority,
+                        creationSource: _lastDeletedTask!.creationSource,
+                      ),
+                );
+              }
+            },
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('删除失败：$error')),
+      );
+    }
+  }
+
+  // ── 语音录制逻辑 ──
+
+  Future<void> _startVoiceCapture() async {
+    if (_isProcessing) return;
 
     setState(() {
       _voiceError = null;
@@ -80,9 +193,7 @@ class _TasksPageState extends ConsumerState<TasksPage> {
 
     final recorder = ref.read(voiceRecorderProvider);
     final hasPermission = await recorder.hasPermission();
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     if (!hasPermission) {
       setState(() => _voiceError = '需要麦克风权限才能语音创建任务。');
@@ -91,38 +202,27 @@ class _TasksPageState extends ConsumerState<TasksPage> {
 
     try {
       await recorder.start();
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() => _voiceStatus = _VoiceCaptureStatus.recording);
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() => _voiceError = '录音启动失败：$error');
     }
   }
 
   Future<void> _submitVoiceCapture() async {
-    if (!_isRecording) {
-      return;
-    }
+    if (!_isRecording) return;
 
     setState(() => _voiceStatus = _VoiceCaptureStatus.processing);
 
     try {
       final path = await ref.read(voiceRecorderProvider).stop();
-      if (path == null) {
-        throw StateError('录音文件为空');
-      }
+      if (path == null) throw StateError('录音文件为空');
 
-      final result = await ref
-          .read(voiceTaskServiceProvider)
-          .parseAudioFile(path);
+      final result =
+          await ref.read(voiceTaskServiceProvider).parseAudioFile(path);
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       if (result.canAutoCreate) {
         await _createVoiceTask(result);
@@ -133,9 +233,7 @@ class _TasksPageState extends ConsumerState<TasksPage> {
         });
       }
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() => _voiceError = '语音创建失败：$error');
     } finally {
       if (mounted) {
@@ -145,22 +243,15 @@ class _TasksPageState extends ConsumerState<TasksPage> {
   }
 
   Future<void> _cancelVoiceCapture() async {
-    if (!_isRecording) {
-      return;
-    }
-
+    if (!_isRecording) return;
     await ref.read(voiceRecorderProvider).cancel();
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     setState(() => _voiceStatus = _VoiceCaptureStatus.idle);
   }
 
   Future<void> _createDraftTask(String title, String? description) async {
     final draft = _voiceDraft;
-    if (draft == null) {
-      return;
-    }
+    if (draft == null) return;
 
     setState(() => _voiceDraft = null);
     try {
@@ -168,18 +259,18 @@ class _TasksPageState extends ConsumerState<TasksPage> {
         draft.copyWith(title: title, description: description),
       );
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() => _voiceError = '语音草稿创建失败：$error');
     }
   }
 
   Future<void> _createVoiceTask(VoiceTaskParseResult result) async {
     final task = await ref.read(taskRepositoryProvider).createVoiceTask(result);
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
+
+    // 调度通知
+    final notificationService = ref.read(notificationServiceProvider);
+    await notificationService.scheduleTaskReminder(task);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -196,53 +287,76 @@ class _TasksPageState extends ConsumerState<TasksPage> {
   }
 
   void _showVoiceHint() {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('按住麦克风说出任务，松手后自动创建。')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('按住麦克风说出任务，松手后自动创建。')),
+    );
   }
 }
 
+/// 任务列表主体。
 class _TaskListBody extends StatelessWidget {
   final List<Task> tasks;
-  final _VoiceCaptureStatus voiceStatus;
-  final VoiceTaskParseResult? voiceDraft;
-  final String? voiceError;
-  final Future<void> Function(String title, String? description) onCreateDraft;
-  final VoidCallback onDismissDraft;
+  final void Function(Task) onToggle;
+  final void Function(Task) onTap;
+  final void Function(Task) onDelete;
 
   const _TaskListBody({
     required this.tasks,
-    required this.voiceStatus,
-    required this.voiceDraft,
-    required this.voiceError,
-    required this.onCreateDraft,
-    required this.onDismissDraft,
+    required this.onToggle,
+    required this.onTap,
+    required this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (tasks.isEmpty) {
+      return const EmptyState(
+        icon: Icons.checklist_rounded,
+        title: '还没有任务',
+        subtitle: '在顶部输入框输入任务标题，回车快速创建\n或按住右下角麦克风语音创建',
+      );
+    }
+
+    // 按完成状态分组
+    final activeTasks = tasks.where((t) => !t.isCompleted).toList();
+    final completedTasks = tasks.where((t) => t.isCompleted).toList();
+
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
       children: [
-        _VoiceStatusBanner(status: voiceStatus, error: voiceError),
-        if (voiceDraft != null) ...[
-          const SizedBox(height: 12),
-          _VoiceDraftCard(
-            result: voiceDraft!,
-            onCreate: onCreateDraft,
-            onCancel: onDismissDraft,
+        ...activeTasks.map((task) => TaskTile(
+              task: task,
+              onToggleComplete: () => onToggle(task),
+              onTap: () => onTap(task),
+              onDelete: () => onDelete(task),
+            )),
+        if (completedTasks.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              '已完成 (${completedTasks.length})',
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade500,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
+          const SizedBox(height: 4),
+          ...completedTasks.map((task) => TaskTile(
+                task: task,
+                onToggleComplete: () => onToggle(task),
+                onTap: () => onTap(task),
+                onDelete: () => onDelete(task),
+              )),
         ],
-        const SizedBox(height: 12),
-        if (tasks.isEmpty)
-          const _EmptyTaskState()
-        else
-          ...tasks.map((task) => _TaskTile(task: task)),
       ],
     );
   }
 }
 
+/// 语音状态 Banner。
 class _VoiceStatusBanner extends StatelessWidget {
   final _VoiceCaptureStatus status;
   final String? error;
@@ -262,27 +376,23 @@ class _VoiceStatusBanner extends StatelessWidget {
 
     return switch (status) {
       _VoiceCaptureStatus.recording => const _InfoPanel(
-        icon: Icons.mic,
-        color: AppTheme.errorColor,
-        title: '录音中',
-        message: '松手后提交语音，滑开或取消可放弃本次录音。',
-      ),
+          icon: Icons.mic,
+          color: AppTheme.errorColor,
+          title: '录音中',
+          message: '松手后提交语音，滑开或取消可放弃本次录音。',
+        ),
       _VoiceCaptureStatus.processing => const _InfoPanel(
-        icon: Icons.auto_awesome,
-        color: AppTheme.primaryColor,
-        title: '识别中',
-        message: '正在通过后端代理识别语音并解析任务。',
-      ),
-      _VoiceCaptureStatus.idle => const _InfoPanel(
-        icon: Icons.mic_none,
-        color: AppTheme.primaryColor,
-        title: '语音创建任务',
-        message: '按住右下角麦克风，说出任务、截止时间和优先级。',
-      ),
+          icon: Icons.auto_awesome,
+          color: AppTheme.primaryColor,
+          title: '识别中',
+          message: '正在通过后端代理识别语音并解析任务。',
+        ),
+      _VoiceCaptureStatus.idle => const SizedBox.shrink(),
     };
   }
 }
 
+/// 语音草稿确认卡片。
 class _VoiceDraftCard extends StatefulWidget {
   final VoiceTaskParseResult result;
   final Future<void> Function(String title, String? description) onCreate;
@@ -306,9 +416,8 @@ class _VoiceDraftCardState extends State<_VoiceDraftCard> {
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.result.title);
-    _descriptionController = TextEditingController(
-      text: widget.result.description ?? '',
-    );
+    _descriptionController =
+        TextEditingController(text: widget.result.description ?? '');
   }
 
   @override
@@ -327,7 +436,8 @@ class _VoiceDraftCardState extends State<_VoiceDraftCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('需要确认语音任务', style: Theme.of(context).textTheme.titleMedium),
+            Text('需要确认语音任务',
+                style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             Text(
               '置信度 ${(widget.result.confidence * 100).round()}%，先确认再创建。',
@@ -349,7 +459,8 @@ class _VoiceDraftCardState extends State<_VoiceDraftCard> {
             Wrap(
               spacing: 8,
               children: [
-                TextButton(onPressed: widget.onCancel, child: const Text('取消')),
+                TextButton(
+                    onPressed: widget.onCancel, child: const Text('取消')),
                 FilledButton(
                   onPressed: () => unawaited(
                     widget.onCreate(
@@ -370,6 +481,7 @@ class _VoiceDraftCardState extends State<_VoiceDraftCard> {
   }
 }
 
+/// 信息面板。
 class _InfoPanel extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -385,114 +497,34 @@ class _InfoPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Icon(icon, color: color),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(message),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TaskTile extends StatelessWidget {
-  final Task task;
-
-  const _TaskTile({required this.task});
-
-  @override
-  Widget build(BuildContext context) {
-    final priorityColor = AppTheme.priorityColor(task.priority.value);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: priorityColor.withValues(alpha: 0.12),
-          foregroundColor: priorityColor,
-          child: Text(_priorityShortLabel(task.priority)),
-        ),
-        title: Text(task.title),
-        subtitle: Text(_subtitle),
-        trailing: task.creationSource == AppConstants.sourceVoice
-            ? const Icon(Icons.mic, size: 20)
-            : null,
-      ),
-    );
-  }
-
-  String get _subtitle {
-    final parts = <String>[];
-    if (task.dueDate != null) {
-      parts.add(DateFormat('M月d日 HH:mm').format(task.dueDate!));
-    }
-    if (task.description?.isNotEmpty == true) {
-      parts.add(task.description!);
-    }
-    return parts.isEmpty ? '无截止时间' : parts.join(' · ');
-  }
-}
-
-class _EmptyTaskState extends StatelessWidget {
-  const _EmptyTaskState();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.only(top: 96),
-      child: Column(
+      child: Row(
         children: [
-          Icon(Icons.checklist, size: 64, color: Colors.grey),
-          SizedBox(height: 16),
-          Text('还没有任务', style: TextStyle(fontSize: 18)),
-          SizedBox(height: 8),
-          Text('按住麦克风快速创建第一条语音任务'),
+          Icon(icon, color: color),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(message),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
-}
-
-class _LoadError extends StatelessWidget {
-  final String message;
-
-  const _LoadError({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(child: Text('任务加载失败：$message'));
-  }
-}
-
-String _priorityShortLabel(TaskPriority priority) {
-  return switch (priority) {
-    TaskPriority.p0 => 'P0',
-    TaskPriority.p1 => 'P1',
-    TaskPriority.p2 => 'P2',
-    TaskPriority.p3 => 'P3',
-    TaskPriority.none => '-',
-  };
 }

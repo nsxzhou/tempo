@@ -60,6 +60,8 @@ abstract class TaskRepository {
 /// 网络连接服务封装。
 ///
 /// 封装 connectivity_plus 提供在线/离线判断。
+/// connectivity_plus 5.x 把 onConnectivityChanged 类型从 `Stream<ConnectivityResult>`
+/// 升级为 `Stream<List<ConnectivityResult>>`（多网卡场景）。
 class ConnectivityService {
   final Connectivity _connectivity;
   ConnectivityResult _current = ConnectivityResult.none;
@@ -70,20 +72,22 @@ class ConnectivityService {
   }
 
   void _init() {
-    _connectivity.onConnectivityChanged.listen((result) {
-      _current = result;
+    _connectivity.onConnectivityChanged.listen((results) {
+      // 多网卡:取第一个,或 none 视为离线
+      _current = results.isEmpty ? ConnectivityResult.none : results.first;
     });
   }
 
   /// 当前是否在线（非 none 即认为在线）。
   Future<bool> get isOnline async {
-    final result = await _connectivity.checkConnectivity();
-    return result != ConnectivityResult.none;
+    final results = await _connectivity.checkConnectivity();
+    return results.any((r) => r != ConnectivityResult.none);
   }
 
-  /// 网络状态变化流。
+  /// 网络状态变化流（把 List 折叠成单个值,兼容老接口）。
   Stream<ConnectivityResult> get onConnectivityChanged =>
-      _connectivity.onConnectivityChanged;
+      _connectivity.onConnectivityChanged
+          .map((results) => results.isEmpty ? ConnectivityResult.none : results.first);
 
   /// 释放资源。
   void dispose() {

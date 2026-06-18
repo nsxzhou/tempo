@@ -14,6 +14,7 @@ class AppConstants {
   static const String routePlan = '/plan';
   static const String routeSettings = '/settings';
   static const String routeOnboarding = '/onboarding';
+  static const String routeLogin = '/login';
   static const String routeTaskDetail = '/tasks/:id';
 
   // ── 优先级 ──
@@ -31,7 +32,62 @@ class AppConstants {
 
   // ── 通知 ──
   static const int reminderBeforeMinutes = 15;
+  static const String notificationChannelId = 'tempo_reminders';
+  static const String notificationChannelName = 'Tempo 任务提醒';
+  static const String notificationChannelDesc = '任务到期前的提醒通知';
 
   // ── 分页 ──
   static const int defaultPageSize = 20;
+
+  // ── Supabase 配置 ──
+  /// Supabase 项目 URL。
+  /// 部署时需替换为实际项目 URL，或通过 --dart-define 注入。
+  static const String supabaseUrl = String.fromEnvironment(
+    'SUPABASE_URL',
+    defaultValue: 'http://127.0.0.1:54321',
+  );
+
+  /// Supabase Anon Key（公开密钥，非 service role key）。
+  /// 部署时需替换为实际项目 anon key，或通过 --dart-define 注入。
+  static const String supabaseAnonKey = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+    defaultValue:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0',
+  );
+
+  // ── Deep Link ──
+  /// Custom URL scheme（方案 B 降级，公开测试前迁移到 Universal Links / App Links）。
+  static const String deepLinkScheme = 'tempo';
+  static const String deepLinkCallback = 'tempo://login-callback';
+
+  // ── Edge Function 端点 ──
+  /// parse-task 统一解析端点（语音 + 文本共用）。
+  static const String parseTaskEndpoint = String.fromEnvironment(
+    'TEMPO_PARSE_TASK_ENDPOINT',
+    defaultValue: 'http://127.0.0.1:54321/functions/v1/parse-task',
+  );
+
+  /// siyuan-pairing 配对码交换端点。
+  static const String siyuanPairingEndpoint = String.fromEnvironment(
+    'TEMPO_SIYUAN_PAIRING_ENDPOINT',
+    defaultValue: 'http://127.0.0.1:54321/functions/v1/siyuan-pairing',
+  );
+
+  // ── SharedPreferences Keys ──
+  static const String prefOnboardingCompleted = 'onboarding_completed';
+  static const String prefNotificationEnabled = 'notification_enabled';
+
+  // ── 配对码 ──
+  static const int pairingCodeLength = 6;
+  static const Duration pairingCodeExpiry = Duration(minutes: 5);
+  static const String siyuanStorageKey = 'tempo_siyuan_auth';
+
+  // ── Supabase 表名 ──
+  static const String tableTasks = 'tasks';
+  static const String tableTaskLists = 'task_lists';
+  static const String tableSiyuanPairingCodes = 'siyuan_pairing_codes';
+  static const String tableFeedback = 'feedback';
+
+  // ── 默认列表 ──
+  static const String defaultListName = 'Inbox';
 }

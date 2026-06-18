@@ -40,6 +40,9 @@ dependencies:
   record: ^6.2.1
   path: ^1.9.0
   path_provider: ^2.1.5
+  connectivity_plus: ^6.1.0
+  timezone: ^0.9.4
+  sensors_plus: ^6.1.1
 
 dev_dependencies:
   flutter_test:
@@ -51,6 +54,7 @@ dev_dependencies:
   drift_dev: ^2.22.1
   freezed: ^2.5.8
   json_serializable: ^6.9.3
+  mocktail: ^1.0.4
 
 flutter:
   uses-material-design: true

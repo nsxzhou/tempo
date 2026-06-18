@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital,wght@0,400;1,400&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Geist Mono", "SF Mono", "JetBrains Mono", monospace;
+  --font-serif: "Instrument Serif", Georgia, serif;
+  
+  --color-border-subtle: #F4F4F5;
+  --color-border-strong: #D4D4D8;
+  --color-border-emphasis: #A1A1AA;
+}
+
+:root {
+  /* Surface colors */
+  --bg: #FFFFFF;
+  --bg-subtle: #FAFAFA;
+  --bg-muted: #F4F4F5;
+  --surface: #FFFFFF;
+  --surface-elevated: #FFFFFF;
+
+  /* Foreground colors */
+  --fg: #0A0A0A;
+  --fg-secondary: #18181B;
+  --fg-muted: #71717A;
+  --fg-subtle: #A1A1AA;
+  --fg-faint: #D4D4D8;
+
+  /* Priority colors */
+  --p0: #DC2626;
+  --p0-bg: #FEF2F2;
+  --p0-border: #FECACA;
+  --p1: #D97706;
+  --p1-bg: #FFFBEB;
+  --p1-border: #FED7AA;
+  --p2: #2563EB;
+  --p2-bg: #EFF6FF;
+  --p2-border: #BFDBFE;
+  --p3: #71717A;
+  --p3-bg: #F4F4F5;
+  --p3-border: #E4E4E7;
+  
+  --success: #059669;
+  --success-bg: #ECFDF5;
+  --success-border: #A7F3D0;
+}
+
+/* Hide scrollbar across browsers */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Heatmap rendering metrics */
+[data-level="0"] { background-color: #FFFFFF; }
+[data-level="1"] { background-color: rgba(10, 10, 10, 0.06); }
+[data-level="2"] { background-color: rgba(10, 10, 10, 0.18); }
+[data-level="3"] { background-color: rgba(10, 10, 10, 0.42); }
+[data-level="4"] { background-color: #0A0A0A; border-color: #0A0A0A; }
+

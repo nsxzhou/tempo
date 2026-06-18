@@ -1,0 +1,17 @@
+{
+  "name": "tempo-siyuan-plugin",
+  "version": "0.1.0",
+  "description": "Tempo 任务同步 — 思源笔记 Petal 插件",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.14.0"
+  }
+}

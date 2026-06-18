@@ -1,0 +1,14 @@
+{
+  "name": "tempo-sync",
+  "author": "Tempo",
+  "version": "0.1.0",
+  "displayName": {
+    "default": "Tempo 任务同步"
+  },
+  "description": {
+    "default": "将思源笔记中的任务块一键导入 Tempo 待办 App"
+  },
+  "icon": "",
+  "css": "",
+  "js": "index.js"
+}

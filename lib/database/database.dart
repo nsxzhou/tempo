@@ -17,8 +17,12 @@ part 'database.g.dart';
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
+  /// 测试用构造函数（可注入自定义 executor）。
+  @visibleForTesting
+  AppDatabase.forTesting(super.e);
+
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration {
@@ -27,7 +31,11 @@ class AppDatabase extends _$AppDatabase {
         await m.createAll();
       },
       onUpgrade: (Migrator m, int from, int to) async {
-        // 未来版本迁移逻辑
+        // v1 → v2: 新增 syncPending 字段到 Tasks 和 TaskLists 表
+        if (from < 2) {
+          await m.addColumn(tasks, tasks.syncPending);
+          await m.addColumn(taskLists, taskLists.syncPending);
+        }
       },
     );
   }

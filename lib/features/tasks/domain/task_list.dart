@@ -12,6 +12,7 @@ class TaskList with _$TaskList {
     required String name,
     @Default(0) int sortOrder,
     required DateTime createdAt,
+    @Default(false) bool syncPending,
   }) = _TaskList;
 
   factory TaskList.fromJson(Map<String, dynamic> json) =>

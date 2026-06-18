@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tempo MVP v2.0 — 智能待办 App + 思源笔记集成 | MVP实验设计版</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --text: #1a1a2e;
+    --text-secondary: #555;
+    --accent: #4f46e5;
+    --accent-light: #eef2ff;
+    --border: #e5e7eb;
+    --green: #059669;
+    --green-light: #ecfdf5;
+    --orange: #d97706;
+    --orange-light: #fffbeb;
+    --red: #dc2626;
+    --red-light: #fef2f2;
+    --blue: #2563eb;
+    --blue-light: #eff6ff;
+    --purple: #7c3aed;
+    --purple-light: #f5f3ff;
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-300: #d1d5db;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.75;
+    padding: 0;
+  }
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 48px 32px;
+  }
+
+  /* Header */
+  .doc-header {
+    text-align: center;
+    margin-bottom: 56px;
+    padding-bottom: 40px;
+    border-bottom: 2px solid var(--accent);
+  }
+  .doc-header h1 {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+  }
+  .doc-header .subtitle {
+    font-size: 16px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+  }
+  .doc-header .meta {
+    font-size: 13px;
+    color: var(--text-secondary);
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .doc-header .meta span::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+
+  /* Badge */
+  .version-badge {
+    display: inline-block;
+    background: var(--red);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 14px;
+    margin-left: 8px;
+    vertical-align: middle;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Sections */
+  .section {
+    margin-bottom: 48px;
+  }
+  .section-number {
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-light);
+    padding: 2px 10px;
+    border-radius: 12px;
+    margin-bottom: 8px;
+  }
+  h2 {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    color: var(--text);
+  }
+  h3 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 24px 0 12px 0;
+    color: var(--text);
+  }
+  p {
+    margin-bottom: 12px;
+    color: var(--text);
+  }
+  .lead {
+    font-size: 15px;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+    padding: 16px 20px;
+    background: var(--gray-50);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 16px;
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .card-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .card-title {
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  /* Tags */
+  .tag {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 2px 10px;
+    border-radius: 12px;
+    margin-right: 6px;
+    margin-bottom: 6px;
+  }
+  .tag-green { background: var(--green-light); color: var(--green); }
+  .tag-orange { background: var(--orange-light); color: var(--orange); }
+  .tag-red { background: var(--red-light); color: var(--red); }
+  .tag-blue { background: var(--blue-light); color: var(--blue); }
+  .tag-purple { background: var(--purple-light); color: var(--purple); }
+  .tag-accent { background: var(--accent-light); color: var(--accent); }
+
+  /* Table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th {
+    background: var(--gray-100);
+    text-align: left;
+    padding: 10px 14px;
+    font-weight: 600;
+    border-bottom: 2px solid var(--border);
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+
+  /* Architecture diagram */
+  .arch-diagram {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    margin: 20px 0;
+    text-align: center;
+  }
+  .arch-row {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin: 8px 0;
+    flex-wrap: wrap;
+  }
+  .arch-box {
+    background: var(--accent-light);
+    border: 1px solid #c7d2fe;
+    border-radius: var(--radius-sm);
+    padding: 14px 20px;
+    min-width: 160px;
+    text-align: center;
+  }
+  .arch-box.primary {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+  .arch-box.secondary {
+    background: var(--green-light);
+    border-color: #a7f3d0;
+  }
+  .arch-box.tertiary {
+    background: var(--purple-light);
+    border-color: #ddd6fe;
+  }
+  .arch-box small {
+    display: block;
+    font-size: 11px;
+    opacity: 0.7;
+    margin-top: 4px;
+  }
+  .arch-arrow {
+    color: var(--text-secondary);
+    font-size: 20px;
+    margin: 4px 0;
+  }
+
+  /* Phase timeline */
+  .phase {
+    position: relative;
+    padding-left: 32px;
+    margin-bottom: 32px;
+  }
+  .phase::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    bottom: -24px;
+    width: 2px;
+    background: var(--border);
+  }
+  .phase:last-child::before { bottom: 8px; }
+  .phase::after {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 6px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 3px solid var(--accent-light);
+  }
+  .phase.pre-dev::after {
+    background: var(--orange);
+    border-color: #fed7aa;
+  }
+  .phase-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .phase.pre-dev .phase-title { color: var(--orange); }
+  .phase-duration {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+  }
+
+  /* Highlight box */
+  .highlight-box {
+    padding: 20px 24px;
+    border-radius: var(--radius);
+    margin: 20px 0;
+  }
+  .highlight-box.green { background: var(--green-light); border-left: 4px solid var(--green); }
+  .highlight-box.orange { background: var(--orange-light); border-left: 4px solid var(--orange); }
+  .highlight-box.blue { background: var(--blue-light); border-left: 4px solid var(--blue); }
+  .highlight-box.red { background: var(--red-light); border-left: 4px solid var(--red); }
+  .highlight-box.purple { background: var(--purple-light); border-left: 4px solid var(--purple); }
+
+  .highlight-box strong {
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  /* Code block */
+  .code-block {
+    background: #1e1e2e;
+    color: #cdd6f4;
+    padding: 16px 20px;
+    border-radius: var(--radius-sm);
+    font-family: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-x: auto;
+    margin: 12px 0;
+  }
+  .code-block .comment { color: #6c7086; }
+  .code-block .keyword { color: #cba6f7; }
+  .code-block .string { color: #a6e3a1; }
+  .code-block .type { color: #89b4fa; }
+
+  /* Two-column grid */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 16px 0;
+  }
+  @media (max-width: 700px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .container { padding: 24px 16px; }
+  }
+
+  /* Feature list */
+  .feature-list {
+    list-style: none;
+    padding: 0;
+  }
+  .feature-list li {
+    padding: 8px 0 8px 28px;
+    position: relative;
+    border-bottom: 1px solid var(--gray-100);
+  }
+  .feature-list li:last-child { border-bottom: none; }
+  .feature-list li::before {
+    content: '✓';
+    position: absolute;
+    left: 0;
+    color: var(--green);
+    font-weight: 700;
+  }
+  .feature-list li.cut::before {
+    content: '✗';
+    color: var(--red);
+  }
+  .feature-list li.new::before {
+    content: '+';
+    color: var(--blue);
+  }
+
+  /* Flowchart in CSS */
+  .flow-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 16px 0;
+    flex-wrap: wrap;
+  }
+  .flow-step {
+    background: var(--accent-light);
+    border: 1px solid #c7d2fe;
+    border-radius: 24px;
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  .flow-arrow {
+    color: var(--gray-300);
+    font-size: 18px;
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 40px 0;
+  }
+
+  /* Changelog */
+  .changelog {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 24px;
+  }
+  .changelog h4 {
+    font-size: 15px;
+    margin-bottom: 12px;
+    color: var(--accent);
+  }
+  .changelog ul {
+    list-style: none;
+    padding: 0;
+  }
+  .changelog li {
+    padding: 4px 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .changelog .label {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 8px;
+    border-radius: 8px;
+    margin-right: 6px;
+    min-width: 40px;
+    text-align: center;
+  }
+  .label-new { background: var(--green-light); color: var(--green); }
+  .label-chg { background: var(--orange-light); color: var(--orange); }
+  .label-cut { background: var(--red-light); color: var(--red); }
+  .label-move { background: var(--blue-light); color: var(--blue); }
+
+  /* Footer */
+  .doc-footer {
+    text-align: center;
+    padding-top: 32px;
+    border-top: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- ==================== HEADER ==================== -->
+<div class="doc-header">
+  <h1>Tempo — MVP 实验设计<span class="version-badge">v2.0</span></h1>
+  <div class="subtitle">智能待办 App（Flutter）+ 思源笔记集成 · 基于 MVP 实验方法论重构</div>
+  <div class="meta">
+    <span>v2.0 MVP实验设计版</span>
+    <span>2026-06-18</span>
+    <span>Flutter · Supabase · TypeScript</span>
+  </div>
+</div>
+
+<!-- ==================== CHANGELOG ==================== -->
+<div class="changelog">
+  <h4>📋 v2.0 变更摘要（基于 OPC MVP 实验设计方法论审查）</h4>
+  <ul>
+    <li><span class="label label-new">新增</span> Phase 0：写代码前验证（Wizard-of-Oz AI 排期实验 + 用户访谈）</li>
+    <li><span class="label label-move">提前</span> 思源单向同步从 Phase 3 前移到 Phase 1</li>
+    <li><span class="label label-cut">砍掉</span> Phase 1 P0 中约 30% 功能：日视图、AI 拆解、精力曲线手动设置、每日推送、完整离线同步</li>
+    <li><span class="label label-new">新增</span> 第 10 节：前置验证实验设计</li>
+    <li><span class="label label-new">新增</span> 第 11 节：假设失败标准与 Pivot 方向</li>
+    <li><span class="label label-new">新增</span> 第 12 节：用户获取与分发策略</li>
+    <li><span class="label label-chg">扩充</span> 风险章节：新增市场/技能/成本/竞品/跨平台 5 个盲点风险</li>
+    <li><span class="label label-chg">重排</span> 分期路线图：Phase 1(6-8周) → 1.5(2-3周反馈) → 2 → 3 → 4</li>
+    <li><span class="label label-new">新增</span> Phase 1 App 内反馈入口 + 简单 onboarding</li>
+  </ul>
+</div>
+
+<!-- ==================== 核心设计原则 ==================== -->
+<div class="section">
+  <span class="section-number">设计原则</span>
+  <h2>v2.0 核心方法论：假设驱动的 MVP</h2>
+  <div class="lead">
+    v1.1 的问题是：把最致命的假设（用户想要 AI 排期吗？用户愿意安装独立 App 吗？）的验证放在了"产品做完之后"，而不是"写代码之前"。v2.0 的核心转向：<strong>先验证最冒险的假设，再用代码实现已验证的需求</strong>。
+  </div>
+
+  <h3>致命假设一览</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>级别</th>
+        <th>假设</th>
+        <th>验证时机</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="tag tag-red">致命</span></td>
+        <td>H1：用户愿意让 AI 替自己排时间块</td>
+        <td>Phase 0（Wizard-of-Oz 实验，零代码）</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-red">致命</span></td>
+        <td>H2：思源用户愿意安装并使用独立 App</td>
+        <td>Phase 0（用户访谈）→ Phase 1.5（Dogfooding 验证）</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-red">致命</span></td>
+        <td>H3：LLM 排期质量达用户采纳率 >60%</td>
+        <td>Phase 0（离线 Benchmark）→ Phase 2（真实数据验证）</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-orange">重要</span></td>
+        <td>H4：火山引擎 ASR 真实环境识别准确率达标</td>
+        <td>Phase 1 启动时技术 Spike（1-2 天）</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-orange">重要</span></td>
+        <td>H5：思源用户群体足够大支撑产品成长</td>
+        <td>Phase 0（社区调研估算）</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ==================== 01 为什么要做 ==================== -->
+<div class="section">
+  <span class="section-number">01</span>
+  <h2>为什么要做这件事</h2>
+  <div class="lead">
+    现有待办工具在"智能规划"和"笔记生态打通"两个维度上同时缺失。思源笔记用户缺少一个原生的任务管理入口，而通用待办工具又无法与个人知识管理体系联动。
+  </div>
+
+  <h3>问题空间</h3>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background: var(--red-light);">🧩</div>
+        <div class="card-title">工具割裂</div>
+      </div>
+      <p style="font-size: 14px; color: var(--text-secondary);">
+        任务管理在滴答清单，项目笔记在思源，日程在系统日历。三个工具之间没有数据流，每天要在"我今天该做什么"上反复切换上下文。
+      </p>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background: var(--orange-light);">🤖</div>
+        <div class="card-title">AI 规划停留在概念</div>
+      </div>
+      <p style="font-size: 14px; color: var(--text-secondary);">
+        滴答清单至今没有 AI 排期功能，Todoist Assist 只做任务拆解不做时间安排。"帮我把今天的任务排进时间块"仍然是手动活。
+      </p>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background: var(--blue-light);">📝</div>
+        <div class="card-title">笔记与任务脱节</div>
+      </div>
+      <p style="font-size: 14px; color: var(--text-secondary);">
+        思源笔记中没有原生的待办管理。在文档里写的 action item 需要手动搬到外部工具，状态变更也无法回写到笔记。
+      </p>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background: var(--purple-light);">🔄</div>
+        <div class="card-title">复盘数据分散</div>
+      </div>
+      <p style="font-size: 14px; color: var(--text-secondary);">
+        任务完成情况、时间花费、习惯追踪的数据散落在不同 app 中。想做一次周复盘，得手动从三个地方搬数据。
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 02 目标用户 ==================== -->
+<div class="section">
+  <span class="section-number">02</span>
+  <h2>目标用户</h2>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon" style="background: var(--accent-light);">👤</div>
+      <div class="card-title">核心用户画像：知识工作者 + 思源笔记用户</div>
+    </div>
+    <p style="font-size: 14px;">
+      已经在用思源笔记做个人知识管理，习惯在笔记中记录项目计划和行动项，但苦于没有一个好用的待办工具与笔记打通。每天面对 10-30 个任务，需要清晰的优先级和时间安排。
+    </p>
+    <div style="margin-top: 12px;">
+      <span class="tag tag-accent">思源笔记重度用户</span>
+      <span class="tag tag-blue">独立开发者/自由职业</span>
+      <span class="tag tag-green">效率工具爱好者</span>
+      <span class="tag tag-purple">知识工作者</span>
+    </div>
+  </div>
+
+  <div class="highlight-box orange" style="margin-top: 16px;">
+    <strong>⚠️ 市场规模约束</strong>
+    思源笔记用户总量估算在数万级（对比 Obsidian 百万级），其中"重度用户"（每天使用且写 action item）可能仅几千人。这是产品的自然天花板，但也是一人公司的合理规模。关键是：<strong>需要在 Phase 0 通过社区调研确认可触达用户量级，评估是否足以支撑持续开发</strong>。
+  </div>
+</div>
+
+<!-- ==================== 03 MVP 范围 ==================== -->
+<div class="section">
+  <span class="section-number">03</span>
+  <h2>MVP 功能范围（v2.0 重构）</h2>
+  <div class="lead">
+    <strong>核心变化：</strong>v1.1 的"P0"实际上是 v1.0 的完整功能清单。v2.0 遵循"先验证致命假设，再投入工程资源"的原则，将 Phase 1 收窄为验证核心假设的<strong>最小功能切片</strong>，砍掉约 30% 延后功能。
+  </div>
+
+  <h3>P0 — Phase 1 最小闭环（6-8 周）</h3>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background: var(--green-light);">📋</div>
+        <div class="card-title">任务管理（基础版）</div>
+      </div>
+      <ul class="feature-list">
+        <li>任务 CRUD：标题、优先级、截止日期、列表组织</li>
+        <li>智能过滤器（今天 / 本周 / 已过期 / 自定义）</li>
+        <li>自然语言日期解析（本地规则引擎，不用 LLM）</li>
+        <li class="cut">子任务、标签、重复规则 — 延后到 Phase 2</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background: var(--blue-light);">📅</div>
+        <div class="card-title">日历视图（精简版）</div>
+      </div>
+      <ul class="feature-list">
+        <li>月视图：任务按日期标记，点击展开列表</li>
+        <li>周视图：时间轴 + 任务块</li>
+        <li class="cut">日视图 — 延后到 Phase 2</li>
+        <li class="cut">系统日历订阅 — 延后到 Phase 2</li>
+        <li class="cut">拖拽排期 — 延后到 Phase 2</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background: var(--orange-light);">🔗</div>
+        <div class="card-title">思源单向同步 <span class="tag tag-new" style="font-size:10px;margin-left:4px;">提前</span></div>
+      </div>
+      <ul class="feature-list">
+        <li>思源 Petal 插件：扫描文档中未完成任务块</li>
+        <li>一键导入到 Tempo，自动写入 custom-tempo-id 关联</li>
+        <li>Supabase webhook 接收导入请求</li>
+        <li class="cut">状态回写 — 延后到 Phase 3</li>
+        <li class="cut">Widget 嵌入 — 延后到 Phase 3</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background: var(--purple-light);">🧭</div>
+        <div class="card-title">体验基础 <span class="tag tag-new" style="font-size:10px;margin-left:4px;">新增</span></div>
+      </div>
+      <ul class="feature-list">
+        <li class="new">简单 onboarding（首次打开 3 屏引导）</li>
+        <li class="new">App 内反馈入口（摇一摇 / 设置页按钮）</li>
+        <li>本地通知提醒（到期前 15 分钟 / 到期时）</li>
+        <li>本地缓存 + 在线优先同步（简化离线方案）</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Phase 1 砍掉/延后清单</h3>
+  <table>
+    <thead>
+      <tr><th>功能</th><th>决策</th><th>理由</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>日历日视图</td><td><span class="tag tag-orange">→ Phase 2</span></td><td>月视图+周视图已足够验证日历待办融合价值</td></tr>
+      <tr><td>AI 任务拆解</td><td><span class="tag tag-orange">→ Phase 2</span></td><td>是排期的派生功能，不应和排期同时上线验证</td></tr>
+      <tr><td>精力曲线设置页</td><td><span class="tag tag-blue">→ 简化为默认配置</span></td><td>Phase 2 用默认模式（上高/中中/下低），手动设置在验证通过后做</td></tr>
+      <tr><td>每日摘要推送</td><td><span class="tag tag-red">砍掉</span></td><td>验证排期质量前，推送不准确的排期损害用户信任</td></tr>
+      <tr><td>完整离线优先</td><td><span class="tag tag-blue">→ 简化为本地缓存+在线优先</span></td><td>保留 Drift 本地缓存，完整的冲突解决逻辑延后到 Phase 2</td></tr>
+      <tr><td>语音创建任务</td><td><span class="tag tag-orange">→ Phase 2</span></td><td>在验证"用户是否愿意用 App"之前，语音入口 ROI 不确定</td></tr>
+      <tr><td>思源双向同步 & Widget</td><td><span class="tag tag-purple">→ Phase 3</span></td><td>单向同步即足够验证"笔记↔任务"价值假设</td></tr>
+      <tr><td>子任务 & 标签 & 重复规则</td><td><span class="tag tag-orange">→ Phase 2</span></td><td>基础 CRUD 已够 MVP 验证，高级组织功能延后</td></tr>
+    </tbody>
+  </table>
+
+  <h3>P1 — Phase 2 AI 差异化（Phase 1 验证通过后启动）</h3>
+  <div style="margin: 8px 0;">
+    <span class="tag tag-purple">AI 智能排期</span>
+    <span class="tag tag-purple">语音创建任务</span>
+    <span class="tag tag-purple">日视图 + 拖拽排期</span>
+    <span class="tag tag-purple">系统日历订阅</span>
+    <span class="tag tag-purple">精力曲线（默认配置版）</span>
+    <span class="tag tag-purple">AI 任务拆解</span>
+    <span class="tag tag-purple">子任务/标签/重复规则</span>
+  </div>
+
+  <h3>P2 — Phase 3 & 4（远期）</h3>
+  <div style="margin: 8px 0;">
+    <span class="tag tag-blue">Phase 3：思源双向同步 + Widget 嵌入 + 状态回写 + 周报 Widget</span><br>
+    <span class="tag tag-blue" style="margin-top:6px;">Phase 4：番茄钟 + 习惯打卡 + Android/iOS Widget + Siri/Google Assistant + 性能打磨</span><br>
+    <span class="tag tag-accent" style="margin-top:6px;">远期：团队协作 / 地理围栏 / Apple Watch / Obsidian 插件</span>
+  </div>
+
+  <h3>竞品功能对照</h3>
+  <table>
+    <thead>
+      <tr><th>功能</th><th>滴答清单</th><th>Todoist</th><th>Tempo Phase 1</th><th>Tempo Phase 2+</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>自然语言创建</td><td>✅ 日期识别</td><td>✅ 日期+项目+优先级</td><td>✅ 日期识别（本地规则）</td><td>✅ LLM 增强解析</td></tr>
+      <tr><td>AI 排期</td><td>❌</td><td>❌</td><td>—</td><td>✅ 原生 AI 排入时间块</td></tr>
+      <tr><td>AI 任务拆解</td><td>❌</td><td>✅ Todoist Assist</td><td>—</td><td>✅ LLM 拆解</td></tr>
+      <tr><td>日历视图</td><td>✅ 年/月/周/日</td><td>✅ 周/月</td><td>✅ 月/周</td><td>✅ 月/周/日</td></tr>
+      <tr><td>笔记同步</td><td>❌</td><td>❌</td><td>✅ 思源单向导入</td><td>✅ 双向同步 + Widget</td></tr>
+      <tr><td>语音创建</td><td>✅ Siri 快捷指令</td><td>❌</td><td>—</td><td>✅ 流式 ASR + NLP</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ==================== 04 技术架构 ==================== -->
+<div class="section">
+  <span class="section-number">04</span>
+  <h2>技术架构</h2>
+
+  <div class="arch-diagram">
+    <div class="arch-row">
+      <div class="arch-box primary" style="min-width: 280px;">
+        <strong>Tempo Flutter App</strong>
+        <small>iOS · Android</small>
+      </div>
+    </div>
+    <div class="arch-arrow">↕</div>
+    <div class="arch-row">
+      <div class="arch-box secondary" style="min-width: 280px;">
+        <strong>Supabase</strong>
+        <small>PostgreSQL · Auth · Realtime · Edge Functions</small>
+      </div>
+    </div>
+    <div class="arch-arrow">↕</div>
+    <div class="arch-row">
+      <div class="arch-box tertiary">
+        <strong>思源笔记插件</strong>
+        <small>TypeScript · Petal</small>
+      </div>
+      <div class="arch-box" style="background: var(--orange-light); border-color: #fed7aa;">
+        <strong>思源 HTTP API</strong>
+        <small>localhost:6806</small>
+      </div>
+      <div class="arch-box">
+        <strong>LLM API</strong>
+        <small>Phase 2 接入</small>
+      </div>
+      <div class="arch-box" style="background: var(--red-light); border-color: #fecaca;">
+        <strong>火山引擎 ASR</strong>
+        <small>Phase 2 接入</small>
+      </div>
+    </div>
+  </div>
+
+  <h3>Flutter App 技术选型</h3>
+  <table>
+    <thead><tr><th>层次</th><th>选型</th><th>选型理由</th></tr></thead>
+    <tbody>
+      <tr><td>状态管理</td><td><code>flutter_riverpod</code></td><td>编译时安全、测试友好、社区主流</td></tr>
+      <tr><td>本地数据库</td><td><code>drift</code>（SQLite）</td><td>类型安全的 SQLite 封装，支持响应式查询</td></tr>
+      <tr><td>路由</td><td><code>go_router</code></td><td>声明式路由、deep link 支持</td></tr>
+      <tr><td>日历组件</td><td><code>table_calendar</code> + 自定义</td><td>月视图用现成组件，周视图自定义实现</td></tr>
+      <tr><td>网络请求</td><td><code>dio</code></td><td>拦截器、重试、Token 刷新成熟</td></tr>
+      <tr><td>本地通知</td><td><code>flutter_local_notifications</code></td><td>跨平台通知标准方案</td></tr>
+      <tr><td>NLP 解析</td><td>本地规则（chrono 库）</td><td>Phase 1 不做 LLM 调用，用 chrono 解析中文日期</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Phase 1 简化离线策略</h3>
+  <div class="highlight-box blue">
+    <strong>本地缓存 + 在线优先</strong>
+    Drift 做本地 SQLite 缓存（毫秒级读取体验），数据以 Supabase 为准。网络可用时实时读写 Supabase，网络不可用时读本地缓存 + 显示"离线"提示。Phase 2 再做完整的离线→云端冲突解决。
+  </div>
+
+  <h3>后端数据模型（不变）</h3>
+  <div class="code-block">
+<span class="comment">-- 核心表结构保持不变，Phase 1 简化使用</span>
+
+<span class="keyword">CREATE TABLE</span> <span class="type">task_lists</span> (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id      UUID REFERENCES auth.users(id),
+  name         TEXT NOT NULL,
+  sort_order   INT DEFAULT 0,
+  created_at   TIMESTAMPTZ DEFAULT now()
+);
+
+<span class="keyword">CREATE TABLE</span> <span class="type">tasks</span> (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  list_id      UUID REFERENCES task_lists(id),
+  title        TEXT NOT NULL,
+  description  TEXT,
+  priority     SMALLINT DEFAULT 0,
+  due_date     TIMESTAMPTZ,
+  is_completed BOOLEAN DEFAULT false,
+  completed_at TIMESTAMPTZ,
+  siyuan_block_id TEXT,
+  sort_order   INT DEFAULT 0,
+  created_at   TIMESTAMPTZ DEFAULT now(),
+  updated_at   TIMESTAMPTZ DEFAULT now(),
+  creation_source TEXT DEFAULT 'text'
+);
+
+<span class="comment">-- Phase 2 新增字段：parent_id, start_date, duration_min, repeat_rule, tags</span>
+<span class="comment">-- Phase 2 新增表：energy_schedule</span>
+  </div>
+</div>
+
+<!-- ==================== 05 思源集成 ==================== -->
+<div class="section">
+  <span class="section-number">05</span>
+  <h2>思源笔记集成方案</h2>
+
+  <h3>Phase 1 单向同步（思源 → Tempo）</h3>
+  <div class="flow-steps">
+    <div class="flow-step">用户写 ☐ 买牛奶</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">插件扫描文档中 task list 块</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">检查是否已有 custom-tempo-id</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">无则推送到 Supabase 创建任务</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">App 展示任务</div>
+  </div>
+
+  <h3>Phase 3 双向同步（App → 思源状态回写）</h3>
+  <div class="flow-steps" style="margin-top: 8px;">
+    <div class="flow-step">用户在 App 完成 ✓</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">Supabase webhook</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">插件调 updateBlock</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">思源 ☐ → ☑</div>
+  </div>
+
+  <h3>关联机制</h3>
+  <p>
+    思源笔记支持给块添加 <code>custom-</code> 前缀的自定义属性。用 <code>custom-tempo-id</code> 存储任务 UUID 作为关联键。Phase 1 插件在导入时写入此属性；Phase 3 双向同步通过它定位对应块做状态回写。
+  </p>
+</div>
+
+<!-- ==================== 06 AI 排期设计 ==================== -->
+<div class="section">
+  <span class="section-number">06</span>
+  <h2>AI 排期设计（Phase 2 交付，Phase 0 前置验证）</h2>
+
+  <div class="highlight-box purple">
+    <strong>⚠️ 前置条件：</strong>AI 排期不进入 Phase 1 代码开发。Phase 0 先通过 Wizard-of-Oz 实验（见第 10 节）验证"用户真的想要 AI 排期"，Phase 1.5 根据用户反馈决定是否启动 Phase 2 开发。
+  </div>
+
+  <h3>排期算法流程（设计保留，Phase 2 实现）</h3>
+  <div class="flow-steps">
+    <div class="flow-step">收集待办池</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">获取日历事件</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">读取精力曲线</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">LLM 排期</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">用户确认/调整</div>
+  </div>
+
+  <div class="highlight-box purple">
+    <strong>LLM Prompt 设计要点</strong>
+    输入：今日待办列表（含优先级、预估时长、截止日期）+ 日历已有事件 + 用户精力曲线。<br>
+    约束：高优先级任务排在高精力时段；同一时间块不超过 90 分钟；截止日期近的任务优先；留出 15 分钟缓冲。<br>
+    输出：JSON 格式的时间块列表，每条包含 task_id、start_time、end_time、reason。<br>
+    <strong>Phase 0：</strong>准备 50 个排期场景，让 LLM 产出结果，请 3 个目标用户打分，验证 H3。
+  </div>
+</div>
+
+<!-- ==================== 07 分期路线图 ==================== -->
+<div class="section">
+  <span class="section-number">07</span>
+  <h2>分期路线图（v2.0 重构）</h2>
+  <div class="lead">
+    相比 v1.1，新增 Phase 0（零代码验证）和 Phase 1.5（反馈期），Phase 1 范围收窄约 30%。
+  </div>
+
+  <div class="phase pre-dev">
+    <div class="phase-title">Phase 0 — 前置验证（写代码前）</div>
+    <div class="phase-duration">预估 1-2 周，零代码</div>
+    <div class="card" style="margin-top: 8px;">
+      <ul class="feature-list">
+        <li>Wizard-of-Oz AI 排期实验：找 5 位目标用户，人工按 AI 规则帮他们排一周任务</li>
+        <li>思源社区用户访谈：10 次访谈，展示概念原型，验证"你会安装吗"</li>
+        <li>LLM 排期质量 Benchmark：50 个场景 + 3 个用户打分</li>
+        <li>思源社区发帖收集早期意向用户</li>
+        <li>市场规模估算：思源用户量级、可触达比例</li>
+      </ul>
+      <div style="margin-top: 12px;">
+        <span class="tag tag-red">致命假设验证节点</span>
+        <span class="tag tag-accent">Go/No-Go 决策点</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-title">Phase 1 — 待办核心 + 日历 + 思源单向同步（最小闭环）</div>
+    <div class="phase-duration">预估 6-8 周</div>
+    <div class="card" style="margin-top: 8px;">
+      <ul class="feature-list">
+        <li>Flutter 项目脚手架（Riverpod + GoRouter + Drift）</li>
+        <li>任务 CRUD（基础版）：标题、优先级、截止日期、列表组织</li>
+        <li>月视图 + 周视图日历</li>
+        <li>自然语言日期解析（本地 chrono 规则引擎）</li>
+        <li>本地通知提醒（到期前 15 分钟 / 到期时）</li>
+        <li>Supabase 接入：Auth + 基础数据同步</li>
+        <li>思源 Petal 插件：扫描未完成任务块 → 一键导入 Tempo</li>
+        <li>首次使用引导（3 屏 onboarding）</li>
+        <li>App 内反馈入口（摇一摇 / 设置页按钮）</li>
+        <li>本地缓存 + 在线优先同步</li>
+      </ul>
+      <div style="margin-top: 12px;">
+        <span class="tag tag-green">内部 Dogfooding</span>
+        <span class="tag tag-accent">5-10 位早期用户</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase pre-dev">
+    <div class="phase-title">Phase 1.5 — 反馈收集 & 方向确认</div>
+    <div class="phase-duration">预估 2-3 周</div>
+    <div class="card" style="margin-top: 8px;">
+      <ul class="feature-list">
+        <li>5-10 位思源用户实际使用 14 天</li>
+        <li>用户访谈：验证 H1（AI 排期需求）、H2（愿意用独立 App）</li>
+        <li>分析留存数据和反馈</li>
+        <li>根据反馈决定：是否进入 Phase 2 AI 排期开发？是否需要调整方向？</li>
+      </ul>
+      <div style="margin-top: 12px;">
+        <span class="tag tag-red">关键决策点</span>
+        <span class="tag tag-accent">决定 Phase 2 是否启动</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-title">Phase 2 — AI 差异化上线</div>
+    <div class="phase-duration">预估 4-6 周（前提：Phase 1.5 验证通过）</div>
+    <div class="card" style="margin-top: 8px;">
+      <ul class="feature-list">
+        <li>LLM 集成：复杂语义解析 + AI 任务拆解</li>
+        <li>AI 日计划排期（精力曲线默认配置 + 日历空闲）</li>
+        <li>日视图时间线 + 拖拽排期</li>
+        <li>系统日历订阅（iOS/Android）</li>
+        <li>火山引擎豆包 ASR 流式语音识别</li>
+        <li>悬浮麦克风 FAB（Push-to-talk）+ 实时文字展示</li>
+        <li>语音 → NLP 自动创建任务 + 5 秒撤回</li>
+        <li>子任务、标签、重复规则</li>
+      </ul>
+      <div style="margin-top: 12px;">
+        <span class="tag tag-blue">差异化功能上线</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-title">Phase 3 — 思源生态闭环</div>
+    <div class="phase-duration">预估 4-5 周</div>
+    <div class="card" style="margin-top: 8px;">
+      <ul class="feature-list">
+        <li>状态回写：App 完成 → 思源块 checkbox 自动更新</li>
+        <li>Widget 看板嵌入：在思源文档中展示任务看板</li>
+        <li>思源周报 Widget（自动汇总完成数据）</li>
+        <li>冲突处理：last-write-wins + 冲突日志</li>
+      </ul>
+      <div style="margin-top: 12px;">
+        <span class="tag tag-purple">生态集成完成</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-title">Phase 4 — 体验打磨 + Widget + 扩展</div>
+    <div class="phase-duration">预估 5 周</div>
+    <div class="card" style="margin-top: 8px;">
+      <ul class="feature-list">
+        <li>番茄钟集成 + 习惯打卡模块</li>
+        <li>Android Widget（2×2 进度环 / 4×2 今日列表 / 4×4 本周概览）</li>
+        <li>iOS WidgetKit 适配</li>
+        <li>Siri 快捷指令 / Google Assistant 系统级语音入口</li>
+        <li>精力曲线手动设置页面</li>
+        <li>性能优化 + 动画打磨</li>
+      </ul>
+      <div style="margin-top: 12px;">
+        <span class="tag tag-orange">公开测试</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 08 风险 ==================== -->
+<div class="section">
+  <span class="section-number">08</span>
+  <h2>风险与应对（v2.0 扩充）</h2>
+
+  <h3>技术实现风险（v1.1 覆盖，保持）</h3>
+  <div class="grid-2">
+    <div class="highlight-box red">
+      <strong>思源 API 版本迭代频繁</strong>
+      应对：锁定最低支持版本，插件内做 API 版本检测 + 降级逻辑。
+    </div>
+    <div class="highlight-box orange">
+      <strong>LLM 排期结果不稳定</strong>
+      应对：Phase 0 先做 Benchmark；缓存 + 温度参数调低 + 输出 schema 校验；给用户"重新排期"和手动微调逃生通道。
+    </div>
+    <div class="highlight-box orange">
+      <strong>双向同步冲突</strong>
+      应对：Phase 3 阶段用 last-write-wins + updated_at 比对，冲突时在 App 端提示用户选择。
+    </div>
+    <div class="highlight-box blue">
+      <strong>Supabase 免费额度</strong>
+      应对：初期个人使用不会超；监控用量，必要时切 Docker 自部署。
+    </div>
+  </div>
+
+  <h3 style="margin-top: 32px;">🚨 v2.0 补充：市场与行为风险（v1.1 完全缺失）</h3>
+
+  <div class="grid-2">
+    <div class="highlight-box red">
+      <strong>🔴 市场规模风险（最被低估）</strong>
+      "思源笔记重度用户"仅几千人，即使 100% 转化也难以支撑产品持续发展。<br>
+      应对：Phase 0 先做用户规模估算；考量是否能扩展到 Obsidian 用户或其他笔记生态；评估一人公司模式下几千用户是否足够。
+    </div>
+    <div class="highlight-box red">
+      <strong>🔴 单人技能广度风险</strong>
+      项目需同时精通 Flutter + Supabase + TypeScript（思源插件）+ LLM Prompt 工程 + 火山引擎 ASR。单人同时覆盖 5 个领域，容易每个模块都做 60 分。<br>
+      应对：Phase 1 砍掉 LLM 和 ASR 两个领域，专注 Flutter + Supabase + TypeScript 三个核心栈。
+    </div>
+    <div class="highlight-box orange">
+      <strong>🟠 LLM API 成本随使用增长</strong>
+      100 用户每天 AI 排期 ≈ $15/月，加上 NLP 解析和拆解会更高。方案完全没有成本和定价模型。<br>
+      应对：Phase 2 前做成本测算；预留免费额度上限 + Pro 订阅分层。
+    </div>
+    <div class="highlight-box orange">
+      <strong>🟠 竞品反应风险</strong>
+      如果验证成功，滴答清单或 Todoist 可能在 1-2 个版本内跟进 AI 排期。<br>
+      应对：思源深度集成是更难复制的护城河；优先在思源生态建立口碑壁垒。
+    </div>
+    <div class="highlight-box orange">
+      <strong>🟡 跨平台体验一致性</strong>
+      日历拖拽在 iOS 和 Android 原生行为差异大，Flutter 实现可能与原生体验有差距。<br>
+      应对：Phase 2 日视图拖拽前先做平台行为调研，必要时用 platform channel 调用原生组件。
+    </div>
+    <div class="highlight-box blue">
+      <strong>🟡 火山引擎 ASR 网络依赖 + 无 Flutter SDK</strong>
+      流式识别需稳定网络；可能需通过 platform channel 或 WebSocket 直连。<br>
+      应对：Phase 2 启动时先做 1-2 天技术 Spike 验证 WebSocket 对接可行性。
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 09 成功指标 ==================== -->
+<div class="section">
+  <span class="section-number">09</span>
+  <h2>MVP 成功指标（v2.0 分层定义）</h2>
+
+  <h3>Phase 0 验证判定（Go/No-Go）</h3>
+  <table>
+    <thead><tr><th>实验</th><th>Go 标准</th><th>No-Go 标准</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>WoZ AI 排期实验</td>
+        <td>≥3/5 用户认为"比自己排明显更好"</td>
+        <td>≤2/5 认为有用 → 转向"建议但不自动排期"模式</td>
+      </tr>
+      <tr>
+        <td>思源用户访谈</td>
+        <td>≥5/10 表示"愿意安装试用"</td>
+        <td>≤3/10 愿意安装 → 考虑做成纯思源插件 + Web 端</td>
+      </tr>
+      <tr>
+        <td>LLM 排期 Benchmark</td>
+        <td>≥3 个用户平均评分 4/5 以上</td>
+        <td>平均分 <3/5 → 简化排期逻辑，减少 LLM 依赖</td>
+      </tr>
+      <tr>
+        <td>用户规模估算</td>
+        <td>可触达用户 ≥500 人</td>
+        <td><200 人 → 重新评估产品形态（纯插件？）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Phase 1 产品指标</h3>
+  <table>
+    <thead><tr><th>指标</th><th>目标</th><th>度量方式</th></tr></thead>
+    <tbody>
+      <tr><td>Dogfooding 留存</td><td>≥3/5 用户连续使用 14 天</td><td>App 内日志：每日至少创建/完成 1 个任务</td></tr>
+      <tr><td>思源导入使用率</td><td>≥60% 用户至少用过一次导入</td><td>Supabase 中 creation_source = 'siyuan' 的用户占比</td></tr>
+      <tr><td>任务创建速度</td><td>文字输入到任务出现 < 2 秒</td><td>App 内性能埋点</td></tr>
+      <tr><td>反馈质量</td><td>收到 ≥5 条有价值的定性反馈</td><td>App 内反馈入口数据</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Phase 2 差异化指标（Phase 1.5 通过后才启用）</h3>
+  <table>
+    <thead><tr><th>指标</th><th>目标</th><th>度量方式</th></tr></thead>
+    <tbody>
+      <tr><td>AI 排期采纳率</td><td>> 60% 的时间块被用户确认</td><td>Supabase 中 start_date 字段变更率</td></tr>
+      <tr><td>语音创建采用率</td><td>> 20% 的新任务通过语音创建</td><td>creation_source = 'voice' 占比</td></tr>
+      <tr><td>语音撤回率</td><td>< 10%</td><td>Snackbar "撤回" 点击次数 / 语音创建总次数</td></tr>
+      <tr><td>思源同步成功率</td><td>> 95% 的 action item 成功双向同步</td><td>同步引擎日志</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ==================== 10 前置验证实验 ==================== -->
+<div class="section">
+  <span class="section-number">10</span>
+  <h2>前置验证实验设计 <span class="tag tag-new" style="font-size:10px;margin-left:4px;">v2.0 新增</span></h2>
+  <div class="lead">
+    MVP 实验设计的核心原则：<strong>在写代码之前验证最冒险的假设。</strong>以下实验应在 Phase 1 代码开发之前完成，成本为零或极低。
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon" style="background: var(--red-light);">🧪</div>
+      <div class="card-title">实验 1：Wizard-of-Oz AI 排期验证</div>
+    </div>
+    <table>
+      <thead><tr><th>维度</th><th>详情</th></tr></thead>
+      <tbody>
+        <tr><td>验证假设</td><td>H1：用户愿意让 AI 替自己排时间块</td></tr>
+        <tr><td>方法</td><td>找 5 位目标用户提供一周任务+日历 → 你手动按 AI 规则排期 → 每天发结果 → 一周后访谈</td></tr>
+        <tr><td>判定</td><td>≥3/5 认为"比自己排明显更好" → Go；否则 → 转向建议模式</td></tr>
+        <tr><td>成本</td><td>1 周，零代码</td></tr>
+        <tr><td>产出物</td><td>排期结果 + 执行偏差记录 + 用户访谈纪要</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon" style="background: var(--orange-light);">🎤</div>
+      <div class="card-title">实验 2：思源用户使用意愿访谈</div>
+    </div>
+    <table>
+      <thead><tr><th>维度</th><th>详情</th></tr></thead>
+    <tbody>
+        <tr><td>验证假设</td><td>H2：思源用户愿意安装并使用独立 App 管理任务</td></tr>
+        <tr><td>方法</td><td>思源社区招募 10 人，展示概念原型（线框图/PPT），问"你会安装吗？为什么？"</td></tr>
+        <tr><td>判定</td><td>≥5/10 表示愿意 → Go；≤3/10 → 考虑纯插件+Web 端方向</td></tr>
+        <tr><td>成本</td><td>1-2 周，需准备概念原型（Figma/PPT）</td></tr>
+        <tr><td>产出物</td><td>用户画像验证 + 使用场景优先级 + 价格敏感度</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon" style="background: var(--purple-light);">📊</div>
+      <div class="card-title">实验 3：LLM 排期质量基准测试</div>
+    </div>
+    <table>
+      <thead><tr><th>维度</th><th>详情</th></tr></thead>
+    <tbody>
+        <tr><td>验证假设</td><td>H3：LLM 排期质量达用户采纳率 >60%</td></tr>
+        <tr><td>方法</td><td>构造 50 个排期场景（含不同任务量/日历冲突/精力模式），让 LLM 产出，请 3 个目标用户打分（1-5）</td></tr>
+        <tr><td>判定</td><td>平均分 ≥4/5 → Go；<3/5 → 简化排期逻辑</td></tr>
+        <tr><td>成本</td><td>1 周，需 LLM API 调用费用（~$5-10）</td></tr>
+        <tr><td>产出物</td><td>50 个排期结果 + 用户评分 + Prompt 调优记录</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon" style="background: var(--blue-light);">📈</div>
+      <div class="card-title">实验 4：市场规模快速估算</div>
+    </div>
+    <table>
+      <thead><tr><th>维度</th><th>详情</th></tr></thead>
+    <tbody>
+        <tr><td>验证假设</td><td>H5：思源用户群体足够大支撑产品成长</td></tr>
+        <tr><td>方法</td><td>思源社区活跃用户数 + GitHub Star 趋势 + 社区帖子"你用什么待办工具"回复量估算</td></tr>
+        <tr><td>判定</td><td>可触达 ≥500 人 → Go；<200 人 → 评估拓展到 Obsidian 等生态</td></tr>
+        <tr><td>成本</td><td>半天</td></tr>
+        <tr><td>产出物</td><td>用户规模估算表 + 触达渠道分析</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ==================== 11 失败标准与 Pivot ==================== -->
+<div class="section">
+  <span class="section-number">11</span>
+  <h2>假设失败标准与 Pivot 方向 <span class="tag tag-new" style="font-size:10px;margin-left:4px;">v2.0 新增</span></h2>
+  <div class="lead">
+    好的 MVP 方案不仅知道如何验证假设，还知道假设被证伪后往哪走。以下为每个致命/重要假设定义了失败标准和 Pivot 方向。
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>假设</th><th>失败标准</th><th>Pivot 方向</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="tag tag-red">H1</span> 用户想要 AI 排期</td>
+        <td>WoZ 实验中 ≤2/5 用户认为有用</td>
+        <td>转向"智能建议但不自动排期"模式：AI 推荐时间块，用户手动确认每个任务的时间；或做成纯思源插件（不独立 App）</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-red">H2</span> 用户愿意用独立 App</td>
+        <td>Dogfooding 14 天后 <3 人留存</td>
+        <td>转向纯思源插件 + Web 端：核心交互在思源内完成，App 退化为通知和快速查看工具</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-red">H3</span> LLM 排期质量达标</td>
+        <td>采纳率 <40% 或 >30% 用户手动大幅调整</td>
+        <td>简化排期：减少 LLM 依赖，用规则引擎 + 用户手动排期为主，LLM 只做"今日建议"不自动排</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-orange">H4</span> 语音创建被采用</td>
+        <td>语音占比 <10% 且反馈"不需要"</td>
+        <td>降低语音优先级，聚焦文本交互体验；保留 ASR 能力在系统级快捷指令入口</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-orange">H5</span> 市场规模足够</td>
+        <td>可触达 <200 人</td>
+        <td>拓展到 Obsidian 生态（更大的用户基数）；或降低预期，定位为思源生态精品插件而非独立产品</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ==================== 12 用户获取策略 ==================== -->
+<div class="section">
+  <span class="section-number">12</span>
+  <h2>用户获取与分发策略 <span class="tag tag-new" style="font-size:10px;margin-left:4px;">v2.0 新增</span></h2>
+  <div class="lead">
+    v1.1 方案对"怎么做产品"考虑充分，但对"用户怎么知道这个产品"完全空白。思源社区是主要渠道但规模有限，需要多层触达策略。
+  </div>
+
+  <h3>触达渠道（按优先级）</h3>
+  <table>
+    <thead><tr><th>渠道</th><th>方法</th><th>适用阶段</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>🥇 思源社区</td>
+        <td>在社区发"概念介绍"帖 → 收集意向用户 → 内测邀请制（限量 20 人）</td>
+        <td>Phase 0 开始</td>
+      </tr>
+      <tr>
+        <td>🥈 少数派</td>
+        <td>撰写"效率工具困境"类文章，自然引出 Tempo 的解法</td>
+        <td>Phase 2 上线后</td>
+      </tr>
+      <tr>
+        <td>🥉 V2EX / 即刻</td>
+        <td>在效率工具相关讨论中分享经验，附产品链接</td>
+        <td>Phase 2 上线后</td>
+      </tr>
+      <tr>
+        <td>4 GitHub</td>
+        <td>开源思源插件代码，通过思源插件市场自然引流</td>
+        <td>Phase 1 起</td>
+      </tr>
+      <tr>
+        <td>5 用户推荐</td>
+        <td>早期用户完成 14 天使用后，请他们帮忙在社区写推荐帖</td>
+        <td>Phase 1.5 起</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>早期用户策略</h3>
+  <div class="highlight-box blue">
+    <strong>内测邀请制（限量 20 人）</strong><br>
+    1. 管理预期：明确告知这是早期版本，功能不完整，但会认真对待每条反馈<br>
+    2. 降低流失：限量感 + 创始人直接沟通 → 用户更愿意忍受早期瑕疵<br>
+    3. 反馈质量：少量深度用户 > 大量浅度用户，更适合发现产品方向性问题<br>
+    4. 种子传播：满意的内测用户是最可信的推荐源
+  </div>
+
+  <h3>运营节奏</h3>
+  <div class="flow-steps">
+    <div class="flow-step">Phase 0：思源社区发帖收集意向</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">Phase 1：邀请 5-10 人内测</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">Phase 1.5：用户访谈 + 优化</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">Phase 2：扩大内测到 20 人 + 少数派发文</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">Phase 4：公开测试</div>
+  </div>
+</div>
+
+<!-- ==================== FOOTER ==================== -->
+<div class="doc-footer">
+  <p>Tempo MVP 实验设计 · v2.0 · 2026-06-18</p>
+  <p style="margin-top: 4px;">v2.0 基于 OPC MVP 实验设计方法论全面重构。核心变化：新增 Phase 0 零代码验证、收窄 Phase 1 范围约 30%、补充假设风险矩阵、失败标准与 Pivot 方向、用户获取策略。</p>
+  <p style="margin-top: 8px; font-size: 11px; color: var(--accent);">审查方：OPC 一人公司专家团 · MVP 实验设计师 验真</p>
+</div>
+
+</div>
+</body>
+</html>

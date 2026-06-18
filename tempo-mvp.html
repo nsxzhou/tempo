@@ -441,6 +441,85 @@
   .label-cut { background: var(--red-light); color: var(--red); }
   .label-move { background: var(--blue-light); color: var(--blue); }
 
+  /* Completion status badges */
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 12px;
+    margin-left: 6px;
+    vertical-align: middle;
+    letter-spacing: 0.3px;
+  }
+  .status-done { background: var(--green-light); color: var(--green); }
+  .status-partial { background: var(--orange-light); color: var(--orange); }
+  .status-todo { background: var(--gray-100); color: #888; }
+
+  .status-legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin: 12px 0 20px 0;
+    padding: 12px 16px;
+    background: var(--gray-50);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+  }
+  .status-legend span {
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* Progress bar */
+  .progress-bar-wrap {
+    background: var(--gray-100);
+    border-radius: 8px;
+    height: 10px;
+    margin: 8px 0 4px 0;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    border-radius: 8px;
+    background: var(--green);
+    transition: width 0.3s;
+  }
+  .progress-text {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-align: right;
+  }
+
+  /* Phase status pill */
+  .phase-status {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 12px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .phase-status.done { background: var(--green-light); color: var(--green); }
+  .phase-status.partial { background: var(--orange-light); color: var(--orange); }
+  .phase-status.todo { background: var(--gray-100); color: #888; }
+
+  /* Feature list status markers */
+  .feature-list li.done::before {
+    content: '✅';
+    color: var(--green);
+  }
+  .feature-list li.partial::before {
+    content: '🔧';
+    color: var(--orange);
+  }
+
   /* Footer */
   .doc-footer {
     text-align: center;
@@ -480,6 +559,110 @@
     <li><span class="label label-new">新增</span> Phase 1 App 内反馈入口 + 简单 onboarding</li>
     <li><span class="label label-move">调整</span> 下一步优先验证语音创建任务技术 Spike；计划页 / AI 排期暂不进入近期实现</li>
   </ul>
+</div>
+
+<!-- ==================== 实现进度 ==================== -->
+<div class="section">
+  <span class="section-number">实现进度</span>
+  <h2>当前开发进度（截至 2026-06-18）</h2>
+
+  <div class="status-legend">
+    <span><span class="status status-done">✅ 已完成</span></span>
+    <span><span class="status status-partial">🔧 部分完成</span></span>
+    <span><span class="status status-todo">⬜ 未开始</span></span>
+  </div>
+
+  <div class="progress-bar-wrap" style="height: 14px;">
+    <div class="progress-bar-fill" style="width: 18%;"></div>
+  </div>
+  <div class="progress-text">Phase 1 整体进度约 18%（15 项中 2.5 项完成）</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 35%;">功能模块</th>
+        <th style="width: 15%;">状态</th>
+        <th>说明</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>项目脚手架（Riverpod + GoRouter + Drift）</td>
+        <td><span class="status status-done">✅ 已完成</span></td>
+        <td>三大核心依赖已接入并联通，主题、路由、数据库均可用</td>
+      </tr>
+      <tr>
+        <td>任务 CRUD</td>
+        <td><span class="status status-partial">🔧 部分</span></td>
+        <td>创建 + 删除 + 响应式列表已实现；编辑、完成切换、详情页、智能过滤器、列表管理 UI 未做</td>
+      </tr>
+      <tr>
+        <td>语音创建任务</td>
+        <td><span class="status status-partial">🔧 部分</span></td>
+        <td>Flutter 客户端完整（push-to-talk、录音、服务层、5s 撤回、测试）；Supabase Edge Function 后端代理未部署</td>
+      </tr>
+      <tr>
+        <td>本地缓存</td>
+        <td><span class="status status-partial">🔧 部分</span></td>
+        <td>Drift SQLite 本地缓存可用；在线优先同步引擎未实现</td>
+      </tr>
+      <tr>
+        <td>月视图 + 周视图日历</td>
+        <td><span class="status status-todo">⬜ 未开始</span></td>
+        <td>table_calendar 已声明依赖，页面为纯占位</td>
+      </tr>
+      <tr>
+        <td>自然语言日期解析</td>
+        <td><span class="status status-todo">⬜ 未开始</span></td>
+        <td>无 chrono 或规则引擎，仅有 ISO 8601 解析</td>
+      </tr>
+      <tr>
+        <td>本地通知提醒</td>
+        <td><span class="status status-todo">⬜ 未开始</span></td>
+        <td>包已声明，零代码使用</td>
+      </tr>
+      <tr>
+        <td>Supabase Auth + 数据同步</td>
+        <td><span class="status status-todo">⬜ 未开始</span></td>
+        <td>包已声明，无初始化、Auth 流程或数据同步代码</td>
+      </tr>
+      <tr>
+        <td>思源 Petal 插件（单向导入）</td>
+        <td><span class="status status-todo">⬜ 未开始</span></td>
+        <td>仅有 siyuanBlockId 字段预留，无插件代码</td>
+      </tr>
+      <tr>
+        <td>首次使用引导（3 屏 onboarding）</td>
+        <td><span class="status status-todo">⬜ 未开始</span></td>
+        <td>单页占位，含 TODO 注释</td>
+      </tr>
+      <tr>
+        <td>App 内反馈入口</td>
+        <td><span class="status status-todo">⬜ 未开始</span></td>
+        <td>无摇一摇或反馈按钮代码</td>
+      </tr>
+      <tr>
+        <td>AI 智能排期</td>
+        <td><span class="status status-todo">⬜ Phase 2</span></td>
+        <td>页面占位，React 原型仅作参考</td>
+      </tr>
+      <tr>
+        <td>子任务 / 标签 / 重复规则</td>
+        <td><span class="status status-todo">⬜ Phase 2</span></td>
+        <td>无 schema、模型或 UI</td>
+      </tr>
+      <tr>
+        <td>系统日历订阅</td>
+        <td><span class="status status-todo">⬜ Phase 2</span></td>
+        <td>无相关依赖或代码</td>
+      </tr>
+      <tr>
+        <td>Android / iOS Widget</td>
+        <td><span class="status status-todo">⬜ Phase 4</span></td>
+        <td>无原生 Widget 代码</td>
+      </tr>
+    </tbody>
+  </table>
 </div>
 
 <!-- ==================== 核心设计原则 ==================== -->
@@ -620,12 +803,12 @@
     <div class="card">
       <div class="card-header">
         <div class="card-icon" style="background: var(--green-light);">📋</div>
-        <div class="card-title">任务管理（基础版）</div>
+        <div class="card-title">任务管理（基础版）<span class="status status-partial">🔧 部分完成</span></div>
       </div>
       <ul class="feature-list">
-        <li>任务 CRUD：标题、优先级、截止日期、列表组织</li>
-        <li>智能过滤器（今天 / 本周 / 已过期 / 自定义）</li>
-        <li>自然语言日期解析（本地规则引擎，不用 LLM）</li>
+        <li class="done">任务 CRUD：标题、优先级、截止日期、列表组织</li>
+        <li class="cut">智能过滤器（今天 / 本周 / 已过期 / 自定义）— 延后到 Phase 2</li>
+        <li class="cut">自然语言日期解析（本地规则引擎，不用 LLM）— 未开始</li>
         <li class="cut">子任务、标签、重复规则 — 延后到 Phase 2</li>
       </ul>
     </div>
@@ -633,7 +816,7 @@
     <div class="card">
       <div class="card-header">
         <div class="card-icon" style="background: var(--blue-light);">📅</div>
-        <div class="card-title">日历视图（精简版）</div>
+        <div class="card-title">日历视图（精简版）<span class="status status-todo">⬜ 未开始</span></div>
       </div>
       <ul class="feature-list">
         <li>月视图：任务按日期标记，点击展开列表</li>
@@ -647,7 +830,7 @@
     <div class="card">
       <div class="card-header">
         <div class="card-icon" style="background: var(--orange-light);">🔗</div>
-        <div class="card-title">思源单向同步 <span class="tag tag-new" style="font-size:10px;margin-left:4px;">提前</span></div>
+        <div class="card-title">思源单向同步 <span class="tag tag-new" style="font-size:10px;margin-left:4px;">提前</span><span class="status status-todo">⬜ 未开始</span></div>
       </div>
       <ul class="feature-list">
         <li>思源 Petal 插件：扫描文档中未完成任务块</li>
@@ -661,7 +844,7 @@
     <div class="card">
       <div class="card-header">
         <div class="card-icon" style="background: var(--purple-light);">🧭</div>
-        <div class="card-title">体验基础 <span class="tag tag-new" style="font-size:10px;margin-left:4px;">新增</span></div>
+        <div class="card-title">体验基础 <span class="tag tag-new" style="font-size:10px;margin-left:4px;">新增</span><span class="status status-todo">⬜ 未开始</span></div>
       </div>
       <ul class="feature-list">
         <li class="new">简单 onboarding（首次打开 3 屏引导）</li>
@@ -891,15 +1074,15 @@
   </div>
 
   <div class="phase pre-dev">
-    <div class="phase-title">Next Spike — AI 语音创建任务技术验证</div>
+    <div class="phase-title">Next Spike — AI 语音创建任务技术验证 <span class="phase-status partial">🔧 客户端完成，后端待部署</span></div>
     <div class="phase-duration">预估 2-4 天，技术 Spike</div>
     <div class="card" style="margin-top: 8px;">
       <ul class="feature-list">
-        <li>Flutter App：按住麦克风录音，松手提交，滑开取消</li>
+        <li class="done">Flutter App：按住麦克风录音，松手提交，滑开取消</li>
         <li>后端代理：App 不存密钥，由 Supabase Edge Function 调火山 ASR + 豆包文本模型</li>
-        <li>LLM 解析核心字段：标题、描述、截止时间、优先级、置信度、原始转写</li>
-        <li>无感创建：高置信度自动写入本地 Drift，低置信度进入可编辑草稿</li>
-        <li>5 秒撤回：自动创建后可撤销，避免误识别污染任务库</li>
+        <li class="done">LLM 解析核心字段：标题、描述、截止时间、优先级、置信度、原始转写</li>
+        <li class="done">无感创建：高置信度自动写入本地 Drift，低置信度进入可编辑草稿</li>
+        <li class="done">5 秒撤回：自动创建后可撤销，避免误识别污染任务库</li>
       </ul>
       <div style="margin-top: 12px;">
         <span class="tag tag-accent">近期唯一 AI 工程验证</span>
@@ -909,7 +1092,7 @@
   </div>
 
   <div class="phase pre-dev">
-    <div class="phase-title">Phase 0 — 前置验证（写代码前）</div>
+    <div class="phase-title">Phase 0 — 前置验证（写代码前）<span class="phase-status todo">⬜ 未开始</span></div>
     <div class="phase-duration">预估 1-2 周，零代码</div>
     <div class="card" style="margin-top: 8px;">
       <ul class="feature-list">
@@ -927,12 +1110,12 @@
   </div>
 
   <div class="phase">
-    <div class="phase-title">Phase 1 — 待办核心 + 日历 + 思源单向同步（最小闭环）</div>
+    <div class="phase-title">Phase 1 — 待办核心 + 日历 + 思源单向同步（最小闭环）<span class="phase-status partial">🔧 进行中</span></div>
     <div class="phase-duration">预估 6-8 周</div>
     <div class="card" style="margin-top: 8px;">
       <ul class="feature-list">
-        <li>Flutter 项目脚手架（Riverpod + GoRouter + Drift）</li>
-        <li>任务 CRUD（基础版）：标题、优先级、截止日期、列表组织</li>
+        <li class="done">Flutter 项目脚手架（Riverpod + GoRouter + Drift）</li>
+        <li class="partial">任务 CRUD（基础版）：标题、优先级、截止日期、列表组织</li>
         <li>月视图 + 周视图日历</li>
         <li>自然语言日期解析（本地 chrono 规则引擎）</li>
         <li>本地通知提醒（到期前 15 分钟 / 到期时）</li>
@@ -940,7 +1123,7 @@
         <li>思源 Petal 插件：扫描未完成任务块 → 一键导入 Tempo</li>
         <li>首次使用引导（3 屏 onboarding）</li>
         <li>App 内反馈入口（摇一摇 / 设置页按钮）</li>
-        <li>本地缓存 + 在线优先同步</li>
+        <li class="partial">本地缓存 + 在线优先同步</li>
       </ul>
       <div style="margin-top: 12px;">
         <span class="tag tag-green">内部 Dogfooding</span>
@@ -950,7 +1133,7 @@
   </div>
 
   <div class="phase pre-dev">
-    <div class="phase-title">Phase 1.5 — 反馈收集 & 方向确认</div>
+    <div class="phase-title">Phase 1.5 — 反馈收集 & 方向确认 <span class="phase-status todo">⬜ 未开始</span></div>
     <div class="phase-duration">预估 2-3 周</div>
     <div class="card" style="margin-top: 8px;">
       <ul class="feature-list">
@@ -967,7 +1150,7 @@
   </div>
 
   <div class="phase">
-    <div class="phase-title">Phase 2 — AI 差异化上线</div>
+    <div class="phase-title">Phase 2 — AI 差异化上线 <span class="phase-status todo">⬜ 未开始</span></div>
     <div class="phase-duration">预估 4-6 周（前提：Phase 1.5 验证通过）</div>
     <div class="card" style="margin-top: 8px;">
       <ul class="feature-list">
@@ -986,7 +1169,7 @@
   </div>
 
   <div class="phase">
-    <div class="phase-title">Phase 3 — 思源生态闭环</div>
+    <div class="phase-title">Phase 3 — 思源生态闭环 <span class="phase-status todo">⬜ 未开始</span></div>
     <div class="phase-duration">预估 4-5 周</div>
     <div class="card" style="margin-top: 8px;">
       <ul class="feature-list">
@@ -1002,7 +1185,7 @@
   </div>
 
   <div class="phase">
-    <div class="phase-title">Phase 4 — 体验打磨 + Widget + 扩展</div>
+    <div class="phase-title">Phase 4 — 体验打磨 + Widget + 扩展 <span class="phase-status todo">⬜ 未开始</span></div>
     <div class="phase-duration">预估 5 周</div>
     <div class="card" style="margin-top: 8px;">
       <ul class="feature-list">

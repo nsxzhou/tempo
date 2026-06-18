@@ -23,10 +23,18 @@ class AuthService {
   /// 邮件中的链接会以 `tempo://login-callback` scheme 唤起 App，
   /// supabase_flutter 自动处理 session 交换。
   Future<void> sendMagicLink(String email) async {
-    await _client.auth.signInWithOtp(
-      email: email.trim(),
-      emailRedirectTo: AppConstants.deepLinkCallback,
-    );
+    try {
+      await _client.auth.signInWithOtp(
+        email: email.trim(),
+        emailRedirectTo: AppConstants.deepLinkCallback,
+      );
+    } catch (e, st) {
+      // ignore: avoid_print
+      print('=== [AUTH-ERROR] $e');
+      // ignore: avoid_print
+      print('=== [AUTH-STACK] $st');
+      rethrow;
+    }
   }
 
   /// 登出，清除当前 session。

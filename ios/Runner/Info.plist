@@ -28,6 +28,19 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Tempo uses the microphone to create tasks from voice input.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.tempo.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>tempo</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

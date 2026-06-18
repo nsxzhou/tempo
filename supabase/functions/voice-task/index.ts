@@ -1,3 +1,12 @@
+// @deprecated 逻辑已迁移到 parse-task Edge Function（统一语音+文本解析端点）。
+// 此文件保留作参考，请勿修改。新功能请使用 supabase/functions/parse-task/index.ts。
+//
+// 迁移说明：
+// - parse-task 支持 multipart/form-data（语音）和 application/json（文本）两种路径
+// - 语音路径逻辑（ASR → LLM）与本文件完全一致
+// - 文本路径直接调用 LLM 解析，无需 ASR
+// - LLM Prompt 模板已统一，见 parse-task/index.ts 的 buildSystemPrompt()
+
 type VoiceTaskResponse = {
   title: string;
   description: string | null;

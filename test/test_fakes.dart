@@ -58,9 +58,75 @@ class FakeTaskRepository implements TaskRepository {
   }
 
   @override
+  Future<Task> updateTask(Task task) async {
+    final index = tasks.indexWhere((t) => t.id == task.id);
+    if (index != -1) {
+      tasks[index] = task.copyWith(updatedAt: DateTime.now());
+      _emit();
+      return tasks[index];
+    }
+    throw StateError('Task not found: ${task.id}');
+  }
+
+  @override
+  Future<Task> toggleComplete(String id) async {
+    final index = tasks.indexWhere((t) => t.id == id);
+    if (index == -1) {
+      throw StateError('Task not found: $id');
+    }
+    final current = tasks[index];
+    final now = DateTime.now();
+    final toggled = current.copyWith(
+      isCompleted: !current.isCompleted,
+      completedAt: !current.isCompleted ? now : null,
+      updatedAt: now,
+    );
+    tasks[index] = toggled;
+    _emit();
+    return toggled;
+  }
+
+  @override
   Future<void> deleteTask(String id) async {
     deletedTaskIds.add(id);
     tasks.removeWhere((task) => task.id == id);
+    _emit();
+  }
+
+  @override
+  Stream<List<Task>> watchTasksByList(String listId) {
+    scheduleMicrotask(() {
+      _controller.add(tasks.where((t) => t.listId == listId).toList());
+    });
+    return _controller.stream;
+  }
+
+  @override
+  Stream<List<Task>> watchTasksByDateRange(DateTime start, DateTime end) {
+    scheduleMicrotask(() {
+      _controller.add(
+        tasks.where((t) {
+          if (t.dueDate == null) return false;
+          return t.dueDate!.isAfter(start) && t.dueDate!.isBefore(end);
+        }).toList(),
+      );
+    });
+    return _controller.stream;
+  }
+
+  @override
+  Future<Task?> getTaskById(String id) async {
+    return tasks.where((t) => t.id == id).firstOrNull;
+  }
+
+  @override
+  Future<void> pushPending() async {
+    // Fake: 清除所有 syncPending 标记
+    for (var i = 0; i < tasks.length; i++) {
+      if (tasks[i].syncPending) {
+        tasks[i] = tasks[i].copyWith(syncPending: false);
+      }
+    }
     _emit();
   }
 

@@ -26,6 +26,7 @@ mixin _$TaskList {
   String get name => throw _privateConstructorUsedError;
   int get sortOrder => throw _privateConstructorUsedError;
   DateTime get createdAt => throw _privateConstructorUsedError;
+  bool get syncPending => throw _privateConstructorUsedError;
 
   /// Serializes this TaskList to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -48,6 +49,7 @@ abstract class $TaskListCopyWith<$Res> {
     String name,
     int sortOrder,
     DateTime createdAt,
+    bool syncPending,
   });
 }
 
@@ -71,6 +73,7 @@ class _$TaskListCopyWithImpl<$Res, $Val extends TaskList>
     Object? name = null,
     Object? sortOrder = null,
     Object? createdAt = null,
+    Object? syncPending = null,
   }) {
     return _then(
       _value.copyWith(
@@ -94,6 +97,10 @@ class _$TaskListCopyWithImpl<$Res, $Val extends TaskList>
                 ? _value.createdAt
                 : createdAt // ignore: cast_nullable_to_non_nullable
                       as DateTime,
+            syncPending: null == syncPending
+                ? _value.syncPending
+                : syncPending // ignore: cast_nullable_to_non_nullable
+                      as bool,
           )
           as $Val,
     );
@@ -115,6 +122,7 @@ abstract class _$$TaskListImplCopyWith<$Res>
     String name,
     int sortOrder,
     DateTime createdAt,
+    bool syncPending,
   });
 }
 
@@ -137,6 +145,7 @@ class __$$TaskListImplCopyWithImpl<$Res>
     Object? name = null,
     Object? sortOrder = null,
     Object? createdAt = null,
+    Object? syncPending = null,
   }) {
     return _then(
       _$TaskListImpl(
@@ -160,6 +169,10 @@ class __$$TaskListImplCopyWithImpl<$Res>
             ? _value.createdAt
             : createdAt // ignore: cast_nullable_to_non_nullable
                   as DateTime,
+        syncPending: null == syncPending
+            ? _value.syncPending
+            : syncPending // ignore: cast_nullable_to_non_nullable
+                  as bool,
       ),
     );
   }
@@ -174,6 +187,7 @@ class _$TaskListImpl implements _TaskList {
     required this.name,
     this.sortOrder = 0,
     required this.createdAt,
+    this.syncPending = false,
   });
 
   factory _$TaskListImpl.fromJson(Map<String, dynamic> json) =>
@@ -190,10 +204,13 @@ class _$TaskListImpl implements _TaskList {
   final int sortOrder;
   @override
   final DateTime createdAt;
+  @override
+  @JsonKey()
+  final bool syncPending;
 
   @override
   String toString() {
-    return 'TaskList(id: $id, userId: $userId, name: $name, sortOrder: $sortOrder, createdAt: $createdAt)';
+    return 'TaskList(id: $id, userId: $userId, name: $name, sortOrder: $sortOrder, createdAt: $createdAt, syncPending: $syncPending)';
   }
 
   @override
@@ -207,13 +224,15 @@ class _$TaskListImpl implements _TaskList {
             (identical(other.sortOrder, sortOrder) ||
                 other.sortOrder == sortOrder) &&
             (identical(other.createdAt, createdAt) ||
-                other.createdAt == createdAt));
+                other.createdAt == createdAt) &&
+            (identical(other.syncPending, syncPending) ||
+                other.syncPending == syncPending));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode =>
-      Object.hash(runtimeType, id, userId, name, sortOrder, createdAt);
+      Object.hash(runtimeType, id, userId, name, sortOrder, createdAt, syncPending);
 
   /// Create a copy of TaskList
   /// with the given fields replaced by the non-null parameter values.
@@ -236,6 +255,7 @@ abstract class _TaskList implements TaskList {
     required final String name,
     final int sortOrder,
     required final DateTime createdAt,
+    final bool syncPending,
   }) = _$TaskListImpl;
 
   factory _TaskList.fromJson(Map<String, dynamic> json) =
@@ -251,6 +271,8 @@ abstract class _TaskList implements TaskList {
   int get sortOrder;
   @override
   DateTime get createdAt;
+  @override
+  bool get syncPending;
 
   /// Create a copy of TaskList
   /// with the given fields replaced by the non-null parameter values.

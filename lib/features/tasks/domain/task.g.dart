@@ -26,6 +26,7 @@ _$TaskImpl _$$TaskImplFromJson(Map<String, dynamic> json) => _$TaskImpl(
   createdAt: DateTime.parse(json['createdAt'] as String),
   updatedAt: DateTime.parse(json['updatedAt'] as String),
   creationSource: json['creationSource'] as String? ?? 'text',
+  syncPending: json['syncPending'] as bool? ?? false,
 );
 
 Map<String, dynamic> _$$TaskImplToJson(_$TaskImpl instance) =>
@@ -43,6 +44,7 @@ Map<String, dynamic> _$$TaskImplToJson(_$TaskImpl instance) =>
       'createdAt': instance.createdAt.toIso8601String(),
       'updatedAt': instance.updatedAt.toIso8601String(),
       'creationSource': instance.creationSource,
+      'syncPending': instance.syncPending,
     };
 
 const _$TaskPriorityEnumMap = {

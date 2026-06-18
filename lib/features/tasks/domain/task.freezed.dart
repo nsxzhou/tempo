@@ -34,6 +34,7 @@ mixin _$Task {
   DateTime get createdAt => throw _privateConstructorUsedError;
   DateTime get updatedAt => throw _privateConstructorUsedError;
   String get creationSource => throw _privateConstructorUsedError;
+  bool get syncPending => throw _privateConstructorUsedError;
 
   /// Serializes this Task to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -63,6 +64,7 @@ abstract class $TaskCopyWith<$Res> {
     DateTime createdAt,
     DateTime updatedAt,
     String creationSource,
+    bool syncPending,
   });
 }
 
@@ -94,6 +96,7 @@ class _$TaskCopyWithImpl<$Res, $Val extends Task>
     Object? createdAt = null,
     Object? updatedAt = null,
     Object? creationSource = null,
+    Object? syncPending = null,
   }) {
     return _then(
       _value.copyWith(
@@ -149,6 +152,10 @@ class _$TaskCopyWithImpl<$Res, $Val extends Task>
                 ? _value.creationSource
                 : creationSource // ignore: cast_nullable_to_non_nullable
                       as String,
+            syncPending: null == syncPending
+                ? _value.syncPending
+                : syncPending // ignore: cast_nullable_to_non_nullable
+                      as bool,
           )
           as $Val,
     );
@@ -177,6 +184,7 @@ abstract class _$$TaskImplCopyWith<$Res> implements $TaskCopyWith<$Res> {
     DateTime createdAt,
     DateTime updatedAt,
     String creationSource,
+    bool syncPending,
   });
 }
 
@@ -205,6 +213,7 @@ class __$$TaskImplCopyWithImpl<$Res>
     Object? createdAt = null,
     Object? updatedAt = null,
     Object? creationSource = null,
+    Object? syncPending = null,
   }) {
     return _then(
       _$TaskImpl(
@@ -260,6 +269,10 @@ class __$$TaskImplCopyWithImpl<$Res>
             ? _value.creationSource
             : creationSource // ignore: cast_nullable_to_non_nullable
                   as String,
+        syncPending: null == syncPending
+            ? _value.syncPending
+            : syncPending // ignore: cast_nullable_to_non_nullable
+                  as bool,
       ),
     );
   }
@@ -282,6 +295,7 @@ class _$TaskImpl implements _Task {
     required this.createdAt,
     required this.updatedAt,
     this.creationSource = 'text',
+    this.syncPending = false,
   });
 
   factory _$TaskImpl.fromJson(Map<String, dynamic> json) =>
@@ -317,10 +331,13 @@ class _$TaskImpl implements _Task {
   @override
   @JsonKey()
   final String creationSource;
+  @override
+  @JsonKey()
+  final bool syncPending;
 
   @override
   String toString() {
-    return 'Task(id: $id, listId: $listId, title: $title, description: $description, priority: $priority, dueDate: $dueDate, isCompleted: $isCompleted, completedAt: $completedAt, siyuanBlockId: $siyuanBlockId, sortOrder: $sortOrder, createdAt: $createdAt, updatedAt: $updatedAt, creationSource: $creationSource)';
+    return 'Task(id: $id, listId: $listId, title: $title, description: $description, priority: $priority, dueDate: $dueDate, isCompleted: $isCompleted, completedAt: $completedAt, siyuanBlockId: $siyuanBlockId, sortOrder: $sortOrder, createdAt: $createdAt, updatedAt: $updatedAt, creationSource: $creationSource, syncPending: $syncPending)';
   }
 
   @override
@@ -349,7 +366,9 @@ class _$TaskImpl implements _Task {
             (identical(other.updatedAt, updatedAt) ||
                 other.updatedAt == updatedAt) &&
             (identical(other.creationSource, creationSource) ||
-                other.creationSource == creationSource));
+                other.creationSource == creationSource) &&
+            (identical(other.syncPending, syncPending) ||
+                other.syncPending == syncPending));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -369,6 +388,7 @@ class _$TaskImpl implements _Task {
     createdAt,
     updatedAt,
     creationSource,
+    syncPending,
   );
 
   /// Create a copy of Task
@@ -400,6 +420,7 @@ abstract class _Task implements Task {
     required final DateTime createdAt,
     required final DateTime updatedAt,
     final String creationSource,
+    final bool syncPending,
   }) = _$TaskImpl;
 
   factory _Task.fromJson(Map<String, dynamic> json) = _$TaskImpl.fromJson;
@@ -430,6 +451,8 @@ abstract class _Task implements Task {
   DateTime get updatedAt;
   @override
   String get creationSource;
+  @override
+  bool get syncPending;
 
   /// Create a copy of Task
   /// with the given fields replaced by the non-null parameter values.

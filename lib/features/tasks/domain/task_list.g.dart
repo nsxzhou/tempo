@@ -13,6 +13,7 @@ _$TaskListImpl _$$TaskListImplFromJson(Map<String, dynamic> json) =>
       name: json['name'] as String,
       sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
       createdAt: DateTime.parse(json['createdAt'] as String),
+      syncPending: json['syncPending'] as bool? ?? false,
     );
 
 Map<String, dynamic> _$$TaskListImplToJson(_$TaskListImpl instance) =>
@@ -22,4 +23,5 @@ Map<String, dynamic> _$$TaskListImplToJson(_$TaskListImpl instance) =>
       'name': instance.name,
       'sortOrder': instance.sortOrder,
       'createdAt': instance.createdAt.toIso8601String(),
+      'syncPending': instance.syncPending,
     };

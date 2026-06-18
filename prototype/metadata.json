@@ -1,0 +1,6 @@
+{
+  "name": "Tempo",
+  "description": "A highly polished, Stripe-style aesthetic task organizer and AI planner prototype with premium typography and interactions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

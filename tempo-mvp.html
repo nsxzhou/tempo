@@ -535,16 +535,34 @@
 
 <!-- ==================== HEADER ==================== -->
 <div class="doc-header">
-  <h1>Tempo — MVP 实验设计<span class="version-badge">v2.0</span></h1>
+  <h1>Tempo — MVP 实验设计<span class="version-badge">v2.1</span></h1>
   <div class="subtitle">智能待办 App（Flutter）+ 思源笔记集成 · 基于 MVP 实验方法论重构</div>
   <div class="meta">
-    <span>v2.0 MVP实验设计版</span>
+    <span>v2.1 实施交付版</span>
     <span>2026-06-18</span>
     <span>Flutter · Supabase · TypeScript</span>
   </div>
 </div>
 
 <!-- ==================== CHANGELOG ==================== -->
+<div class="changelog">
+  <h4>📋 v2.1 变更摘要（Phase 1 实施交付版）</h4>
+  <ul>
+    <li><span class="label label-new">交付</span> Phase 1 全部 10 项功能 + 语音后端 Spike：~52 个文件创建/修改，团队 SOP 走完（PM→架构→工程→QA 2 轮）</li>
+    <li><span class="label label-new">完成</span> 任务 CRUD 补全（inline 创建+Checkbox+左滑删除+详情页+排序分组）</li>
+    <li><span class="label label-new">完成</span> 日历视图（月视图+周视图+切换交互）</li>
+    <li><span class="label label-new">完成</span> LLM 日期解析（复用 parse-task Edge Function，含离线降级 DatePicker）</li>
+    <li><span class="label label-new">完成</span> 本地通知（reminder+due 双通知，完成/删除取消）</li>
+    <li><span class="label label-new">完成</span> Supabase Auth（Magic Link + Deep Link 唤起）</li>
+    <li><span class="label label-new">完成</span> 在线优先同步（SyncTaskRepository + SyncService + last-write-wins）</li>
+    <li><span class="label label-new">完成</span> 思源 Petal 插件（配对码绑定+手动扫描+custom-tempo-id 幂等）</li>
+    <li><span class="label label-new">完成</span> 3 屏 Onboarding + 设置页 + 摇一摇反馈</li>
+    <li><span class="label label-chg">偏离</span> 文档原定 Phase 1 用本地 chrono 规则引擎，grill 共识改用 LLM 解析（成本 ~$3-5/月、延迟 1-3s、离线降级保底）</li>
+    <li><span class="label label-chg">整合</span> 语音 Edge Function 统一为 parse-task（multipart 语音路径 + json 文本路径）</li>
+    <li><span class="label label-new">新增</span> Phase 0/Phase 1.5/Phase 2-4 全部保留为后续方向验证框架，Phase 1 实施记录与设计/PRD 同存于 deliverables/software-tempo-phase1/</li>
+  </ul>
+</div>
+
 <div class="changelog">
   <h4>📋 v2.0 变更摘要（基于 OPC MVP 实验设计方法论审查）</h4>
   <ul>
@@ -564,7 +582,7 @@
 <!-- ==================== 实现进度 ==================== -->
 <div class="section">
   <span class="section-number">实现进度</span>
-  <h2>当前开发进度（截至 2026-06-18）</h2>
+  <h2>Phase 1 实施交付状态（v2.1）</h2>
 
   <div class="status-legend">
     <span><span class="status status-done">✅ 已完成</span></span>
@@ -573,9 +591,9 @@
   </div>
 
   <div class="progress-bar-wrap" style="height: 14px;">
-    <div class="progress-bar-fill" style="width: 18%;"></div>
+    <div class="progress-bar-fill" style="width: 100%;"></div>
   </div>
-  <div class="progress-text">Phase 1 整体进度约 18%（15 项中 2.5 项完成）</div>
+  <div class="progress-text">Phase 1 整体进度 100%（11/11 项完成）— 2026-06-18 由团队 SOP 走完交付（PM→架构→工程→QA 2 轮）</div>
 
   <table>
     <thead>
@@ -592,59 +610,59 @@
         <td>三大核心依赖已接入并联通，主题、路由、数据库均可用</td>
       </tr>
       <tr>
-        <td>任务 CRUD</td>
-        <td><span class="status status-partial">🔧 部分</span></td>
-        <td>创建 + 删除 + 响应式列表已实现；编辑、完成切换、详情页、智能过滤器、列表管理 UI 未做</td>
+        <td>任务 CRUD（基础版）</td>
+        <td><span class="status status-done">✅ 已完成</span></td>
+        <td>文本 inline 创建 + Checkbox 完成切换 + 左滑删除 + 详情页编辑 + 排序分组 + 5s 撤回；Drift v2 schema + Tasks Companion 新增 syncPending</td>
       </tr>
       <tr>
-        <td>语音创建任务</td>
-        <td><span class="status status-partial">🔧 部分</span></td>
-        <td>Flutter 客户端完整（push-to-talk、录音、服务层、5s 撤回、测试）；Supabase Edge Function 后端代理未部署</td>
+        <td>语音创建任务（客户端 + 后端）</td>
+        <td><span class="status status-done">✅ 已完成</span></td>
+        <td>Flutter 客户端完整（push-to-talk、录音、服务层、5s 撤回、草稿确认）；后端统一为 parse-task Edge Function（multipart 语音路径 + json 文本路径），待部署</td>
       </tr>
       <tr>
-        <td>本地缓存</td>
-        <td><span class="status status-partial">🔧 部分</span></td>
-        <td>Drift SQLite 本地缓存可用；在线优先同步引擎未实现</td>
+        <td>本地缓存 + 在线优先同步</td>
+        <td><span class="status status-done">✅ 已完成</span></td>
+        <td>SyncTaskRepository：在线先云端后本地 / 离线写本地标 syncPending / 读取 local-first + 后台刷新不覆盖 pending / pushPending 推送后清标记；SyncService 监听 connectivity 恢复推送</td>
       </tr>
       <tr>
         <td>月视图 + 周视图日历</td>
-        <td><span class="status status-todo">⬜ 未开始</span></td>
-        <td>table_calendar 已声明依赖，页面为纯占位</td>
+        <td><span class="status status-done">✅ 已完成</span></td>
+        <td>MonthView（table_calendar + 任务圆点标记 + 当日任务列表）；WeekView（横向 7 天时间轴 + 任务块按 dueDate 定位）；视图切换 + 左右滑动</td>
       </tr>
       <tr>
-        <td>自然语言日期解析</td>
-        <td><span class="status status-todo">⬜ 未开始</span></td>
-        <td>无 chrono 或规则引擎，仅有 ISO 8601 解析</td>
+        <td>自然语言日期解析（LLM 方案）</td>
+        <td><span class="status status-done">✅ 已完成</span></td>
+        <td>TextParseService 调 parse-task json 路径；网络失败 / 解析失败 / 置信度不足 → null → DatePicker 降级；dueDate 合理性校验（不早于 now-1 天）</td>
       </tr>
       <tr>
         <td>本地通知提醒</td>
-        <td><span class="status status-todo">⬜ 未开始</span></td>
-        <td>包已声明，零代码使用</td>
+        <td><span class="status status-done">✅ 已完成</span></td>
+        <td>NotificationService zonedSchedule 双通知（reminder=dueDate-15min、due=dueDate）；完成 / 删除任务取消通知；tap → router.go('/tasks/:id') 跳详情页</td>
       </tr>
       <tr>
         <td>Supabase Auth + 数据同步</td>
-        <td><span class="status status-todo">⬜ 未开始</span></td>
-        <td>包已声明，无初始化、Auth 流程或数据同步代码</td>
+        <td><span class="status status-done">✅ 已完成</span></td>
+        <td>AuthService Magic Link 登录 + session 流；routerProvider redirect 守卫（onboarding → login → tasks）；Deep Link tempo:// 唤起 + 自动登录</td>
       </tr>
       <tr>
         <td>思源 Petal 插件（单向导入）</td>
-        <td><span class="status status-todo">⬜ 未开始</span></td>
-        <td>仅有 siyuanBlockId 字段预留，无插件代码</td>
+        <td><span class="status status-done">✅ 已完成</span></td>
+        <td>TypeScript 插件完整：plugin.json / index / api / pairing / storage / ui / scanner / sync；配对码绑定（6 位码 5 分钟有效）+ token 交换 + localStorage 存储；扫描任务块 + custom-tempo-id 幂等写回</td>
       </tr>
       <tr>
         <td>首次使用引导（3 屏 onboarding）</td>
-        <td><span class="status status-todo">⬜ 未开始</span></td>
-        <td>单页占位，含 TODO 注释</td>
+        <td><span class="status status-done">✅ 已完成</span></td>
+        <td>OnboardingPage 3 屏 PageView（欢迎 / 功能 / 通知权限）；OnboardingManager 用 SharedPreferences 记录 onboarding_completed；路由守卫驱动</td>
       </tr>
       <tr>
         <td>App 内反馈入口</td>
-        <td><span class="status status-todo">⬜ 未开始</span></td>
-        <td>无摇一摇或反馈按钮代码</td>
+        <td><span class="status status-done">✅ 已完成</span></td>
+        <td>ShakeDetector 加速度传感器 + 阈值防抖（仅登录用户启用）；FeedbackDialog 文字 + 设备信息 → Supabase feedback 表；SettingsPage 含反馈按钮</td>
       </tr>
       <tr>
         <td>AI 智能排期</td>
         <td><span class="status status-todo">⬜ Phase 2</span></td>
-        <td>页面占位，React 原型仅作参考</td>
+        <td>页面占位，React 原型仅作参考；需 Phase 0 Wizard-of-Oz 实验 + LLM 排期 Benchmark 验证 H1/H3</td>
       </tr>
       <tr>
         <td>子任务 / 标签 / 重复规则</td>
@@ -663,6 +681,12 @@
       </tr>
     </tbody>
   </table>
+
+  <div class="highlight-box green" style="margin-top: 20px;">
+    <strong>🎉 Phase 1 全部 11 项功能已交付</strong>
+    v2.1 实施记录（含 PRD + 系统设计 + 12 个任务实现）保存在 <code>deliverables/software-tempo-phase1/</code>：prd.md / design.md / class-diagram.mermaid / sequence-diagram.mermaid。<br>
+    遗留：① widget_test.dart smoke test 需 mock Supabase；② sync_service_test.dart / task_repository_test.dart 待补；③ Deep Link 当前用 custom scheme <code>tempo://</code>，公开测试前迁移 Universal Link / App Link。
+  </div>
 </div>
 
 <!-- ==================== 核心设计原则 ==================== -->
@@ -1514,8 +1538,8 @@
 
 <!-- ==================== FOOTER ==================== -->
 <div class="doc-footer">
-  <p>Tempo MVP 实验设计 · v2.0 · 2026-06-18</p>
-  <p style="margin-top: 4px;">v2.0 基于 OPC MVP 实验设计方法论全面重构。当前执行调整：近期先做语音创建任务技术 Spike，计划页 / AI 排期暂缓；Phase 0、Phase 1.5 与后续路线仍保留为方向验证框架。</p>
+  <p>Tempo MVP 实验设计 · v2.1 · 2026-06-18</p>
+  <p style="margin-top: 4px;">v2.1 = v2.0 方法论 + Phase 1 实施交付版。Phase 1 全部 10 项功能 + 语音后端 Spike 已完成，~52 个文件（PRD+设计+Flutter+Supabase+思源插件），团队 SOP 走完（PM→架构→工程→QA 2 轮）。设计 / PRD / 实施记录同存于 <code>deliverables/software-tempo-phase1/</code>。Phase 0、Phase 1.5、Phase 2-4 仍保留为后续方向验证框架。</p>
   <p style="margin-top: 8px; font-size: 11px; color: var(--accent);">审查方：OPC 一人公司专家团 · MVP 实验设计师 验真</p>
 </div>
 

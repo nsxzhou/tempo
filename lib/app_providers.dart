@@ -9,6 +9,7 @@ import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -27,6 +28,17 @@ import 'features/tasks/domain/task.dart';
 
 // Re-export auth providers so consumers of app_providers can access them.
 export 'features/auth/data/auth_service.dart';
+
+// ── Shell / Messenger ──
+
+/// 根 ScaffoldMessenger Key（Snackbar 全局显示，避免被 TabBar 遮挡）。
+final scaffoldMessengerKeyProvider =
+    Provider<GlobalKey<ScaffoldMessengerState>>((ref) {
+  return GlobalKey<ScaffoldMessengerState>(debugLabel: 'tempo_messenger');
+});
+
+/// Shell 底部 TabBar 可见性（快速创建/语音/Snackbar 期间可隐藏）。
+final shellTabBarVisibleProvider = StateProvider<bool>((ref) => true);
 
 // ── Dio ──
 
@@ -143,6 +155,10 @@ final voiceTaskServiceProvider = Provider<VoiceTaskService>((ref) {
   return DioVoiceTaskService(
     dio: dio,
     endpoint: AppConstants.parseTaskEndpoint,
+    headers: {
+      'Authorization': 'Bearer ${AppConstants.supabaseAnonKey}',
+      'apikey': AppConstants.supabaseAnonKey,
+    },
   );
 });
 

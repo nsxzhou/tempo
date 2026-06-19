@@ -4,13 +4,15 @@
 // 顶部状态栏改用系统原生 + SafeArea(不再自绘 TempoStatusBar)
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app_providers.dart';
 import '../constants/app_constants.dart';
 import '../theme/app_theme.dart';
 import '../widgets/tempo/tempo.dart';
 
-class ShellScaffold extends StatelessWidget {
+class ShellScaffold extends ConsumerWidget {
   final Widget child;
   const ShellScaffold({super.key, required this.child});
 
@@ -24,8 +26,9 @@ class ShellScaffold extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final index = _currentIndex(context);
+    final tabBarVisible = ref.watch(shellTabBarVisibleProvider);
     // 构造一条伪 path 给 TempoTabBar 用
     final paths = const [
       AppConstants.routeTasks,
@@ -39,8 +42,7 @@ class ShellScaffold extends StatelessWidget {
       body: Stack(
         children: [
           Positioned.fill(child: child),
-          // TabBar 浮在底部
-          TempoTabBar(currentPath: paths[index]),
+          if (tabBarVisible) TempoTabBar(currentPath: paths[index]),
         ],
       ),
     );

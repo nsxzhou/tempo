@@ -1,8 +1,7 @@
-// TempoUserCard — 设置页用户卡(对应 prototype SettingsView 头部)
-// mono 邮箱 + 注销按钮 + 3 列统计
+// TempoUserCard — 设置页用户卡(Option A: 极简纯文字)
+// mono 邮箱 + 灰色注销文字链接 + 3 列统计
 
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 
 import '../../../theme/app_theme.dart';
 
@@ -40,115 +39,59 @@ class TempoUserCard extends StatelessWidget {
         border: Border.all(color: AppTheme.borderStrong, width: 0.8),
         boxShadow: AppTheme.shadowSm,
       ),
-      child: Stack(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 右上角柔光
-          Positioned(
-            top: -32,
-            right: -32,
-            child: Container(
-              width: 128,
-              height: 128,
-              decoration: BoxDecoration(
-                color: AppTheme.priorityP2.withValues(alpha: 0.05),
-                shape: BoxShape.circle,
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x14000000),
-                    blurRadius: 32,
-                    spreadRadius: 4,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        email,
-                        style: AppTheme.mono(
-                          size: 12,
-                          color: AppTheme.fg,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-                    ),
-                    // 注销按钮
-                    _SignOutButton(label: signOutLabel, onPressed: onSignOut),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Container(height: 1, color: AppTheme.borderSubtle),
-                const SizedBox(height: 16),
-                // 3 列统计
-                Row(
-                  children: [
-                    for (int i = 0; i < stats.length; i++) ...[
-                      if (i > 0)
-                        Container(
-                          width: 1,
-                          height: 32,
-                          color: AppTheme.borderSubtle,
-                        ),
-                      Expanded(
-                        child: _StatColumn(stat: stats[i]),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SignOutButton extends StatelessWidget {
-  final String label;
-  final VoidCallback? onPressed;
-  const _SignOutButton({required this.label, this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-            border: Border.all(color: AppTheme.priorityP0Border, width: 0.8),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+          Row(
             children: [
-              Icon(
-                LucideIcons.log_out,
-                size: 12,
-                color: AppTheme.priorityP0,
+              Expanded(
+                child: Text(
+                  email,
+                  style: AppTheme.mono(
+                    size: 12,
+                    color: AppTheme.fg,
+                    letterSpacing: -0.2,
+                  ),
+                ),
               ),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.priorityP0,
+              // 灰色文字链接
+              GestureDetector(
+                onTap: onSignOut,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 2),
+                  child: Text(
+                    signOutLabel,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.fgSubtle,
+                    ),
+                  ),
                 ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 20),
+          Container(height: 1, color: AppTheme.borderSubtle),
+          const SizedBox(height: 16),
+          // 3 列统计
+          Row(
+            children: [
+              for (int i = 0; i < stats.length; i++) ...[
+                if (i > 0)
+                  Container(
+                    width: 1,
+                    height: 32,
+                    color: AppTheme.borderSubtle,
+                  ),
+                Expanded(
+                  child: _StatColumn(stat: stats[i]),
+                ),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:tempo/app_providers.dart';
 import 'package:tempo/features/tasks/data/notification_service.dart';
 import 'package:tempo/features/tasks/data/voice_task_parse_result.dart';
+import 'package:tempo/features/tasks/data/voice_task_service.dart';
 import 'package:tempo/features/tasks/domain/task.dart';
 import 'package:tempo/features/tasks/presentation/tasks_page.dart';
 
@@ -76,7 +77,9 @@ void main() {
   testWidgets('backend error does not create a task', (tester) async {
     final repository = FakeTaskRepository();
     final recorder = FakeVoiceRecorder();
-    final service = FakeVoiceTaskService(error: StateError('backend 500'));
+    final service = FakeVoiceTaskService(
+      error: const VoiceTaskException('语音解析服务暂时不可用（500）。', statusCode: 500),
+    );
 
     await _pumpTasksPage(
       tester,
@@ -88,7 +91,7 @@ void main() {
     await _submitVoice(tester);
 
     expect(repository.tasks, isEmpty);
-    expect(find.textContaining('backend 500'), findsOneWidget);
+    expect(find.textContaining('语音解析服务暂时不可用'), findsOneWidget);
     await repository.dispose();
   });
 }

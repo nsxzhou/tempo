@@ -1,16 +1,17 @@
 // ============================================================
-// LoginPage — 邮箱 Magic Link 登录页
-// 用户输入邮箱 → 发送 Magic Link → 等待邮件点击 → Deep Link 唤起 → 自动登录
+// LoginPage — 邮箱 Magic Link 登录页(对齐 Stripe 派设计系统)
+// Instrument Serif 'Tempo' logo + mono 副标题 + 主题输入框 + 黑底按钮
+// 逻辑保留:邮箱校验 / sendMagicLink / 等待邮件 / 错误提示
 // ============================================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../data/auth_service.dart';
 
-/// 登录页：邮箱输入 + 发送 Magic Link + 等待状态。
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
@@ -34,9 +35,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.bg,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
+          padding: const EdgeInsets.symmetric(horizontal: 28),
           child: Center(
             child: SingleChildScrollView(
               child: Form(
@@ -45,76 +47,133 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Logo / 标题
-                    Icon(
-                      Icons.checklist_rounded,
-                      size: 72,
-                      color: AppTheme.primaryColor,
-                    ),
-                    const SizedBox(height: 16),
+                    // Serif italic logo
                     Text(
                       AppConstants.appName,
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.primaryColor,
-                          ),
+                      style: AppTheme.italicSerif(
+                        size: 40,
+                        color: AppTheme.fg,
+                        height: 1.0,
+                        letterSpacing: -0.8,
+                      ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     Text(
                       '智能待办 · 让时间更有节奏',
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.grey.shade600,
-                          ),
+                      style: AppTheme.mono(
+                        size: 11,
+                        color: AppTheme.fgMuted,
+                        letterSpacing: 0.4,
+                      ),
                     ),
                     const SizedBox(height: 48),
-
-                    if (_emailSent) ...[
+                    if (_emailSent)
                       _WaitingForEmailCard(
                         email: _emailController.text.trim(),
                         onResend: _sendMagicLink,
-                      ),
-                    ] else ...[
-                      // 邮箱输入框
+                      )
+                    else ...[
                       TextFormField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
                         autofillHints: const ['email'],
-                        decoration: const InputDecoration(
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AppTheme.fg,
+                        ),
+                        decoration: InputDecoration(
                           labelText: '邮箱地址',
-                          prefixIcon: Icon(Icons.email_outlined),
+                          labelStyle: TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.fgMuted,
+                          ),
+                          prefixIcon: Icon(
+                            LucideIcons.mail,
+                            size: 16,
+                            color: AppTheme.fgMuted,
+                          ),
                           hintText: 'you@example.com',
+                          hintStyle: TextStyle(
+                            fontSize: 13,
+                            color: AppTheme.fgSubtle,
+                          ),
                         ),
                         validator: _validateEmail,
                         onFieldSubmitted: (_) => _sendMagicLink(),
                       ),
                       const SizedBox(height: 16),
-
                       if (_errorMessage != null) ...[
-                        Text(
-                          _errorMessage!,
-                          style: TextStyle(
-                            color: AppTheme.errorColor,
-                            fontSize: 14,
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.priorityP0Bg,
+                            border: Border.all(
+                              color: AppTheme.priorityP0Border,
+                              width: 0.8,
+                            ),
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radiusMd,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                LucideIcons.circle_alert,
+                                size: 14,
+                                color: AppTheme.priorityP0,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _errorMessage!,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: AppTheme.priorityP0,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 16),
                       ],
-
-                      // 发送按钮
-                      FilledButton(
-                        onPressed: _isSending ? null : () => _sendMagicLink(),
-                        child: _isSending
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: _isSending ? null : () => _sendMagicLink(),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppTheme.fg,
+                            foregroundColor: AppTheme.bg,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusMd,
+                              ),
+                            ),
+                          ),
+                          child: _isSending
+                              ? const SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppTheme.bg,
+                                  ),
+                                )
+                              : const Text(
+                                  '发送登录链接',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                              )
-                            : const Text('发送登录链接'),
+                        ),
                       ),
                     ],
                   ],
@@ -166,7 +225,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 }
 
-/// 等待邮件点击的提示卡片。
+/// 等待邮件点击的提示卡片(主题卡,非 Material Card)。
 class _WaitingForEmailCard extends StatelessWidget {
   final String email;
   final VoidCallback onResend;
@@ -178,39 +237,70 @@ class _WaitingForEmailCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            Icon(
-              Icons.mark_email_read_outlined,
-              size: 48,
-              color: AppTheme.primaryColor,
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppTheme.bg,
+        border: Border.all(color: AppTheme.borderStrong, width: 0.8),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        boxShadow: AppTheme.shadowSm,
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppTheme.bgSubtle,
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+              border: Border.all(color: AppTheme.borderStrong, width: 0.8),
             ),
-            const SizedBox(height: 16),
-            Text(
-              '请检查邮箱',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+            child: Icon(
+              LucideIcons.mail_check,
+              size: 22,
+              color: AppTheme.fg,
             ),
-            const SizedBox(height: 8),
-            Text(
-              '我们已向 $email 发送了一封登录邮件，请点击邮件中的链接完成登录。',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey.shade600,
-                  ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            '请检查邮箱',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.fg,
+              letterSpacing: -0.2,
             ),
-            const SizedBox(height: 20),
-            TextButton.icon(
-              onPressed: onResend,
-              icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('重新发送'),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '我们已向 $email 发送了一封登录邮件,请点击邮件中的链接完成登录。',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppTheme.fgMuted,
+              height: 1.5,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 20),
+          OutlinedButton.icon(
+            onPressed: onResend,
+            icon: Icon(LucideIcons.refresh_cw, size: 14, color: AppTheme.fg),
+            label: const Text(
+              '重新发送',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.fg,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: AppTheme.borderStrong),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

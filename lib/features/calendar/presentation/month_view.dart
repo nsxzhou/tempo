@@ -1,145 +1,221 @@
-// ============================================================
-// MonthView — 月视图（table_calendar + 圆点标记 + 当日任务列表）
-// ============================================================
+// MonthView — 月视图(对应 prototype CalendarView.tsx 月视图)
+// 7x6 网格 + 3px 优先级点 + 选中态黑底圆
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
-import 'package:table_calendar/table_calendar.dart';
 
-import '../../../app_providers.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/empty_state.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../tasks/domain/task.dart';
-import '../../tasks/presentation/widgets/task_tile.dart';
 
-/// 月视图：使用 table_calendar 显示任务分布，点击日期展开当日任务。
-class MonthView extends ConsumerStatefulWidget {
+class MonthView extends StatelessWidget {
+  final DateTime selectedDate;
   final List<Task> tasks;
+  final ValueChanged<DateTime> onSelectDate;
 
-  const MonthView({super.key, required this.tasks});
+  const MonthView({
+    super.key,
+    required this.selectedDate,
+    required this.tasks,
+    required this.onSelectDate,
+  });
 
-  @override
-  ConsumerState<MonthView> createState() => _MonthViewState();
-}
-
-class _MonthViewState extends ConsumerState<MonthView> {
-  DateTime _focusedDay = DateTime.now();
-  DateTime? _selectedDay;
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedDay = _normalizeDate(DateTime.now());
+  Color _priorityColor(int p) {
+    switch (p) {
+      case 1:
+        return AppTheme.priorityP0;
+      case 2:
+        return AppTheme.priorityP1;
+      case 3:
+        return AppTheme.priorityP2;
+      default:
+        return AppTheme.fgMuted;
+    }
   }
 
-  /// 将 DateTime 规范化为当天 00:00:00（去掉时分秒）。
-  DateTime _normalizeDate(DateTime dt) =>
-      DateTime(dt.year, dt.month, dt.day);
-
-  /// 获取某天的任务列表。
-  List<Task> _tasksForDay(DateTime day) {
-    final normalized = _normalizeDate(day);
-    return widget.tasks.where((t) {
-      if (t.dueDate == null) return false;
-      return _normalizeDate(t.dueDate!) == normalized;
+  List<Color> _dotsForDay(DateTime day) {
+    final dayStart = DateTime(day.year, day.month, day.day);
+    final dayEnd = dayStart.add(const Duration(days: 1));
+    final dayTasks = tasks.where((t) {
+      if (t.dueDate == null || t.isCompleted) return false;
+      return t.dueDate!.isAfter(dayStart) && t.dueDate!.isBefore(dayEnd);
     }).toList();
+
+    // 取前 3 个不同优先级
+    final seen = <int>{};
+    final dots = <Color>[];
+    for (final t in dayTasks) {
+      if (seen.add(t.priority.value)) {
+        dots.add(_priorityColor(t.priority.value));
+        if (dots.length >= 3) break;
+      }
+    }
+    return dots;
   }
 
   @override
   Widget build(BuildContext context) {
-    final selectedTasks =
-        _selectedDay != null ? _tasksForDay(_selectedDay!) : <Task>[];
+    final now = DateTime.now();
+    final firstDay = DateTime(selectedDate.year, selectedDate.month, 1);
+    // 一周从周一开始 → weekday: 1=Mon..7=Sun
+    final leadingEmpty = (firstDay.weekday - 1) % 7;
+    final daysInMonth = DateTime(selectedDate.year, selectedDate.month + 1, 0).day;
 
-    return Column(
-      children: [
-        TableCalendar<Task>(
-          firstDay: DateTime(2020, 1, 1),
-          lastDay: DateTime(2030, 12, 31),
-          focusedDay: _focusedDay,
-          calendarFormat: CalendarFormat.month,
-          startingDayOfWeek: StartingDayOfWeek.monday,
-          selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-          onDaySelected: (selected, focused) {
-            setState(() {
-              _selectedDay = selected;
-              _focusedDay = focused;
-            });
-          },
-          onPageChanged: (focused) {
-            _focusedDay = focused;
-          },
-          eventLoader: _tasksForDay,
-          calendarStyle: CalendarStyle(
-            markersMaxCount: 3,
-            markerDecoration: BoxDecoration(
-              color: AppTheme.primaryColor,
-              shape: BoxShape.circle,
-            ),
-            selectedDecoration: BoxDecoration(
-              color: AppTheme.primaryColor,
-              shape: BoxShape.circle,
-            ),
-            todayDecoration: BoxDecoration(
-              color: AppTheme.primaryColor.withValues(alpha: 0.3),
-              shape: BoxShape.circle,
-            ),
-            markerSize: 6,
-            markerMargin: const EdgeInsets.symmetric(horizontal: 1),
-          ),
-          headerStyle: const HeaderStyle(
-            formatButtonVisible: false,
-            titleCentered: true,
-          ),
-        ),
-        const Divider(height: 1),
-        // 当日任务列表
-        Expanded(
-          child: selectedTasks.isEmpty
-              ? EmptyState(
-                  icon: Icons.event_available,
-                  title: _selectedDay != null
-                      ? '${DateFormat('M月d日').format(_selectedDay!)} 暂无任务'
-                      : '选择日期查看任务',
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: selectedTasks.length,
-                  itemBuilder: (context, index) {
-                    final task = selectedTasks[index];
-                    return TaskTile(
-                      task: task,
-                      onToggleComplete: () => _toggleTask(task),
-                      onTap: () => context.push('/tasks/${task.id}'),
-                      onDelete: () => _deleteTask(task),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _toggleTask(Task task) async {
-    final repository = ref.read(taskRepositoryProvider);
-    await repository.toggleComplete(task.id);
-
-    final notificationService = ref.read(notificationServiceProvider);
-    final updated = task.copyWith(
-      isCompleted: !task.isCompleted,
-      completedAt: !task.isCompleted ? DateTime.now() : null,
-    );
-    if (updated.isCompleted) {
-      await notificationService.cancelTaskReminders(task.id);
-    } else {
-      await notificationService.scheduleTaskReminder(updated);
+    // 构造 6x7 = 42 格
+    final cells = <_MonthCell>[];
+    // 前导
+    for (int i = 0; i < leadingEmpty; i++) {
+      final d = firstDay.subtract(Duration(days: leadingEmpty - i));
+      cells.add(_MonthCell(date: d, isOtherMonth: true));
     }
+    // 当月
+    for (int i = 1; i <= daysInMonth; i++) {
+      cells.add(_MonthCell(date: DateTime(selectedDate.year, selectedDate.month, i)));
+    }
+    // 尾部填充到 42
+    while (cells.length < 42) {
+      final last = cells.last.date.add(const Duration(days: 1));
+      cells.add(_MonthCell(date: last, isOtherMonth: true));
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.bgSubtle.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        border: Border.all(color: AppTheme.borderStrong, width: 0.8),
+        boxShadow: AppTheme.shadowSm,
+      ),
+      child: Column(
+        children: [
+          // 星期头
+          Row(
+            children: const ['一', '二', '三', '四', '五', '六', '日']
+                .map((w) => Expanded(
+                      child: Center(
+                        child: Text(
+                          w,
+                          style: AppTheme.mono(
+                            size: 10,
+                            weight: FontWeight.w700,
+                            color: AppTheme.fgSubtle,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ),
+                    ))
+                .toList(),
+          ),
+          const SizedBox(height: 8),
+          // 6 行
+          for (int row = 0; row < 6; row++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Row(
+                children: List.generate(7, (col) {
+                  final cell = cells[row * 7 + col];
+                  return Expanded(
+                    child: _DayCell(
+                      cell: cell,
+                      dots: _dotsForDay(cell.date),
+                      isToday: _sameDay(cell.date, now),
+                      isSelected: _sameDay(cell.date, selectedDate) && !cell.isOtherMonth,
+                      onTap: cell.isOtherMonth
+                          ? null
+                          : () => onSelectDate(cell.date),
+                    ),
+                  );
+                }),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
-  Future<void> _deleteTask(Task task) async {
-    await ref.read(taskRepositoryProvider).deleteTask(task.id);
-    final notificationService = ref.read(notificationServiceProvider);
-    await notificationService.cancelTaskReminders(task.id);
+  bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+}
+
+class _MonthCell {
+  final DateTime date;
+  final bool isOtherMonth;
+  _MonthCell({required this.date, this.isOtherMonth = false});
+}
+
+class _DayCell extends StatelessWidget {
+  final _MonthCell cell;
+  final List<Color> dots;
+  final bool isToday;
+  final bool isSelected;
+  final VoidCallback? onTap;
+  const _DayCell({
+    required this.cell,
+    required this.dots,
+    required this.isToday,
+    required this.isSelected,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dim = cell.isOtherMonth;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: isSelected ? AppTheme.fg : Colors.transparent,
+                shape: BoxShape.circle,
+                border: isToday && !isSelected
+                    ? Border.all(color: AppTheme.fg, width: 1)
+                    : null,
+              ),
+              child: Text(
+                '${cell.date.day}',
+                style: AppTheme.mono(
+                  size: 12,
+                  weight: FontWeight.w600,
+                  color: isSelected
+                      ? AppTheme.bg
+                      : (dim
+                          ? AppTheme.fgFaint
+                          : (isToday ? AppTheme.fg : AppTheme.fgSecondary)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            SizedBox(
+              height: 3,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(3, (i) {
+                  if (i >= dots.length) return const SizedBox(width: 3);
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 1),
+                    child: Container(
+                      width: 3,
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppTheme.bg : dots[i],
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -73,6 +73,7 @@ class _TempoAppState extends ConsumerState<TempoApp> {
         child: MaterialApp.router(
           title: 'Tempo',
           debugShowCheckedModeBanner: false,
+          scaffoldMessengerKey: ref.watch(scaffoldMessengerKeyProvider),
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,
           themeMode: ThemeMode.light, // Phase 2 支持 dark

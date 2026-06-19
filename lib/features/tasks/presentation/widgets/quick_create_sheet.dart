@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/tempo/src/tempo_date_picker.dart';
+import '../../../../core/widgets/tempo/src/tempo_snackbar.dart';
 import '../../domain/task.dart';
 
 /// 日期快捷选项
@@ -119,17 +121,7 @@ class _QuickCreateSheetState extends State<QuickCreateSheet> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('创建失败: $e', style: const TextStyle(fontSize: 12, color: AppTheme.bg)),
-          backgroundColor: AppTheme.priorityP0,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      TempoSnackbar.show(context, message: '创建失败: $e');
     }
   }
 
@@ -146,7 +138,6 @@ class _QuickCreateSheetState extends State<QuickCreateSheet> {
           borderRadius: BorderRadius.vertical(
             top: Radius.circular(AppTheme.radiusLg),
           ),
-          border: Border(top: BorderSide(color: AppTheme.borderStrong, width: 1)),
           boxShadow: [
             BoxShadow(
               color: Color(0x1F000000),
@@ -156,37 +147,55 @@ class _QuickCreateSheetState extends State<QuickCreateSheet> {
           ],
         ),
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 拖拽指示条
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppTheme.borderStrong,
-                  borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 拖拽指示条
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppTheme.borderStrong,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 16),
+                // 标题输入框
+                _buildTitleField(),
+                const SizedBox(height: 10),
+                // 折叠展开区
+                _buildExpandToggle(),
+                ClipRect(
+                  child: AnimatedSize(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeInOut,
+                    alignment: Alignment.topCenter,
+                    child: _expanded
+                        ? Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const SizedBox(height: 14),
+                              _buildDateSection(),
+                              const SizedBox(height: 14),
+                              _buildPrioritySection(),
+                            ],
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                // 创建按钮
+                _buildCreateButton(),
+              ],
             ),
-            const SizedBox(height: 16),
-            // 标题输入框
-            _buildTitleField(),
-            const SizedBox(height: 10),
-            // 折叠展开区
-            _buildExpandToggle(),
-            if (_expanded) ...[
-              const SizedBox(height: 14),
-              _buildDateSection(),
-              const SizedBox(height: 14),
-              _buildPrioritySection(),
-            ],
-            const SizedBox(height: 14),
-            // 创建按钮
-            _buildCreateButton(),
-          ],
+          ),
         ),
       ),
     );
@@ -241,10 +250,15 @@ class _QuickCreateSheetState extends State<QuickCreateSheet> {
       onTap: () => setState(() => _expanded = !_expanded),
       child: Row(
         children: [
-          Icon(
-            _expanded ? LucideIcons.chevron_down : LucideIcons.chevron_right,
-            size: 14,
-            color: AppTheme.fgMuted,
+          AnimatedRotation(
+            turns: _expanded ? 0.25 : 0,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            child: Icon(
+              LucideIcons.chevron_right,
+              size: 14,
+              color: AppTheme.fgMuted,
+            ),
           ),
           const SizedBox(width: 6),
           Text(
@@ -379,24 +393,12 @@ class _QuickCreateSheetState extends State<QuickCreateSheet> {
   }
 
   Future<void> _pickCustomDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _customDate ?? DateTime.now().add(const Duration(days: 1)),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: AppTheme.light.copyWith(
-            colorScheme: AppTheme.light.colorScheme.copyWith(
-              primary: AppTheme.fg,
-              onPrimary: AppTheme.bg,
-              surface: AppTheme.bg,
-              onSurface: AppTheme.fg,
-            ),
-          ),
-          child: child!,
-        );
-      },
+    final now = DateTime.now();
+    final picked = await TempoDatePicker.show(
+      context,
+      initialDate: _customDate ?? now.add(const Duration(days: 1)),
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: now.add(const Duration(days: 365)),
     );
     if (picked != null) {
       setState(() {

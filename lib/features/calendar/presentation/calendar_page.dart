@@ -12,6 +12,7 @@ import 'package:intl/intl.dart';
 
 import '../../../app_providers.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/tempo/tempo.dart';
 import '../../tasks/domain/task.dart';
 import 'month_view.dart';
@@ -230,11 +231,9 @@ class _SelectedDayPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final dayStart = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
-    final dayEnd = dayStart.add(const Duration(days: 1));
     final dayTasks = tasks.where((t) {
       if (t.dueDate == null) return false;
-      return t.dueDate!.isAfter(dayStart) && t.dueDate!.isBefore(dayEnd);
+      return isDueOnDate(t.dueDate!, selectedDate);
     }).toList();
 
     return Padding(

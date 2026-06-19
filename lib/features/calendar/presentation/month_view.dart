@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
+import 'package:tempo/core/utils/date_utils.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
@@ -34,11 +35,9 @@ class MonthView extends StatelessWidget {
   }
 
   List<Color> _dotsForDay(DateTime day) {
-    final dayStart = DateTime(day.year, day.month, day.day);
-    final dayEnd = dayStart.add(const Duration(days: 1));
     final dayTasks = tasks.where((t) {
       if (t.dueDate == null || t.isCompleted) return false;
-      return t.dueDate!.isAfter(dayStart) && t.dueDate!.isBefore(dayEnd);
+      return isDueOnDate(t.dueDate!, day);
     }).toList();
 
     // 取前 3 个不同优先级

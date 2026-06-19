@@ -26,6 +26,7 @@ type ParseTaskResponse = {
   priority: number;
   confidence: number;
   raw_transcript: string;
+  tag: string | null;
 };
 
 const corsHeaders = {
@@ -171,11 +172,12 @@ async function uploadToStorage(
   }
 
   const signData = (await signRes.json()) as { signedURL: string };
-  // signedURL 是相对路径，需要拼接 baseUrl
   const signedPath = signData.signedURL;
-  return signedPath.startsWith("http")
-    ? signedPath
-    : `${baseUrl}${signedPath.startsWith("/") ? "" : "/"}${signedPath}`;
+  if (signedPath.startsWith("http")) {
+    return signedPath;
+  }
+  // Storage API 返回相对路径 /object/sign/...，需拼上 /storage/v1 前缀。
+  return `${baseUrl}/storage/v1${signedPath.startsWith("/") ? signedPath : `/${signedPath}`}`;
 }
 
 async function deleteFromStorage(path: string): Promise<void> {
@@ -377,6 +379,7 @@ Return JSON ONLY with these fields:
 - priority: number (0=none, 1=P0 urgent, 2=P1 high, 3=P2 medium, 4=P3 low)
 - confidence: number (0-1, how confident you are in the extraction)
 - raw_transcript: string (the original input text)
+- tag: string | null ("work" for work/professional tasks, "life" for personal/daily life tasks like groceries, milk, chores; null if uncertain)
 
 Rules:
 - Parse relative dates relative to the current time: ${currentDatetime}
@@ -384,7 +387,8 @@ Rules:
 - If no time is specified but date is, default to 09:00
 - If no date is mentioned, due_date = null
 - Extract priority from keywords: 紧急→P0, 高/重要→P1, 中→P2, 低→P3
-- Title should be concise (remove date/priority words from title)`;
+- Title should be concise (remove date/priority words from title)
+- Category examples: 牛奶/买菜/家务/健身 → tag=life; 会议/文档/审阅/OKR → tag=work; if unsure → tag=null`;
 }
 
 // ── 工具函数 ──
@@ -404,7 +408,16 @@ function normalizeTaskResponse(
     priority: normalizePriority(payload.priority),
     confidence: Math.max(0, Math.min(1, confidence)),
     raw_transcript: rawTranscript,
+    tag: normalizeTag(payload.tag),
   };
+}
+
+function normalizeTag(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "work" || normalized === "工作") return "work";
+  if (normalized === "life" || normalized === "生活") return "life";
+  return null;
 }
 
 // ── LLM 响应提取 ──
@@ -490,5 +503,6 @@ function mockResponse(): ParseTaskResponse {
     priority: 2,
     confidence: 0.86,
     raw_transcript: "明天下午三点提交设计稿，优先级高",
+    tag: "work",
   };
 }

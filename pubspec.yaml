@@ -12,8 +12,8 @@ dependencies:
 
   # UI
   cupertino_icons: ^1.0.8
-  google_fonts: ^6.2.1
   table_calendar: ^3.1.2
+  flutter_lucide: ^1.11.0
 
   # State Management
   flutter_riverpod: ^2.6.1
@@ -65,11 +65,32 @@ flutter:
     - assets/icons/
     - .env
 
-  # fonts:
-  #   - family: Geist
-  #     fonts:
-  #       - asset: fonts/Geist-Regular.ttf
-  #       - asset: fonts/Geist-Medium.ttf
-  #         weight: 500
-  #       - asset: fonts/Geist-SemiBold.ttf
-  #         weight: 600
+  fonts:
+    - family: Geist
+      fonts:
+        - asset: fonts/Geist-Light.ttf
+          weight: 300
+        - asset: fonts/Geist-Regular.ttf
+          weight: 400
+        - asset: fonts/Geist-Medium.ttf
+          weight: 500
+        - asset: fonts/Geist-SemiBold.ttf
+          weight: 600
+        - asset: fonts/Geist-Bold.ttf
+          weight: 700
+    - family: Geist Mono
+      fonts:
+        - asset: fonts/GeistMono-Regular.ttf
+          weight: 400
+        - asset: fonts/GeistMono-Medium.ttf
+          weight: 500
+        - asset: fonts/GeistMono-SemiBold.ttf
+          weight: 600
+    - family: Instrument Serif
+      fonts:
+        - asset: fonts/InstrumentSerif-Regular.ttf
+          weight: 400
+          style: normal
+        - asset: fonts/InstrumentSerif-Italic.ttf
+          weight: 400
+          style: italic

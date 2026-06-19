@@ -8,7 +8,6 @@
 
 import 'dart:async';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -184,17 +183,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     icon: LucideIcons.bell,
                     title: '桌面高频提醒',
                     subtitle: '任务倒计时与 AI 周期精力诊断',
-                    trailing: SizedBox(
-                      width: 34,
-                      height: 20,
-                      child: FittedBox(
-                        fit: BoxFit.contain,
-                        child: CupertinoSwitch(
-                          value: _notificationEnabled,
-                          onChanged: _toggleNotification,
-                          activeTrackColor: AppTheme.fg,
-                        ),
-                      ),
+                    trailing: Switch(
+                      value: _notificationEnabled,
+                      onChanged: _toggleNotification,
+                      activeThumbColor: AppTheme.bg,
+                      activeTrackColor: AppTheme.fg,
+                      inactiveThumbColor: AppTheme.fgSubtle,
+                      inactiveTrackColor: AppTheme.bgMuted,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                   ),
                   TempoPreferenceRow(
@@ -283,26 +279,49 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Future<void> _showSiyuanMenu() async {
     final action = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: AppTheme.bg,
+      backgroundColor: Colors.transparent,
+      barrierColor: const Color(0x73000000),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusLg),
+        ),
       ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(LucideIcons.unlink),
-              title: const Text('解绑思源'),
-              onTap: () => Navigator.pop(ctx, 'unpair'),
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: AppTheme.bg,
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppTheme.radiusLg),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x1F000000),
+              blurRadius: 30,
+              offset: Offset(0, -8),
             ),
-            ListTile(
-              leading: const Icon(LucideIcons.refresh_cw),
-              title: const Text('重新生成配对码'),
-              onTap: () => Navigator.pop(ctx, 'pair'),
-            ),
-            const SizedBox(height: 8),
           ],
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppTheme.borderStrong,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildSiyuanMenuItem(ctx, LucideIcons.unlink, '解绑思源', 'unpair'),
+              const SizedBox(height: 4),
+              _buildSiyuanMenuItem(ctx, LucideIcons.refresh_cw, '重新生成配对码', 'pair'),
+            ],
+          ),
         ),
       ),
     );
@@ -315,6 +334,39 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         message: '请在思源插件中点击解绑按钮完成解绑',
       );
     }
+  }
+
+  Widget _buildSiyuanMenuItem(
+    BuildContext ctx,
+    IconData icon,
+    String label,
+    String action,
+  ) {
+    return GestureDetector(
+      onTap: () => Navigator.pop(ctx, action),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 4,
+          vertical: 12,
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: AppTheme.fgMuted),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: const TextStyle(
+                fontFamily: AppTheme.fontSans,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.fg,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _signOut() async {

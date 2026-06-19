@@ -1,6 +1,6 @@
 // ============================================================
-// TaskTile — 任务列表项(Stripe 派 1:1 还原 prototype TasksView.tsx)
-// 圆 Checkbox 18px + 34px 命中区 + 优先级 pill + 截止 pill + @tag pill
+// TaskTile — 任务列表项
+// 自适应布局：仅标题紧凑居中；有描述显示摘要；有 meta 显示 pills
 // ============================================================
 
 import 'package:flutter/material.dart';
@@ -30,7 +30,7 @@ class TaskTile extends StatelessWidget {
   });
 
   String get _deadlineText {
-    if (task.dueDate == null) return '未排期';
+    if (task.dueDate == null) return '';
     final now = DateTime.now();
     final due = task.dueDate!;
     if (task.isCompleted) return '已完成';
@@ -44,11 +44,94 @@ class TaskTile extends StatelessWidget {
   String _hm(DateTime d) =>
       '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
-  @override
-  Widget build(BuildContext context) {
+  bool get _hasDescription =>
+      task.description != null && task.description!.trim().isNotEmpty;
+
+  List<Widget> _buildMetaPills() {
     final isOverdue = task.dueDate != null &&
         task.dueDate!.isBefore(DateTime.now()) &&
         !task.isCompleted;
+    final pills = <Widget>[];
+
+    if (task.priority.value != 0) {
+      pills.add(
+        TempoPillBadge(
+          label: 'P${task.priority.value - 1}',
+          kind: switch (task.priority.value) {
+            1 => TempoBadgeKind.p0,
+            2 => TempoBadgeKind.p1,
+            3 => TempoBadgeKind.p2,
+            _ => TempoBadgeKind.p3,
+          },
+        ),
+      );
+    }
+
+    if (isOverdue && !task.isCompleted) {
+      pills.add(
+        TempoPillBadge(
+          label: '已过期',
+          kind: TempoBadgeKind.error,
+          icon: LucideIcons.circle_alert,
+        ),
+      );
+    } else if (task.dueDate != null) {
+      pills.add(
+        TempoPillBadge(
+          label: _deadlineText,
+          kind: TempoBadgeKind.neutral,
+          uppercase: false,
+          fontSize: 10,
+        ),
+      );
+    }
+
+    if (task.tag == AppConstants.tagWork) {
+      pills.add(_tagPill('@工作'));
+    } else if (task.tag == AppConstants.tagLife) {
+      pills.add(_tagPill('@生活'));
+    }
+
+    if (task.creationSource == AppConstants.sourceSiyuan) {
+      pills.add(
+        TempoPillBadge(
+          label: '思源',
+          kind: TempoBadgeKind.tag,
+          icon: LucideIcons.link_2,
+        ),
+      );
+    } else if (task.creationSource == AppConstants.sourceVoice) {
+      pills.add(
+        TempoPillBadge(
+          label: '语音',
+          kind: TempoBadgeKind.tag,
+          icon: LucideIcons.mic,
+        ),
+      );
+    }
+
+    return pills;
+  }
+
+  Widget _tagPill(String label) {
+    return GestureDetector(
+      onTap: onTagClick,
+      child: TempoPillBadge(
+        label: label,
+        kind: TempoBadgeKind.tag,
+        uppercase: false,
+        fontSize: 10,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final metaPills = _buildMetaPills();
+    final hasMeta = metaPills.isNotEmpty;
+    final rowAlign = (!_hasDescription && !hasMeta)
+        ? CrossAxisAlignment.center
+        : CrossAxisAlignment.start;
 
     return Material(
       color: AppTheme.bg,
@@ -68,9 +151,8 @@ class TaskTile extends StatelessWidget {
             boxShadow: task.isCompleted ? null : AppTheme.shadowSm,
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: rowAlign,
             children: [
-              // 34px 命中区包裹 18px 圆 Checkbox
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: onToggleComplete,
@@ -84,10 +166,10 @@ class TaskTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              // 标题 + meta
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       task.title,
@@ -96,9 +178,8 @@ class TaskTile extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
-                        color: task.isCompleted
-                            ? AppTheme.fgMuted
-                            : AppTheme.fg,
+                        color:
+                            task.isCompleted ? AppTheme.fgMuted : AppTheme.fg,
                         decoration: task.isCompleted
                             ? TextDecoration.lineThrough
                             : null,
@@ -106,53 +187,31 @@ class TaskTile extends StatelessWidget {
                         height: 1.3,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        if (task.priority.value != 0)
-                          TempoPillBadge(
-                            label: 'P${task.priority.value - 1}',
-                            kind: switch (task.priority.value) {
-                              1 => TempoBadgeKind.p0,
-                              2 => TempoBadgeKind.p1,
-                              3 => TempoBadgeKind.p2,
-                              _ => TempoBadgeKind.p3,
-                            },
-                          ),
-                        if (isOverdue && !task.isCompleted)
-                          TempoPillBadge(
-                            label: '已过期',
-                            kind: TempoBadgeKind.error,
-                            icon: LucideIcons.circle_alert,
-                          )
-                        else if (task.dueDate != null)
-                          TempoPillBadge(
-                            label: _deadlineText,
-                            kind: TempoBadgeKind.neutral,
-                            uppercase: false,
-                            fontSize: 10,
-                          ),
-                        if (task.creationSource == AppConstants.sourceSiyuan)
-                          TempoPillBadge(
-                            label: '思源',
-                            kind: TempoBadgeKind.tag,
-                            icon: LucideIcons.link_2,
-                          )
-                        else if (task.creationSource ==
-                            AppConstants.sourceVoice)
-                          TempoPillBadge(
-                            label: '语音',
-                            kind: TempoBadgeKind.tag,
-                            icon: LucideIcons.mic,
-                          ),
-                      ],
-                    ),
+                    if (_hasDescription) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        task.description!.trim(),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.fgSubtle,
+                          height: 1.35,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ],
+                    if (hasMeta) ...[
+                      SizedBox(height: _hasDescription ? 6 : 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: metaPills,
+                      ),
+                    ],
                   ],
                 ),
               ),
-              // 右侧
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

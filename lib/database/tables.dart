@@ -37,6 +37,9 @@ class Tasks extends Table {
   /// 创建来源: 'text' | 'siyuan' | 'voice' | 'ai'
   TextColumn get creationSource => text().withDefault(const Constant('text'))();
 
+  /// 分类: 'work' | 'life' | null
+  TextColumn get tag => text().nullable()();
+
   /// 同步待推送标记：true 表示本地写入但尚未推送到云端。
   BoolColumn get syncPending =>
       boolean().withDefault(const Constant(false))();

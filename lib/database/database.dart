@@ -49,6 +49,10 @@ class AppDatabase extends _$AppDatabase {
     final rows = await select(tasks).get();
     return rows.map((r) => r.toJson()).toList();
   }
+
+  /// 按 ID 获取任务列表（详情页归属名称用）。
+  Future<TaskList?> getTaskListById(String id) =>
+      (select(taskLists)..where((l) => l.id.equals(id))).getSingleOrNull();
 }
 
 LazyDatabase _openConnection() {

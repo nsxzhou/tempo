@@ -14,7 +14,7 @@ import '../../features/auth/presentation/login_page.dart';
 import '../../features/tasks/presentation/tasks_page.dart';
 import '../../features/tasks/presentation/task_detail_page.dart';
 import '../../features/calendar/presentation/calendar_page.dart';
-import '../../features/ai_planner/presentation/plan_page.dart';
+import '../../features/ai_planner/presentation/plan_placeholder_page.dart';
 import '../../features/settings/presentation/settings_page.dart';
 import '../../features/onboarding/presentation/onboarding_page.dart';
 import 'shell_scaffold.dart';
@@ -97,7 +97,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppConstants.routePlan,
             pageBuilder: (context, state) =>
-                const NoTransitionPage(child: PlanPage()),
+                const NoTransitionPage(child: PlanPlaceholderPage()),
           ),
           GoRoute(
             path: AppConstants.routeSettings,

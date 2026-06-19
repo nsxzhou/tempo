@@ -1,10 +1,13 @@
 // QuickCreateSheet — 快速创建底部抽屉
 // 折叠式:默认只标题+创建按钮;展开后显示日期pills(今天/明天/后天/下周一)+优先级pills(P0~P3)
-// 创建后关闭sheet→undo snackbar 5s真删除
+// 创建后关闭 sheet → 显示撤回 Snackbar（4.5s 自动消失）
 
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../app_providers.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/tempo/src/tempo_date_picker.dart';
 import '../../../../core/widgets/tempo/src/tempo_snackbar.dart';
@@ -39,21 +42,25 @@ enum _QuickDate {
   }
 }
 
-/// 快速创建回调：返回创建成功的 Task id，供 undo 用
-typedef QuickCreateCallback = Future<String> Function({
+/// 快速创建回调：返回创建成功的 Task
+typedef QuickCreateCallback = Future<Task> Function({
   required String title,
   DateTime? dueDate,
   TaskPriority priority,
+  String? tag,
 });
 
-class QuickCreateSheet extends StatefulWidget {
+class QuickCreateSheet extends ConsumerStatefulWidget {
   final QuickCreateCallback onCreate;
 
   const QuickCreateSheet({super.key, required this.onCreate});
 
-  /// 从 TasksPage 弹出快速创建 bottom sheet
-  static Future<void> show(BuildContext context, {required QuickCreateCallback onCreate}) {
-    return showModalBottomSheet(
+  /// 从 TasksPage 弹出快速创建 bottom sheet；成功时返回创建的 Task
+  static Future<Task?> show(
+    BuildContext context, {
+    required QuickCreateCallback onCreate,
+  }) {
+    return showModalBottomSheet<Task?>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -68,10 +75,10 @@ class QuickCreateSheet extends StatefulWidget {
   }
 
   @override
-  State<QuickCreateSheet> createState() => _QuickCreateSheetState();
+  ConsumerState<QuickCreateSheet> createState() => _QuickCreateSheetState();
 }
 
-class _QuickCreateSheetState extends State<QuickCreateSheet> {
+class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
   final _titleController = TextEditingController();
   final _titleFocus = FocusNode();
 
@@ -79,6 +86,8 @@ class _QuickCreateSheetState extends State<QuickCreateSheet> {
   _QuickDate? _selectedDate;
   DateTime? _customDate;
   TaskPriority _selectedPriority = TaskPriority.none;
+  String? _selectedTag;
+  bool _tagTouched = false;
 
   bool _isSubmitting = false;
 
@@ -111,13 +120,24 @@ class _QuickCreateSheetState extends State<QuickCreateSheet> {
     if (!_canSubmit) return;
     setState(() => _isSubmitting = true);
     try {
-      await widget.onCreate(
+      String? tag;
+      if (_tagTouched) {
+        tag = _selectedTag;
+      } else {
+        final parsed = await ref.read(textParseServiceProvider).parseText(
+              _titleController.text.trim(),
+            );
+        tag = parsed?.tag;
+      }
+
+      final task = await widget.onCreate(
         title: _titleController.text.trim(),
         dueDate: _effectiveDueDate,
         priority: _selectedPriority,
+        tag: tag,
       );
       if (!mounted) return;
-      Navigator.of(context).pop(); // 关闭 sheet
+      Navigator.of(context).pop(task);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
@@ -183,6 +203,8 @@ class _QuickCreateSheetState extends State<QuickCreateSheet> {
                             children: [
                               const SizedBox(height: 14),
                               _buildDateSection(),
+                              const SizedBox(height: 14),
+                              _buildTagSection(),
                               const SizedBox(height: 14),
                               _buildPrioritySection(),
                             ],
@@ -269,7 +291,9 @@ class _QuickCreateSheetState extends State<QuickCreateSheet> {
               letterSpacing: 0.4,
             ),
           ),
-          if (_effectiveDueDate != null || _selectedPriority != TaskPriority.none) ...[
+          if (_effectiveDueDate != null ||
+              _selectedPriority != TaskPriority.none ||
+              _selectedTag != null) ...[
             const SizedBox(width: 6),
             Container(
               width: 5,
@@ -410,6 +434,72 @@ class _QuickCreateSheetState extends State<QuickCreateSheet> {
 
   String _formatDate(DateTime date) {
     return '${date.month}/${date.day}';
+  }
+
+  // ══════════════ 分类 pills ══════════════
+
+  Widget _buildTagSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '分类',
+          style: AppTheme.mono(
+            size: 10,
+            weight: FontWeight.w700,
+            color: AppTheme.fgMuted,
+            letterSpacing: 1.0,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _buildTagPill('工作', AppConstants.tagWork),
+            const SizedBox(width: 8),
+            _buildTagPill('生活', AppConstants.tagLife),
+            const SizedBox(width: 8),
+            _buildTagPill('未分类', null),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTagPill(String label, String? value) {
+    final isSelected = _selectedTag == value;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _tagTouched = true;
+          if (isSelected && value != null) {
+            _selectedTag = null;
+          } else {
+            _selectedTag = value;
+          }
+        });
+      },
+      child: Container(
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.fg : AppTheme.bgMuted,
+          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+          border: Border.all(
+            color: isSelected ? AppTheme.fg : AppTheme.borderStrong,
+            width: isSelected ? 1 : 0.8,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isSelected ? AppTheme.bg : AppTheme.fgSecondary,
+          ),
+        ),
+      ),
+    );
   }
 
   // ══════════════ 优先级 pills ══════════════

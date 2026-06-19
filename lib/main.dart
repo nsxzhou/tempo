@@ -33,6 +33,8 @@ Future<void> main() async {
   print('[TEMPO-DEBUG] supabaseUrl = ${AppConstants.supabaseUrl}');
   // ignore: avoid_print
   print('[TEMPO-DEBUG] anonKey prefix = ${AppConstants.supabaseAnonKey.substring(0, 12)}...');
+  // ignore: avoid_print
+  print('[TEMPO-DEBUG] parseTaskEndpoint = ${AppConstants.parseTaskEndpoint}');
 
   // 3) 初始化 timezone 数据（本地通知 zonedSchedule 需要）
   tz.initializeTimeZones();

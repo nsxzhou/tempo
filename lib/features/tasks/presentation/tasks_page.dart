@@ -16,6 +16,7 @@ import 'package:intl/intl.dart';
 import '../../../app_providers.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/tempo/tempo.dart';
 import '../data/voice_task_parse_result.dart';
 import '../domain/task.dart';
@@ -95,14 +96,20 @@ class _TasksPageState extends ConsumerState<TasksPage> {
               right: 20,
               bottom: 120,
               child: _FloatingActions(
-                onVoice: () => setState(() => _showVoiceOverlay = true),
+                onVoice: () {
+                  ref.read(shellTabBarVisibleProvider.notifier).state = false;
+                  setState(() => _showVoiceOverlay = true);
+                },
                 onAdd: _openQuickCreate,
               ),
             ),
           // 语音录入浮层
           if (_showVoiceOverlay)
             VoiceOverlay(
-              onClose: () => setState(() => _showVoiceOverlay = false),
+              onClose: () {
+                setState(() => _showVoiceOverlay = false);
+                ref.read(shellTabBarVisibleProvider.notifier).state = true;
+              },
               onAutoCreate: _handleVoiceCreate,
             ),
         ],
@@ -216,12 +223,15 @@ class _TasksPageState extends ConsumerState<TasksPage> {
   Widget _buildBentoStats(AsyncValue<List<Task>> tasks) {
     final data = tasks.valueOrNull ?? [];
     final pending = data.where((t) => !t.isCompleted).length;
-    final completed = data.where((t) => t.isCompleted).length;
     final overdue = data.where((t) {
       return t.dueDate != null &&
           t.dueDate!.isBefore(DateTime.now()) &&
           !t.isCompleted;
     }).length;
+    final now = DateTime.now();
+    final weekCount = data
+        .where((t) => t.dueDate != null && isDueInWeekRange(t.dueDate!, now))
+        .length;
     final total = data.length;
 
     return Padding(
@@ -254,7 +264,7 @@ class _TasksPageState extends ConsumerState<TasksPage> {
           ),
           _BentoCard(
             label: '本周安排',
-            value: '$total',
+            value: '$weekCount',
             unit: '项总代办',
             selected: _timeFilter == _TimeFilter.week,
             dotColor: AppTheme.fgFaint,
@@ -262,8 +272,8 @@ class _TasksPageState extends ConsumerState<TasksPage> {
           ),
           _BentoCard(
             label: '全部任务',
-            value: '$completed',
-            unit: '项已完成',
+            value: '$total',
+            unit: '项总代办',
             selected: _timeFilter == _TimeFilter.all,
             dotColor: AppTheme.success,
             onTap: () => setState(() => _timeFilter = _TimeFilter.all),
@@ -275,12 +285,8 @@ class _TasksPageState extends ConsumerState<TasksPage> {
 
   Widget _buildCategoryFilter(AsyncValue<List<Task>> tasks) {
     final data = tasks.valueOrNull ?? [];
-    final work = data
-        .where((t) => t.creationSource == 'ai' || t.creationSource == 'text')
-        .length;
-    final life = data
-        .where((t) => t.creationSource == 'voice')
-        .length;
+    final work = data.where((t) => t.tag == AppConstants.tagWork).length;
+    final life = data.where((t) => t.tag == AppConstants.tagLife).length;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
@@ -359,9 +365,7 @@ class _TasksPageState extends ConsumerState<TasksPage> {
       case _TimeFilter.week:
         tasks = tasks
             .where((t) =>
-                t.dueDate != null &&
-                t.dueDate!.isAfter(now) &&
-                t.dueDate!.isBefore(now.add(const Duration(days: 7))))
+                t.dueDate != null && isDueInWeekRange(t.dueDate!, now))
             .toList();
         break;
       case _TimeFilter.overdue:
@@ -379,9 +383,9 @@ class _TasksPageState extends ConsumerState<TasksPage> {
     if (_categoryFilter != _CategoryFilter.all) {
       tasks = tasks.where((t) {
         if (_categoryFilter == _CategoryFilter.work) {
-          return t.creationSource == 'ai' || t.creationSource == 'text';
+          return t.tag == AppConstants.tagWork;
         }
-        return t.creationSource == 'voice';
+        return t.tag == AppConstants.tagLife;
       }).toList();
     }
 
@@ -487,17 +491,16 @@ class _TasksPageState extends ConsumerState<TasksPage> {
         context,
         message: '已删除:${task.title}',
         undoLabel: '撤回',
-        onUndo: () {
+        onUndo: () async {
           if (_lastDeletedTask != null) {
-            unawaited(
-              ref.read(taskRepositoryProvider).createTask(
-                    title: _lastDeletedTask!.title,
-                    description: _lastDeletedTask!.description,
-                    dueDate: _lastDeletedTask!.dueDate,
-                    priority: _lastDeletedTask!.priority,
-                    creationSource: _lastDeletedTask!.creationSource,
-                  ),
-            );
+            await ref.read(taskRepositoryProvider).createTask(
+                  title: _lastDeletedTask!.title,
+                  description: _lastDeletedTask!.description,
+                  dueDate: _lastDeletedTask!.dueDate,
+                  priority: _lastDeletedTask!.priority,
+                  creationSource: _lastDeletedTask!.creationSource,
+                  tag: _lastDeletedTask!.tag,
+                );
           }
         },
       );
@@ -516,46 +519,57 @@ class _TasksPageState extends ConsumerState<TasksPage> {
       context,
       message: '已创建语音任务:${task.title}',
       undoLabel: '撤回',
-      onUndo: () {
-        unawaited(ref.read(taskRepositoryProvider).deleteTask(task.id));
+      onUndo: () async {
+        await ref.read(taskRepositoryProvider).deleteTask(task.id);
+        await ref.read(notificationServiceProvider).cancelTaskReminders(task.id);
       },
     );
   }
 
-  void _openQuickCreate() {
+  Future<void> _openQuickCreate() async {
+    ref.read(shellTabBarVisibleProvider.notifier).state = false;
     setState(() => _showQuickCreate = true);
-    QuickCreateSheet.show(
+
+    final createdTask = await QuickCreateSheet.show(
       context,
       onCreate: _handleQuickCreate,
-    ).then((_) {
-      // sheet 关闭后恢复 FAB（无论创建成功还是取消）
-      if (mounted) setState(() => _showQuickCreate = false);
-    });
+    );
+
+    if (!mounted) return;
+    setState(() => _showQuickCreate = false);
+    ref.read(shellTabBarVisibleProvider.notifier).state = true;
+
+    if (createdTask != null) {
+      TempoSnackbar.show(
+        context,
+        message: '已创建:${createdTask.title}',
+        undoLabel: '撤回',
+        onUndo: () async {
+          await ref.read(taskRepositoryProvider).deleteTask(createdTask.id);
+          await ref
+              .read(notificationServiceProvider)
+              .cancelTaskReminders(createdTask.id);
+        },
+      );
+    }
   }
 
-  Future<String> _handleQuickCreate({
+  Future<Task> _handleQuickCreate({
     required String title,
     DateTime? dueDate,
     TaskPriority priority = TaskPriority.none,
+    String? tag,
   }) async {
     final task = await ref.read(taskRepositoryProvider).createTask(
           title: title,
           dueDate: dueDate,
           priority: priority,
           creationSource: AppConstants.sourceText,
+          tag: tag,
         );
-    if (!mounted) return task.id;
+    if (!mounted) return task;
     await ref.read(notificationServiceProvider).scheduleTaskReminder(task);
-    if (!mounted) return task.id;
-    TempoSnackbar.show(
-      context,
-      message: '已创建:${task.title}',
-      undoLabel: '撤回',
-      onUndo: () {
-        unawaited(ref.read(taskRepositoryProvider).deleteTask(task.id));
-      },
-    );
-    return task.id;
+    return task;
   }
 }
 

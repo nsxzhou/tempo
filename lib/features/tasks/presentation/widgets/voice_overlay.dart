@@ -328,7 +328,7 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
       case _VoicePhase.recording:
         return '语音采音中 · 点击麦克风停止';
       case _VoicePhase.processing:
-        return '正在解析语音…';
+        return '语音识别中 · 可能需要几秒…';
       default:
         return '点击麦克风开始采音';
     }

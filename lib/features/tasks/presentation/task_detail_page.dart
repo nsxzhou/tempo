@@ -1,13 +1,13 @@
 // ============================================================
-// TaskDetailPage — 任务详情页(Stripe 派 1:1 还原 prototype DetailView.tsx)
+// TaskDetailPage — 任务详情页
 // 顶部 sticky 返回 + 编辑/更多按钮
-// 优先级徽章 + H1 衬线斜体 32px
-// 4 行 TempoPropertyRow(截止/归属/预估/AI 排程)
+// 优先级 / tag / 来源徽章 + H1 衬线斜体 32px
+// TempoPropertyRow(截止/归属)
 // 可点击编辑描述
-// 子任务列表(内存 mock,待模型扩展后迁移)
-// 思源关联卡
+// 思源关联卡（siyuanBlockId 非空时展示）
 // 底部"标记完成"按钮
 // 业务逻辑(Repository + 通知)保留
+// TODO: 子任务应在 Task 模型扩展后接入
 // ============================================================
 
 import 'dart:async';
@@ -19,17 +19,11 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app_providers.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../core/providers/database_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/tempo/tempo.dart';
 import '../domain/task.dart';
-
-// TODO: 子任务应在 Task 模型扩展后迁移到持久层 (临时内存)
-class _SubTask {
-  final String id;
-  String title;
-  bool done;
-  _SubTask({required this.id, required this.title, this.done = false});
-}
 
 class TaskDetailPage extends ConsumerStatefulWidget {
   final String taskId;
@@ -41,17 +35,11 @@ class TaskDetailPage extends ConsumerStatefulWidget {
 
 class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   Task? _task;
+  String? _listName;
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isEditingDesc = false;
   late final TextEditingController _descController;
-
-  // 内存子任务(等模型扩展后迁出)
-  final List<_SubTask> _subTasks = [
-    _SubTask(id: '1', title: '梳理本周关键产出 OKR', done: true),
-    _SubTask(id: '2', title: '与产品同步路线图细节', done: false),
-    _SubTask(id: '3', title: '准备技术方案文档大纲', done: false),
-  ];
 
   @override
   void initState() {
@@ -68,6 +56,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
 
   Future<void> _loadTask() async {
     final repository = ref.read(taskRepositoryProvider);
+    final db = ref.read(databaseProvider);
     final task = await repository.getTaskById(widget.taskId);
     if (!mounted) return;
     if (task == null) {
@@ -76,11 +65,20 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
       context.pop();
       return;
     }
+    final taskList = await db.getTaskListById(task.listId);
+    if (!mounted) return;
     setState(() {
       _task = task;
+      _listName = _resolveListName(task.listId, taskList?.name);
       _descController.text = task.description ?? '';
       _isLoading = false;
     });
+  }
+
+  String _resolveListName(String listId, String? dbName) {
+    if (dbName != null && dbName.isNotEmpty) return dbName;
+    if (listId == 'local-inbox') return AppConstants.defaultListName;
+    return listId;
   }
 
   @override
@@ -111,10 +109,10 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                   _buildProperties(task),
                   const SizedBox(height: 16),
                   _buildDescription(task),
-                  const SizedBox(height: 16),
-                  _buildSubtasks(),
-                  const SizedBox(height: 16),
-                  if (task.siyuanBlockId != null) _buildSiyuanCard(task),
+                  if (task.siyuanBlockId != null) ...[
+                    const SizedBox(height: 16),
+                    _buildSiyuanCard(task),
+                  ],
                   const SizedBox(height: 16),
                   _buildReadOnlyInfo(task),
                   const SizedBox(height: 24),
@@ -136,7 +134,9 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
             children: [
               if (task.priority != TaskPriority.none)
                 TempoPillBadge(
@@ -150,7 +150,20 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                   },
                   fontSize: 10,
                 ),
-              const SizedBox(width: 6),
+              if (task.tag == AppConstants.tagWork)
+                TempoPillBadge(
+                  label: '@工作',
+                  kind: TempoBadgeKind.tag,
+                  uppercase: false,
+                  fontSize: 10,
+                )
+              else if (task.tag == AppConstants.tagLife)
+                TempoPillBadge(
+                  label: '@生活',
+                  kind: TempoBadgeKind.tag,
+                  uppercase: false,
+                  fontSize: 10,
+                ),
               if (task.creationSource != 'text')
                 TempoPillBadge(
                   label: '#${_sourceTag(task.creationSource)}',
@@ -224,45 +237,11 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
             icon: LucideIcons.folder,
             label: '归属',
             value: Text(
-              _listName(task.listId),
+              _listName ?? _resolveListName(task.listId, null),
               style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
-            ),
-          ),
-          TempoPropertyRow(
-            icon: LucideIcons.clock,
-            label: '预估',
-            value: Text(
-              '30m', // mock
-              style: AppTheme.mono(
-                size: 13,
-                weight: FontWeight.w500,
-              ),
-            ),
-          ),
-          TempoPropertyRow(
-            icon: LucideIcons.sparkles,
-            label: 'AI 排程',
-            value: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '14:00 – 15:30',
-                  style: AppTheme.mono(
-                    size: 13,
-                    weight: FontWeight.w500,
-                  ),
-                ),
-                Text(
-                  '精力匹配 82%',
-                  style: AppTheme.mono(
-                    size: 10,
-                    color: AppTheme.fgSubtle,
-                  ),
-                ),
-              ],
             ),
           ),
         ],
@@ -352,79 +331,8 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     );
   }
 
-  Widget _buildSubtasks() {
-    if (_subTasks.isEmpty) return const SizedBox.shrink();
-    final done = _subTasks.where((s) => s.done).length;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Text(
-                '子任务',
-                style: AppTheme.mono(
-                  size: 10,
-                  weight: FontWeight.w700,
-                  color: AppTheme.fgMuted,
-                  letterSpacing: 1.0,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppTheme.bgMuted,
-                  borderRadius: BorderRadius.circular(AppTheme.radiusXxs),
-                ),
-                child: Text(
-                  '$done/${_subTasks.length} 已勾选',
-                  style: AppTheme.mono(
-                    size: 9,
-                    color: AppTheme.fgMuted,
-                    weight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Container(
-            decoration: BoxDecoration(
-              color: AppTheme.bg,
-              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-              border: Border.all(color: AppTheme.borderStrong, width: 0.8),
-              boxShadow: AppTheme.shadowSm,
-            ),
-            child: Column(
-              children: [
-                for (int i = 0; i < _subTasks.length; i++) ...[
-                  if (i > 0)
-                    Container(
-                      margin: const EdgeInsets.only(left: 38),
-                      height: 0.5,
-                      color: AppTheme.borderSubtle,
-                    ),
-                  _SubTaskRow(
-                    sub: _subTasks[i],
-                    onToggle: () => setState(() {
-                      _subTasks[i].done = !_subTasks[i].done;
-                    }),
-                    onDelete: () => setState(() {
-                      _subTasks.removeAt(i);
-                    }),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSiyuanCard(Task task) {
+    final blockId = task.siyuanBlockId!;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
@@ -462,7 +370,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                     ),
                   ),
                   child: Icon(
-                    LucideIcons.folder,
+                    LucideIcons.link_2,
                     size: 14,
                     color: AppTheme.priorityP1,
                   ),
@@ -473,7 +381,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '产品设计 / PRD 草稿',
+                        blockId,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -484,7 +392,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'siyuan://产品设计/PRD',
+                        '思源笔记块 ID',
                         style: AppTheme.mono(
                           size: 9,
                           color: AppTheme.fgSubtle,
@@ -641,11 +549,6 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
         return '文本输入';
     }
   }
-
-  String _listName(String listId) {
-    // mock: 真实业务应根据 listId 查询
-    return listId == 'local-inbox' ? 'Inbox' : '工作项目';
-  }
 }
 
 class _TopBar extends StatelessWidget {
@@ -699,63 +602,6 @@ class _IconBtn extends StatelessWidget {
           width: 32,
           height: 32,
           child: Icon(icon, size: 14, color: AppTheme.fgSecondary),
-        ),
-      ),
-    );
-  }
-}
-
-class _SubTaskRow extends StatelessWidget {
-  final _SubTask sub;
-  final VoidCallback onToggle;
-  final VoidCallback onDelete;
-  const _SubTaskRow({
-    required this.sub,
-    required this.onToggle,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppTheme.bg,
-      child: InkWell(
-        onTap: onToggle,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          child: Row(
-            children: [
-              TempoCheckbox(
-                value: sub.done,
-                onChanged: (_) => onToggle(),
-                size: 16,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  sub.title,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w500,
-                    color: sub.done ? AppTheme.fgMuted : AppTheme.fg,
-                    decoration: sub.done ? TextDecoration.lineThrough : null,
-                    height: 1.3,
-                  ),
-                ),
-              ),
-              GestureDetector(
-                onTap: onDelete,
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(
-                    LucideIcons.trash_2,
-                    size: 12,
-                    color: AppTheme.fgMuted,
-                  ),
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

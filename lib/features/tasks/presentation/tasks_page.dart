@@ -14,10 +14,12 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app_providers.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/tempo/tempo.dart';
 import '../data/voice_task_parse_result.dart';
 import '../domain/task.dart';
+import 'widgets/quick_create_sheet.dart';
 import 'widgets/task_tile.dart';
 import 'widgets/voice_overlay.dart';
 
@@ -33,6 +35,7 @@ class TasksPage extends ConsumerStatefulWidget {
 
 class _TasksPageState extends ConsumerState<TasksPage> {
   bool _showVoiceOverlay = false;
+  bool _showQuickCreate = false;
   Task? _lastDeletedTask;
 
   _TimeFilter _timeFilter = _TimeFilter.today;
@@ -86,15 +89,16 @@ class _TasksPageState extends ConsumerState<TasksPage> {
               ),
             ),
           ),
-          // 浮动按钮
-          Positioned(
-            right: 20,
-            bottom: 120,
-            child: _FloatingActions(
-              onVoice: () => setState(() => _showVoiceOverlay = true),
-              onAdd: _showQuickAddHint,
+          // 浮动按钮（语音/快速创建 overlay 打开时隐藏）
+          if (!_showVoiceOverlay && !_showQuickCreate)
+            Positioned(
+              right: 20,
+              bottom: 120,
+              child: _FloatingActions(
+                onVoice: () => setState(() => _showVoiceOverlay = true),
+                onAdd: _openQuickCreate,
+              ),
             ),
-          ),
           // 语音录入浮层
           if (_showVoiceOverlay)
             VoiceOverlay(
@@ -518,8 +522,40 @@ class _TasksPageState extends ConsumerState<TasksPage> {
     );
   }
 
-  void _showQuickAddHint() {
-    TempoSnackbar.show(context, message: '快速创建暂未启用,原型对应 composer 弹层。');
+  void _openQuickCreate() {
+    setState(() => _showQuickCreate = true);
+    QuickCreateSheet.show(
+      context,
+      onCreate: _handleQuickCreate,
+    ).then((_) {
+      // sheet 关闭后恢复 FAB（无论创建成功还是取消）
+      if (mounted) setState(() => _showQuickCreate = false);
+    });
+  }
+
+  Future<String> _handleQuickCreate({
+    required String title,
+    DateTime? dueDate,
+    TaskPriority priority = TaskPriority.none,
+  }) async {
+    final task = await ref.read(taskRepositoryProvider).createTask(
+          title: title,
+          dueDate: dueDate,
+          priority: priority,
+          creationSource: AppConstants.sourceText,
+        );
+    if (!mounted) return task.id;
+    await ref.read(notificationServiceProvider).scheduleTaskReminder(task);
+    if (!mounted) return task.id;
+    TempoSnackbar.show(
+      context,
+      message: '已创建:${task.title}',
+      undoLabel: '撤回',
+      onUndo: () {
+        unawaited(ref.read(taskRepositoryProvider).deleteTask(task.id));
+      },
+    );
+    return task.id;
   }
 }
 

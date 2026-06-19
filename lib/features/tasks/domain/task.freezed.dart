@@ -34,6 +34,7 @@ mixin _$Task {
   DateTime get createdAt => throw _privateConstructorUsedError;
   DateTime get updatedAt => throw _privateConstructorUsedError;
   String get creationSource => throw _privateConstructorUsedError;
+  String? get tag => throw _privateConstructorUsedError;
   bool get syncPending => throw _privateConstructorUsedError;
 
   /// Serializes this Task to a JSON map.
@@ -64,6 +65,7 @@ abstract class $TaskCopyWith<$Res> {
     DateTime createdAt,
     DateTime updatedAt,
     String creationSource,
+    String? tag,
     bool syncPending,
   });
 }
@@ -96,6 +98,7 @@ class _$TaskCopyWithImpl<$Res, $Val extends Task>
     Object? createdAt = null,
     Object? updatedAt = null,
     Object? creationSource = null,
+    Object? tag = freezed,
     Object? syncPending = null,
   }) {
     return _then(
@@ -152,6 +155,10 @@ class _$TaskCopyWithImpl<$Res, $Val extends Task>
                 ? _value.creationSource
                 : creationSource // ignore: cast_nullable_to_non_nullable
                       as String,
+            tag: freezed == tag
+                ? _value.tag
+                : tag // ignore: cast_nullable_to_non_nullable
+                      as String?,
             syncPending: null == syncPending
                 ? _value.syncPending
                 : syncPending // ignore: cast_nullable_to_non_nullable
@@ -184,6 +191,7 @@ abstract class _$$TaskImplCopyWith<$Res> implements $TaskCopyWith<$Res> {
     DateTime createdAt,
     DateTime updatedAt,
     String creationSource,
+    String? tag,
     bool syncPending,
   });
 }
@@ -213,6 +221,7 @@ class __$$TaskImplCopyWithImpl<$Res>
     Object? createdAt = null,
     Object? updatedAt = null,
     Object? creationSource = null,
+    Object? tag = freezed,
     Object? syncPending = null,
   }) {
     return _then(
@@ -269,6 +278,10 @@ class __$$TaskImplCopyWithImpl<$Res>
             ? _value.creationSource
             : creationSource // ignore: cast_nullable_to_non_nullable
                   as String,
+        tag: freezed == tag
+            ? _value.tag
+            : tag // ignore: cast_nullable_to_non_nullable
+                  as String?,
         syncPending: null == syncPending
             ? _value.syncPending
             : syncPending // ignore: cast_nullable_to_non_nullable
@@ -295,6 +308,7 @@ class _$TaskImpl implements _Task {
     required this.createdAt,
     required this.updatedAt,
     this.creationSource = 'text',
+    this.tag,
     this.syncPending = false,
   });
 
@@ -332,12 +346,14 @@ class _$TaskImpl implements _Task {
   @JsonKey()
   final String creationSource;
   @override
+  final String? tag;
+  @override
   @JsonKey()
   final bool syncPending;
 
   @override
   String toString() {
-    return 'Task(id: $id, listId: $listId, title: $title, description: $description, priority: $priority, dueDate: $dueDate, isCompleted: $isCompleted, completedAt: $completedAt, siyuanBlockId: $siyuanBlockId, sortOrder: $sortOrder, createdAt: $createdAt, updatedAt: $updatedAt, creationSource: $creationSource, syncPending: $syncPending)';
+    return 'Task(id: $id, listId: $listId, title: $title, description: $description, priority: $priority, dueDate: $dueDate, isCompleted: $isCompleted, completedAt: $completedAt, siyuanBlockId: $siyuanBlockId, sortOrder: $sortOrder, createdAt: $createdAt, updatedAt: $updatedAt, creationSource: $creationSource, tag: $tag, syncPending: $syncPending)';
   }
 
   @override
@@ -367,6 +383,7 @@ class _$TaskImpl implements _Task {
                 other.updatedAt == updatedAt) &&
             (identical(other.creationSource, creationSource) ||
                 other.creationSource == creationSource) &&
+            (identical(other.tag, tag) || other.tag == tag) &&
             (identical(other.syncPending, syncPending) ||
                 other.syncPending == syncPending));
   }
@@ -388,6 +405,7 @@ class _$TaskImpl implements _Task {
     createdAt,
     updatedAt,
     creationSource,
+    tag,
     syncPending,
   );
 
@@ -420,6 +438,7 @@ abstract class _Task implements Task {
     required final DateTime createdAt,
     required final DateTime updatedAt,
     final String creationSource,
+    final String? tag,
     final bool syncPending,
   }) = _$TaskImpl;
 
@@ -451,6 +470,8 @@ abstract class _Task implements Task {
   DateTime get updatedAt;
   @override
   String get creationSource;
+  @override
+  String? get tag;
   @override
   bool get syncPending;
 

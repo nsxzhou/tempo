@@ -28,6 +28,7 @@ class FakeTaskRepository implements TaskRepository {
     DateTime? dueDate,
     TaskPriority priority = TaskPriority.none,
     String creationSource = AppConstants.sourceText,
+    String? tag,
   }) async {
     final now = DateTime(2026, 6, 18, 9, _nextId);
     final task = Task(
@@ -40,6 +41,7 @@ class FakeTaskRepository implements TaskRepository {
       createdAt: now,
       updatedAt: now,
       creationSource: creationSource,
+      tag: tag,
     );
     tasks.insert(0, task);
     _emit();
@@ -54,6 +56,7 @@ class FakeTaskRepository implements TaskRepository {
       dueDate: result.dueDate,
       priority: result.priority,
       creationSource: AppConstants.sourceVoice,
+      tag: result.tag,
     );
   }
 

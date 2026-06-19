@@ -32,6 +32,10 @@ class AppConstants {
   static const String sourceVoice = 'voice';
   static const String sourceAi = 'ai';
 
+  // ── 任务分类 tag ──
+  static const String tagWork = 'work';
+  static const String tagLife = 'life';
+
   // ── 通知 ──
   static const int reminderBeforeMinutes = 15;
   static const String notificationChannelId = 'tempo_reminders';

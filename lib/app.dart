@@ -5,6 +5,7 @@
 // ============================================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_providers.dart';
@@ -62,13 +63,21 @@ class _TempoAppState extends ConsumerState<TempoApp> {
     });
 
     return AuthStateWidget(
-      child: MaterialApp.router(
-        title: 'Tempo',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        darkTheme: AppTheme.dark,
-        themeMode: ThemeMode.light, // Phase 2 支持 dark
-        routerConfig: router,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        // 浅色背景 → 状态栏图标用深色(电池/信号/时间黑/灰)
+        value: SystemUiOverlayStyle.dark.copyWith(
+          statusBarColor: Colors.transparent,
+          systemNavigationBarColor: AppTheme.bg,
+          systemNavigationBarIconBrightness: Brightness.dark,
+        ),
+        child: MaterialApp.router(
+          title: 'Tempo',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
+          darkTheme: AppTheme.dark,
+          themeMode: ThemeMode.light, // Phase 2 支持 dark
+          routerConfig: router,
+        ),
       ),
     );
   }

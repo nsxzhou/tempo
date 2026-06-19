@@ -1,13 +1,13 @@
 // ============================================================
-// EmptyState — 通用空状态组件
-// 用于任务列表、日历等页面在无数据时显示引导文案
+// EmptyState — 通用空状态组件(对齐 Stripe 派设计系统)
+// 极淡图标 + 标题 + 副标题 + 可选描边按钮
 // ============================================================
 
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 /// 通用空状态组件。
-///
-/// 显示图标 + 标题 + 副标题，居中布局。
 class EmptyState extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -32,31 +32,40 @@ class EmptyState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 64, color: Colors.grey.shade400),
+            Icon(icon, size: 56, color: AppTheme.fgFaint),
             const SizedBox(height: 16),
             Text(
               title,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey.shade700,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.fgSecondary,
+                letterSpacing: -0.2,
               ),
             ),
             if (subtitle != null) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
                 subtitle!,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade500,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.fgMuted,
+                  height: 1.5,
                 ),
               ),
             ],
             if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 24),
-              FilledButton.tonal(
+              const SizedBox(height: 20),
+              OutlinedButton(
                 onPressed: onAction,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.fg,
+                  side: const BorderSide(color: AppTheme.borderStrong),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  ),
+                ),
                 child: Text(actionLabel!),
               ),
             ],

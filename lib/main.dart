@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 
@@ -35,6 +36,9 @@ Future<void> main() async {
 
   // 3) 初始化 timezone 数据（本地通知 zonedSchedule 需要）
   tz.initializeTimeZones();
+
+  // 4) 初始化 intl locale 数据(tasks_page / calendar_page 用了 zh_CN 的 DateFormat)
+  await initializeDateFormatting('zh_CN');
 
   runApp(const ProviderScope(child: TempoApp()));
 }

@@ -1,23 +1,23 @@
 // ============================================================
-// FeedbackDialog — 反馈输入弹窗（文字 + 自动附带设备信息）
+// FeedbackDialog — 反馈输入弹窗(对齐 Stripe 派设计系统)
+// 自定义 Dialog + 主题输入框 + 设备信息条 + TempoSnackbar
+// 逻辑保留:submit / collectDeviceInfo / 错误重试
 // ============================================================
 
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app_providers.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/tempo/tempo.dart';
 
-/// 反馈输入弹窗。
-///
-/// 用户输入文字反馈，自动附带设备信息提交到 Supabase。
 class FeedbackDialog extends ConsumerStatefulWidget {
   const FeedbackDialog({super.key});
 
-  /// 显示反馈弹窗。
   static Future<void> show(BuildContext context) {
     return showDialog(
       context: context,
@@ -41,74 +41,162 @@ class _FeedbackDialogState extends ConsumerState<FeedbackDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('提交反馈'),
-      content: SizedBox(
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
         width: 320,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: AppTheme.bg,
+          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+          border: Border.all(color: AppTheme.borderStrong, width: 0.8),
+          boxShadow: AppTheme.shadowSm,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // 标题行
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  '提交反馈',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.fg,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: _isSubmitting
+                      ? null
+                      : () => Navigator.pop(context),
+                  child: Icon(LucideIcons.x, size: 16, color: AppTheme.fgMuted),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // 反馈输入框
             TextField(
               controller: _controller,
               maxLines: 5,
               autofocus: true,
-              decoration: const InputDecoration(
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppTheme.fg,
+                height: 1.5,
+              ),
+              decoration: InputDecoration(
                 hintText: '请描述你遇到的问题或建议...',
-                border: OutlineInputBorder(),
+                hintStyle: TextStyle(fontSize: 12, color: AppTheme.fgSubtle),
+                filled: true,
+                fillColor: AppTheme.bgSubtle,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  borderSide: const BorderSide(color: AppTheme.borderStrong),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  borderSide: const BorderSide(color: AppTheme.borderStrong),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  borderSide: const BorderSide(color: AppTheme.fg, width: 2),
+                ),
+                contentPadding: const EdgeInsets.all(12),
               ),
             ),
             const SizedBox(height: 12),
             // 设备信息提示
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8),
+                color: AppTheme.bgMuted,
+                borderRadius: BorderRadius.circular(AppTheme.radiusSm),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, size: 16, color: Colors.grey.shade600),
+                  Icon(LucideIcons.info, size: 13, color: AppTheme.fgMuted),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '将自动附带设备信息（平台/版本）',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                      ),
+                      '将自动附带设备信息(平台/版本)',
+                      style: TextStyle(fontSize: 10, color: AppTheme.fgMuted),
                     ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 18),
+            // 按钮行
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _isSubmitting
+                        ? null
+                        : () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.fgMuted,
+                      side: const BorderSide(color: AppTheme.borderStrong),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text(
+                      '取消',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _isSubmitting ? null : _submit,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.fg,
+                      foregroundColor: AppTheme.bg,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppTheme.bg,
+                            ),
+                          )
+                        : const Text(
+                            '提交',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _isSubmitting ? null : () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: _isSubmitting ? null : _submit,
-          child: _isSubmitting
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                )
-              : const Text('提交'),
-        ),
-      ],
     );
   }
 
   Future<void> _submit() async {
     final content = _controller.text.trim();
     if (content.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入反馈内容')),
-      );
+      TempoSnackbar.show(context, message: '请输入反馈内容');
       return;
     }
 
@@ -120,16 +208,14 @@ class _FeedbackDialogState extends ConsumerState<FeedbackDialog> {
 
       if (!mounted) return;
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('反馈已提交，感谢！')),
-      );
+      TempoSnackbar.show(context, message: '反馈已提交,感谢!');
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('提交失败：$error'),
-          action: SnackBarAction(label: '重试', onPressed: _submit),
-        ),
+      TempoSnackbar.show(
+        context,
+        message: '提交失败:$error',
+        undoLabel: '重试',
+        onUndo: _submit,
       );
     } finally {
       if (mounted) {
@@ -138,7 +224,6 @@ class _FeedbackDialogState extends ConsumerState<FeedbackDialog> {
     }
   }
 
-  /// 收集设备信息。
   Map<String, dynamic> _collectDeviceInfo() {
     return {
       'platform': Platform.operatingSystem,

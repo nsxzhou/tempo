@@ -41,7 +41,16 @@ class DioVoiceTaskService implements VoiceTaskService {
   }
 
   Future<VoiceTaskParseResult> _postFormData(FormData formData) async {
-    final response = await _dio.post<Object?>(endpoint, data: formData);
+    // Edge Function 内部执行 Storage 上传 → ASR 提交+轮询 → LLM 解析,
+    // 整体耗时可达 30-40 秒,需要覆盖默认的 receiveTimeout。
+    final response = await _dio.post<Object?>(
+      endpoint,
+      data: formData,
+      options: Options(
+        receiveTimeout: const Duration(seconds: 45),
+        sendTimeout: const Duration(seconds: 20),
+      ),
+    );
     return _parseResponse(response.data);
   }
 

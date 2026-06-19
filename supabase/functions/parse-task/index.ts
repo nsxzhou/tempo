@@ -1,14 +1,22 @@
 // ============================================================
 // Tempo parse-task Edge Function
 // 统一解析端点：multipart 语音路径(ASR+LLM) + json 文本路径(LLM only)
+//
+// 语音路径流程:
+//   App multipart POST → 上传音频到 Supabase Storage → 生成 signed URL
+//   → 提交火山引擎录音文件识别(submit) → 轮询结果(query) → 豆包 LLM 解析
+//   → 清理 Storage 临时文件 → 返回结构化任务
+//
 // 环境变量:
-//   DOUBAO_API_KEY           — 豆包 LLM API Key
-//   DOUBAO_MODEL             — 豆包模型 ID
-//   DOUBAO_ENDPOINT          — 豆包 API 端点 (可选, 默认 ark.cn-beijing.volces.com)
-//   VOLCENGINE_ASR_ENDPOINT  — 火山 ASR 端点
-//   VOLCENGINE_ASR_APP_KEY   — 火山 ASR App Key
-//   VOLCENGINE_ASR_ACCESS_TOKEN — 火山 ASR Access Token
-//   VOICE_TASK_MOCK          — 设为 "true" 时返回 mock 响应
+//   DOUBAO_API_KEY             — 豆包 LLM API Key
+//   DOUBAO_MODEL               — 豆包模型 ID (ep-xxxx 接入点)
+//   DOUBAO_ENDPOINT            — 豆包 API 端点 (可选, 默认 ark.cn-beijing.volces.com)
+//   VOLCENGINE_ASR_API_KEY     — 火山引擎语音 API Key (新版控制台 X-Api-Key)
+//   VOICE_TASK_MOCK            — 设为 "true" 时返回 mock 响应
+//
+// Supabase Edge Function 自动注入:
+//   SUPABASE_URL               — Supabase 项目 URL
+//   SUPABASE_SERVICE_ROLE_KEY  — Service Role Key (Storage 操作)
 // ============================================================
 
 type ParseTaskResponse = {
@@ -44,12 +52,27 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
     const contentType = request.headers.get("content-type") ?? "";
 
-    // 语音路径：multipart/form-data → ASR → LLM
+    // 语音路径：multipart/form-data → Storage 上传 → ASR(submit+poll) → LLM
     if (contentType.includes("multipart/form-data")) {
-      const audio = await readAudioFromMultipart(request);
-      const transcript = await transcribeWithVolcengine(audio);
-      const parsed = await parseTaskWithDoubao(transcript);
-      return json(parsed);
+      const { audio, filename } = await readAudioFromMultipart(request);
+      const storagePath = `voice-tasks/${crypto.randomUUID()}/${filename}`;
+
+      try {
+        // 1. 上传到 Supabase Storage，获取可访问 URL
+        const audioUrl = await uploadToStorage(audio, storagePath);
+
+        // 2. 提交 ASR 任务 + 轮询结果
+        const transcript = await transcribeWithVolcengine(audioUrl);
+
+        // 3. LLM 解析
+        const parsed = await parseTaskWithDoubao(transcript);
+        return json(parsed);
+      } finally {
+        // 4. 清理临时文件（静默，不影响主流程）
+        await deleteFromStorage(storagePath).catch((err) => {
+          console.error("Storage cleanup failed:", err);
+        });
+      }
     }
 
     // 文本路径：application/json → LLM 直接解析
@@ -72,42 +95,237 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
 // ── 音频读取 ──
 
-async function readAudioFromMultipart(request: Request): Promise<Uint8Array> {
+async function readAudioFromMultipart(
+  request: Request,
+): Promise<{ audio: Uint8Array; filename: string }> {
   const form = await request.formData();
   const audio = form.get("audio");
   if (!(audio instanceof File)) {
     throw new Error("multipart/form-data must include an 'audio' file field");
   }
-  return new Uint8Array(await audio.arrayBuffer());
+  return {
+    audio: new Uint8Array(await audio.arrayBuffer()),
+    filename: audio.name || "voice-task.m4a",
+  };
 }
 
-// ── 火山引擎 ASR ──
+// ── Supabase Storage 操作 ──
 
-async function transcribeWithVolcengine(audio: Uint8Array): Promise<string> {
-  const endpoint = requiredEnv("VOLCENGINE_ASR_ENDPOINT");
-  const appKey = requiredEnv("VOLCENGINE_ASR_APP_KEY");
-  const accessToken = requiredEnv("VOLCENGINE_ASR_ACCESS_TOKEN");
+const STORAGE_BUCKET = "tempo-audio";
+const SIGNED_URL_EXPIRY = 600; // 10 分钟
 
-  const response = await fetch(endpoint, {
+function storageBaseUrl(): string {
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) {
+    throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for Storage operations");
+  }
+  return url;
+}
+
+function storageAuthHeaders(): Record<string, string> {
+  return {
+    Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+    apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+  };
+}
+
+async function uploadToStorage(
+  audio: Uint8Array,
+  path: string,
+): Promise<string> {
+  const baseUrl = storageBaseUrl();
+  const headers = storageAuthHeaders();
+
+  // 上传文件到 Storage
+  const uploadUrl = `${baseUrl}/storage/v1/object/${STORAGE_BUCKET}/${path}`;
+  const uploadRes = await fetch(uploadUrl, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${accessToken}`,
+      ...headers,
       "Content-Type": "audio/mp4",
-      "X-Api-App-Key": appKey,
+      "x-upsert": "true",
     },
     body: audio,
   });
 
-  if (!response.ok) {
-    throw new Error(`Volcengine ASR failed: ${response.status}`);
+  if (!uploadRes.ok) {
+    const errText = await uploadRes.text();
+    throw new Error(`Storage upload failed (${uploadRes.status}): ${errText}`);
   }
 
-  const payload = await response.json();
-  const transcript = extractTranscript(payload);
-  if (!transcript) {
-    throw new Error("Volcengine ASR response did not include transcript text");
+  // 生成 signed URL 供火山引擎 ASR 访问
+  const signUrl = `${baseUrl}/storage/v1/object/sign/${STORAGE_BUCKET}/${path}`;
+  const signRes = await fetch(signUrl, {
+    method: "POST",
+    headers: {
+      ...headers,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ expiresIn: SIGNED_URL_EXPIRY }),
+  });
+
+  if (!signRes.ok) {
+    const errText = await signRes.text();
+    throw new Error(`Storage sign URL failed (${signRes.status}): ${errText}`);
   }
-  return transcript;
+
+  const signData = (await signRes.json()) as { signedURL: string };
+  // signedURL 是相对路径，需要拼接 baseUrl
+  const signedPath = signData.signedURL;
+  return signedPath.startsWith("http")
+    ? signedPath
+    : `${baseUrl}${signedPath.startsWith("/") ? "" : "/"}${signedPath}`;
+}
+
+async function deleteFromStorage(path: string): Promise<void> {
+  const baseUrl = storageBaseUrl();
+  const headers = storageAuthHeaders();
+
+  const deleteUrl = `${baseUrl}/storage/v1/object/${STORAGE_BUCKET}/${path}`;
+  const res = await fetch(deleteUrl, {
+    method: "DELETE",
+    headers,
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Storage delete failed (${res.status}): ${errText}`);
+  }
+}
+
+// ── 火山引擎 ASR（录音文件识别标准版） ──
+
+const VOLCENGINE_ASR_SUBMIT =
+  "https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit";
+const VOLCENGINE_ASR_QUERY =
+  "https://openspeech.bytedance.com/api/v3/auc/bigmodel/query";
+const VOLCENGINE_ASR_RESOURCE_ID = "volc.bigasr.auc";
+
+// 轮询配置
+const ASR_POLL_INTERVAL_MS = 1500;
+const ASR_POLL_MAX_MS = 30_000;
+
+async function transcribeWithVolcengine(audioUrl: string): Promise<string> {
+  const apiKey = requiredEnv("VOLCENGINE_ASR_API_KEY");
+  const requestId = crypto.randomUUID();
+
+  // Step 1: 提交识别任务
+  const submitHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Api-Key": apiKey,
+    "X-Api-Resource-Id": VOLCENGINE_ASR_RESOURCE_ID,
+    "X-Api-Request-Id": requestId,
+    "X-Api-Sequence": "-1",
+  };
+
+  const submitBody = {
+    audio: {
+      format: "m4a",
+      url: audioUrl,
+    },
+    request: {
+      model_name: "bigmodel",
+      enable_itn: true,
+      enable_punc: true,
+    },
+  };
+
+  const submitRes = await fetch(VOLCENGINE_ASR_SUBMIT, {
+    method: "POST",
+    headers: submitHeaders,
+    body: JSON.stringify(submitBody),
+  });
+
+  const submitStatus = submitRes.headers.get("X-Api-Status-Code");
+  if (submitStatus !== "20000000") {
+    const msg = submitRes.headers.get("X-Api-Message") ?? "unknown error";
+    throw new Error(`ASR submit failed: code=${submitStatus}, msg=${msg}`);
+  }
+
+  // Step 2: 轮询查询结果
+  return await pollAsrResult(apiKey, requestId);
+}
+
+async function pollAsrResult(
+  apiKey: string,
+  requestId: string,
+): Promise<string> {
+  const queryHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Api-Key": apiKey,
+    "X-Api-Resource-Id": VOLCENGINE_ASR_RESOURCE_ID,
+    "X-Api-Request-Id": requestId,
+  };
+
+  const deadline = Date.now() + ASR_POLL_MAX_MS;
+
+  while (Date.now() < deadline) {
+    await sleep(ASR_POLL_INTERVAL_MS);
+
+    const res = await fetch(VOLCENGINE_ASR_QUERY, {
+      method: "POST",
+      headers: queryHeaders,
+      body: "{}",
+    });
+
+    const statusCode = res.headers.get("X-Api-Status-Code");
+
+    // 20000001 = 处理中, 20000002 = 排队中 → 继续等待
+    if (statusCode === "20000001" || statusCode === "20000002") {
+      continue;
+    }
+
+    // 20000000 = 成功
+    if (statusCode === "20000000") {
+      const payload = await res.json();
+      const transcript = extractAsrTranscript(payload);
+      if (!transcript) {
+        throw new Error("ASR completed but returned empty transcript");
+      }
+      return transcript;
+    }
+
+    // 其他状态码 = 错误
+    const msg = res.headers.get("X-Api-Message") ?? "unknown error";
+    throw new Error(`ASR query failed: code=${statusCode}, msg=${msg}`);
+  }
+
+  throw new Error("语音识别超时，请重试");
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function extractAsrTranscript(payload: unknown): string | null {
+  const record = asRecord(payload);
+  if (!record) return null;
+
+  const result = asRecord(record.result);
+  if (!result) return null;
+
+  // 优先取 result.text（完整识别文本）
+  const text = result.text;
+  if (typeof text === "string" && text.trim().length > 0) {
+    return text.trim();
+  }
+
+  // 降级：拼接 utterances
+  const utterances = result.utterances;
+  if (Array.isArray(utterances)) {
+    const parts: string[] = [];
+    for (const utt of utterances) {
+      const u = asRecord(utt);
+      if (u && typeof u.text === "string") {
+        parts.push(u.text);
+      }
+    }
+    const joined = parts.join("").trim();
+    if (joined.length > 0) return joined;
+  }
+
+  return null;
 }
 
 // ── 豆包 LLM 解析 ──
@@ -189,10 +407,7 @@ function normalizeTaskResponse(
   };
 }
 
-function extractTranscript(payload: unknown): string | null {
-  const direct = findStringByKeys(payload, ["transcript", "text", "utterance", "result_text"]);
-  return direct?.trim() || null;
-}
+// ── LLM 响应提取 ──
 
 function extractDoubaoContent(payload: unknown): string {
   const record = asRecord(payload);
@@ -209,27 +424,7 @@ function extractDoubaoContent(payload: unknown): string {
   return content;
 }
 
-function findStringByKeys(value: unknown, keys: string[]): string | null {
-  if (typeof value === "string") return null;
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findStringByKeys(item, keys);
-      if (found) return found;
-    }
-    return null;
-  }
-  const record = asRecord(value);
-  if (!record) return null;
-  for (const key of keys) {
-    const candidate = record[key];
-    if (typeof candidate === "string" && candidate.trim().length > 0) return candidate;
-  }
-  for (const nested of Object.values(record)) {
-    const found = findStringByKeys(nested, keys);
-    if (found) return found;
-  }
-  return null;
-}
+// ── 优先级归一化 ──
 
 function normalizePriority(value: unknown): number {
   if (typeof value === "number") return clampPriority(value);

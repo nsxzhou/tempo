@@ -9,7 +9,6 @@ export 'package:flutter_lucide/flutter_lucide.dart' show LucideIcons;
 export 'src/tempo_tab_bar.dart';
 export 'src/tempo_pill_badge.dart';
 export 'src/tempo_checkbox.dart';
-export 'src/tempo_toggle.dart';
 export 'src/tempo_section_header.dart';
 export 'src/tempo_heatmap_bar.dart';
 export 'src/tempo_progress_dot.dart';

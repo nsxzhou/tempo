@@ -1,6 +1,6 @@
 // ============================================================
 // SettingsPage — 设置页(Stripe 派 1:1 还原 prototype SettingsView.tsx)
-// 顶部 TempoUserCard(用户名 + 邮箱 + 3 列实时统计 + 注销)
+// 顶部 TempoUserCard(邮箱 + 3 列实时统计 + 注销)
 // 外部集成与同步:思源 / 系统日历
 // 个性化偏好:通知 / AI 排程 / 关于
 // 业务:通知开关、注销、登出保留;统计从 taskListProvider 实时计算
@@ -8,6 +8,7 @@
 
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -118,8 +119,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: TempoUserCard(
-                  userName: '周舟',
-                  badge: 'MVP 验证期',
                   email: emailText,
                   stats: stats,
                   onSignOut: () => _signOut(),
@@ -185,9 +184,17 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     icon: LucideIcons.bell,
                     title: '桌面高频提醒',
                     subtitle: '任务倒计时与 AI 周期精力诊断',
-                    trailing: TempoToggle(
-                      value: _notificationEnabled,
-                      onChanged: _toggleNotification,
+                    trailing: SizedBox(
+                      width: 34,
+                      height: 20,
+                      child: FittedBox(
+                        fit: BoxFit.contain,
+                        child: CupertinoSwitch(
+                          value: _notificationEnabled,
+                          onChanged: _toggleNotification,
+                          activeTrackColor: AppTheme.fg,
+                        ),
+                      ),
                     ),
                   ),
                   TempoPreferenceRow(

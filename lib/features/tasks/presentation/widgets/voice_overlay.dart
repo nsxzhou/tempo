@@ -11,6 +11,7 @@ import '../../../../app_providers.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/tempo/tempo.dart';
 import '../../data/voice_task_parse_result.dart';
+import '../../data/voice_task_service.dart';
 import '../../domain/task.dart';
 
 enum _VoicePhase { idle, recording, processing, draft }
@@ -108,10 +109,17 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = '语音创建失败:$e';
+        _error = _formatVoiceError(e);
         _phase = _VoicePhase.idle;
       });
     }
+  }
+
+  String _formatVoiceError(Object error) {
+    if (error is VoiceTaskException) {
+      return error.message;
+    }
+    return '语音创建失败，请稍后重试。';
   }
 
   Future<void> _confirmDraft() async {

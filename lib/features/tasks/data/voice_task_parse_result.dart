@@ -10,6 +10,7 @@ class VoiceTaskParseResult {
   final TaskPriority priority;
   final double confidence;
   final String rawTranscript;
+  final String? tag;
 
   const VoiceTaskParseResult({
     required this.title,
@@ -18,6 +19,7 @@ class VoiceTaskParseResult {
     required this.priority,
     required this.confidence,
     required this.rawTranscript,
+    this.tag,
   });
 
   factory VoiceTaskParseResult.fromJson(Map<String, Object?> json) {
@@ -33,6 +35,7 @@ class VoiceTaskParseResult {
       priority: _readPriority(json['priority']),
       confidence: confidence.clamp(0, 1).toDouble(),
       rawTranscript: _readString(json['raw_transcript']).trim(),
+      tag: _readNullableTag(json['tag']),
     );
   }
 
@@ -47,6 +50,7 @@ class VoiceTaskParseResult {
     TaskPriority? priority,
     double? confidence,
     String? rawTranscript,
+    String? tag,
   }) {
     return VoiceTaskParseResult(
       title: title ?? this.title,
@@ -55,8 +59,18 @@ class VoiceTaskParseResult {
       priority: priority ?? this.priority,
       confidence: confidence ?? this.confidence,
       rawTranscript: rawTranscript ?? this.rawTranscript,
+      tag: tag ?? this.tag,
     );
   }
+}
+
+String? _readNullableTag(Object? value) {
+  final text = _readNullableString(value);
+  if (text == null) return null;
+  final normalized = text.trim().toLowerCase();
+  if (normalized == 'work' || normalized == '工作') return 'work';
+  if (normalized == 'life' || normalized == '生活') return 'life';
+  return null;
 }
 
 String _readString(Object? value) {

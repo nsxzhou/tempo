@@ -29,6 +29,7 @@ abstract class TaskRepository {
     DateTime? dueDate,
     domain.TaskPriority priority = domain.TaskPriority.none,
     String creationSource = AppConstants.sourceText,
+    String? tag,
   });
 
   /// 从语音解析结果创建任务。
@@ -135,6 +136,7 @@ class SyncTaskRepository implements TaskRepository {
     DateTime? dueDate,
     domain.TaskPriority priority = domain.TaskPriority.none,
     String creationSource = AppConstants.sourceText,
+    String? tag,
   }) async {
     final trimmedTitle = title.trim();
     if (trimmedTitle.isEmpty) {
@@ -154,6 +156,7 @@ class SyncTaskRepository implements TaskRepository {
       createdAt: now,
       updatedAt: now,
       creationSource: creationSource,
+      tag: tag,
       syncPending: false,
     );
 
@@ -194,6 +197,7 @@ class SyncTaskRepository implements TaskRepository {
       dueDate: result.dueDate,
       priority: result.priority,
       creationSource: AppConstants.sourceVoice,
+      tag: result.tag,
     );
   }
 
@@ -406,6 +410,7 @@ class SyncTaskRepository implements TaskRepository {
       createdAt: Value(task.createdAt),
       updatedAt: Value(task.updatedAt),
       creationSource: Value(task.creationSource),
+      tag: Value(task.tag),
       syncPending: Value(task.syncPending),
     );
 
@@ -428,6 +433,7 @@ class SyncTaskRepository implements TaskRepository {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       creationSource: row.creationSource,
+      tag: row.tag,
       syncPending: row.syncPending,
     );
   }
@@ -462,6 +468,7 @@ class DriftTaskRepository implements TaskRepository {
     DateTime? dueDate,
     domain.TaskPriority priority = domain.TaskPriority.none,
     String creationSource = AppConstants.sourceText,
+    String? tag,
   }) async {
     final now = DateTime.now();
     final trimmedTitle = title.trim();
@@ -481,6 +488,7 @@ class DriftTaskRepository implements TaskRepository {
       createdAt: Value(now),
       updatedAt: Value(now),
       creationSource: Value(creationSource),
+      tag: Value(tag),
     );
 
     await _database.into(_database.tasks).insert(companion);
@@ -495,6 +503,7 @@ class DriftTaskRepository implements TaskRepository {
       createdAt: now,
       updatedAt: now,
       creationSource: creationSource,
+      tag: tag,
     );
   }
 
@@ -510,6 +519,7 @@ class DriftTaskRepository implements TaskRepository {
       dueDate: result.dueDate,
       priority: result.priority,
       creationSource: AppConstants.sourceVoice,
+      tag: result.tag,
     );
   }
 
@@ -599,6 +609,7 @@ class DriftTaskRepository implements TaskRepository {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       creationSource: row.creationSource,
+      tag: row.tag,
       syncPending: row.syncPending,
     );
   }

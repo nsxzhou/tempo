@@ -40,6 +40,7 @@ class Task with _$Task {
     required DateTime createdAt,
     required DateTime updatedAt,
     @Default('text') String creationSource,
+    String? tag,
     @Default(false) bool syncPending,
   }) = _Task;
 
@@ -62,6 +63,7 @@ extension TaskSupabase on Task {
         'siyuan_block_id': siyuanBlockId,
         'sort_order': sortOrder,
         'creation_source': creationSource,
+        'tag': tag,
         // 不传 updated_at（由触发器管理）
         // 不传 created_at（由 DB 默认值管理，除非 upsert）
       };
@@ -85,6 +87,7 @@ extension TaskSupabase on Task {
         createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
         updatedAt: DateTime.parse(json['updated_at'] as String).toLocal(),
         creationSource: json['creation_source'] as String? ?? 'text',
+        tag: json['tag'] as String?,
         syncPending: false, // 从云端读取的数据总是已同步的
       );
 }

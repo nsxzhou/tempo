@@ -1,5 +1,5 @@
 // TempoUserCard — 设置页用户卡(对应 prototype SettingsView 头部)
-// 用户名 + mono 邮箱 + 注销按钮 + 3 列统计
+// mono 邮箱 + 注销按钮 + 3 列统计
 
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
@@ -18,8 +18,6 @@ class TempoUserStats {
 }
 
 class TempoUserCard extends StatelessWidget {
-  final String userName;
-  final String? badge; // 紫色徽章文案
   final String email;
   final String signOutLabel;
   final List<TempoUserStats> stats;
@@ -27,8 +25,6 @@ class TempoUserCard extends StatelessWidget {
 
   const TempoUserCard({
     super.key,
-    required this.userName,
-    this.badge,
     required this.email,
     this.signOutLabel = '注销',
     required this.stats,
@@ -74,35 +70,13 @@ class TempoUserCard extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                userName,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: -0.4,
-                                ),
-                              ),
-                              if (badge != null) ...[
-                                const SizedBox(width: 8),
-                                _PurpleBadge(label: badge!),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            email,
-                            style: AppTheme.mono(
-                              size: 10,
-                              color: AppTheme.fgSubtle,
-                              letterSpacing: -0.2,
-                            ),
-                          ),
-                        ],
+                      child: Text(
+                        email,
+                        style: AppTheme.mono(
+                          size: 12,
+                          color: AppTheme.fg,
+                          letterSpacing: -0.2,
+                        ),
                       ),
                     ),
                     // 注销按钮
@@ -129,43 +103,6 @@ class TempoUserCard extends StatelessWidget {
                   ],
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PurpleBadge extends StatelessWidget {
-  final String label;
-  const _PurpleBadge({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: AppTheme.accentIndigoBg,
-        borderRadius: BorderRadius.circular(AppTheme.radiusXxs),
-        border: Border.all(color: AppTheme.accentIndigoBorder, width: 0.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            LucideIcons.zap,
-            size: 9,
-            color: AppTheme.accentIndigoFg,
-            fill: 0.4,
-          ),
-          const SizedBox(width: 3),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.accentIndigo,
             ),
           ),
         ],

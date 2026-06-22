@@ -140,6 +140,47 @@ void main() {
       expect(result, isNotNull);
       expect(result!.priority, TaskPriority.p0);
     });
+
+    test('parseTextDebounced 命中缓存后不再重复请求', () async {
+      final responseData = {
+        'title': '开会',
+        'description': null,
+        'due_date': null,
+        'priority': 0,
+        'confidence': 0.9,
+        'raw_transcript': '明天下午三点开会',
+      };
+      _setupDioPost(dio, responseData, 200);
+
+      VoiceTaskParseResult? debounced;
+      service.parseTextDebounced('明天下午三点开会', onResult: (r) => debounced = r);
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      expect(debounced, isNotNull);
+
+      clearInteractions(dio);
+      final cached = await service.parseText('明天下午三点开会');
+      expect(cached, isNotNull);
+      verifyNever(() => dio.post<Map<String, dynamic>>(
+            any(),
+            data: any(named: 'data'),
+            options: any(named: 'options'),
+          ));
+    });
+
+    test('cachedResultFor 返回最近一次解析', () async {
+      final responseData = {
+        'title': '写周报',
+        'description': null,
+        'due_date': null,
+        'priority': 0,
+        'confidence': 0.95,
+        'raw_transcript': '写周报',
+      };
+      _setupDioPost(dio, responseData, 200);
+      await service.parseText('写周报');
+      expect(service.cachedResultFor('写周报')?.title, '写周报');
+      expect(service.cachedResultFor('其他'), isNull);
+    });
   });
 }
 

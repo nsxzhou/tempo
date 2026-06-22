@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app_providers.dart';
@@ -32,7 +33,7 @@ class SettingsPage extends ConsumerStatefulWidget {
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _notificationEnabled = true;
-  PairingCode? _activePairingCode;
+  SiyuanBindingStatus? _siyuanStatus;
 
   @override
   void initState() {
@@ -48,11 +49,42 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             prefs.getBool(AppConstants.prefNotificationEnabled) ?? true;
       });
     }
+    await _loadSiyuanStatus();
+  }
+
+  Future<void> _loadSiyuanStatus() async {
     final pairingService = ref.read(siyuanPairingServiceProvider);
-    final code = await pairingService.getActiveCode();
+    final status = await pairingService.getBindingStatus();
     if (mounted) {
-      setState(() => _activePairingCode = code);
+      setState(() => _siyuanStatus = status);
     }
+  }
+
+  String _siyuanSubtitle(SiyuanBindingStatus status) {
+    if (status.isPaired && status.hasSynced && status.lastSyncAt != null) {
+      final when = DateFormat('M月d日 HH:mm').format(status.lastSyncAt!);
+      return '最近同步：$when · 导入 ${status.lastImportedCount} 项';
+    }
+    if (status.isPaired) {
+      return '已绑定 · 尚未导入任务';
+    }
+    if (status.hasPendingCode) {
+      return '配对码已生成，请在思源插件中输入';
+    }
+    return '在思源插件中输入配对码完成绑定';
+  }
+
+  ({TempoBadgeKind kind, String label}) _siyuanBadge(SiyuanBindingStatus status) {
+    if (status.isPaired && status.hasSynced) {
+      return (kind: TempoBadgeKind.success, label: '已连通');
+    }
+    if (status.isPaired) {
+      return (kind: TempoBadgeKind.tag, label: '已绑定');
+    }
+    if (status.hasPendingCode) {
+      return (kind: TempoBadgeKind.neutral, label: '待配对');
+    }
+    return (kind: TempoBadgeKind.neutral, label: '未启用');
   }
 
   @override
@@ -139,17 +171,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     iconBg: AppTheme.priorityP1Bg,
                     iconBorder: AppTheme.priorityP1Border,
                     title: '思源外部笔记 Petal 连接',
-                    subtitle: '2 分钟前已本地自动增量联动',
-                    badgeKind: _activePairingCode?.isValid == true
-                        ? TempoBadgeKind.success
-                        : (_activePairingCode?.isUsed == true
-                            ? TempoBadgeKind.tag
-                            : TempoBadgeKind.neutral),
-                    badgeLabel: _activePairingCode?.isValid == true
-                        ? '已连通'
-                        : (_activePairingCode?.isUsed == true
-                            ? '已绑定'
-                            : '未启用'),
+                    subtitle: _siyuanStatus != null
+                        ? _siyuanSubtitle(_siyuanStatus!)
+                        : '加载中…',
+                    badgeKind: _siyuanStatus != null
+                        ? _siyuanBadge(_siyuanStatus!).kind
+                        : TempoBadgeKind.neutral,
+                    badgeLabel: _siyuanStatus != null
+                        ? _siyuanBadge(_siyuanStatus!).label
+                        : '…',
                     onTap: () => _handleSiyuanTap(),
                   ),
                   TempoIntegrationRow(
@@ -158,13 +188,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     iconBg: AppTheme.priorityP2Bg,
                     iconBorder: AppTheme.priorityP2Border,
                     title: '本地系统日历订阅',
-                    subtitle: '已监听 13 项重要业务冲突日程',
-                    badgeKind: TempoBadgeKind.active,
-                    badgeLabel: 'ACTIVE',
+                    subtitle: '即将推出 · 同步系统日历事件',
+                    badgeKind: TempoBadgeKind.neutral,
+                    badgeLabel: 'COMING SOON',
                     onTap: () {
                       TempoSnackbar.show(
                         context,
-                        message: '系统日历服务正在稳定守候中',
+                        message: '系统日历同步即将推出，敬请期待',
                       );
                     },
                   ),
@@ -181,8 +211,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 children: [
                   TempoPreferenceRow(
                     icon: LucideIcons.bell,
-                    title: '桌面高频提醒',
-                    subtitle: '任务倒计时与 AI 周期精力诊断',
+                    title: '任务到期提醒',
+                    subtitle: '有具体时间的任务，到期前 15 分钟与到期时推送',
                     trailing: Switch(
                       value: _notificationEnabled,
                       onChanged: _toggleNotification,
@@ -196,7 +226,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   TempoPreferenceRow(
                     icon: LucideIcons.sliders_horizontal,
                     title: 'AI 排程解析偏好',
-                    subtitle: '排期策略优化与长文总结合并',
+                    subtitle: '即将推出 · AI 智能排期',
                     trailing: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 2),
@@ -206,7 +236,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                             BorderRadius.circular(AppTheme.radiusXxs),
                       ),
                       child: Text(
-                        '锌版/Zinc',
+                        '即将推出',
                         style: AppTheme.mono(
                           size: 9,
                           color: AppTheme.fgMuted,
@@ -264,15 +294,22 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   Future<void> _toggleNotification(bool value) async {
     setState(() => _notificationEnabled = value);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(AppConstants.prefNotificationEnabled, value);
+    final notificationService = ref.read(notificationServiceProvider);
+    await notificationService.setRemindersEnabled(value);
+    if (value) {
+      await notificationService.requestPermissions();
+      final tasks = ref.read(taskListProvider).valueOrNull ?? [];
+      await notificationService.rescheduleAllTasks(tasks);
+    }
   }
 
   Future<void> _handleSiyuanTap() async {
-    if (_activePairingCode?.isValid == true) {
-      _showSiyuanMenu();
+    final status = _siyuanStatus;
+    if (status != null && (status.isPaired || status.hasPendingCode)) {
+      await _showSiyuanMenu();
     } else {
-      PairingCodeDialog.show(context);
+      await PairingCodeDialog.show(context);
+      await _loadSiyuanStatus();
     }
   }
 
@@ -326,12 +363,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       ),
     );
     if (action == 'pair' && mounted) {
-      unawaited(PairingCodeDialog.show(context));
+      await PairingCodeDialog.show(context);
+      await _loadSiyuanStatus();
     } else if (action == 'unpair' && mounted) {
-      setState(() => _activePairingCode = null);
+      await ref.read(siyuanPairingServiceProvider).clearBinding();
+      if (!mounted) return;
+      await _loadSiyuanStatus();
       TempoSnackbar.show(
         context,
-        message: '请在思源插件中点击解绑按钮完成解绑',
+        message: '已解除 App 侧绑定，请在思源插件中点击解绑',
       );
     }
   }
@@ -370,93 +410,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _signOut() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: Container(
-          width: 300,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: AppTheme.bg,
-            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-            border: Border.all(color: AppTheme.borderStrong, width: 0.8),
-            boxShadow: AppTheme.shadowSm,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                '注销',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.fg,
-                  letterSpacing: -0.2,
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                '确定要登出吗?本地数据将保留,重新登录后可继续同步。',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.fgMuted,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppTheme.fgMuted,
-                        side: const BorderSide(color: AppTheme.borderStrong),
-                        shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(AppTheme.radiusMd),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: const Text(
-                        '取消',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppTheme.priorityP0,
-                        foregroundColor: AppTheme.bg,
-                        shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(AppTheme.radiusMd),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: const Text(
-                        '登出',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
+    final confirmed = await TempoConfirmDialog.show(
+      context,
+      title: '注销',
+      message: '确定要登出吗?本地数据将保留,重新登录后可继续同步。',
+      confirmLabel: '登出',
+      isDestructive: true,
     );
     if (confirmed != true || !mounted) return;
     try {

@@ -3,6 +3,7 @@
 // ============================================================
 
 import { createTaskFromSiyuan } from './api';
+import { reportSync } from './binding';
 import {
   hasTempoId,
   writeTempoId,
@@ -53,8 +54,11 @@ export async function syncTasks(tasks: UncompletedTask[]): Promise<ScanResult> {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       result.errors.push(`「${task.title}」: ${message}`);
-      // 网络错误不影响已成功导入的任务
     }
+  }
+
+  if (result.imported > 0) {
+    await reportSync(result.imported);
   }
 
   return result;

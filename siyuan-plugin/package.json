@@ -2,15 +2,16 @@
   "name": "tempo-siyuan-plugin",
   "version": "0.1.0",
   "description": "Tempo 任务同步 — 思源笔记 Petal 插件",
-  "type": "module",
+  "private": true,
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch"
+    "build": "node esbuild.config.mjs",
+    "package": "bash scripts/build-package.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0"
   },
   "devDependencies": {
+    "esbuild": "^0.25.0",
     "typescript": "^5.4.0",
     "@types/node": "^20.14.0"
   }

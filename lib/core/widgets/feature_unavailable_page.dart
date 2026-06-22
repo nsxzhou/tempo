@@ -5,6 +5,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../debug/agent_debug_log.dart';
 import '../theme/app_theme.dart';
 import 'empty_state.dart';
 
@@ -23,6 +24,14 @@ class FeatureUnavailablePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // #region agent log
+    agentDebugLog(
+      location: 'feature_unavailable_page.dart:build',
+      message: 'FeatureUnavailablePage built',
+      hypothesisId: 'H3',
+      data: {'title': title, 'hasSubtitle': subtitle != null},
+    );
+    // #endregion
     return Scaffold(
       backgroundColor: AppTheme.bg,
       body: SafeArea(

@@ -13,15 +13,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app_providers.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../data/siyuan_pairing_service.dart';
 
 class PairingCodeDialog extends ConsumerStatefulWidget {
-  const PairingCodeDialog({super.key});
+  const PairingCodeDialog({super.key, this.existingCode});
 
-  static Future<void> show(BuildContext context) {
-    return showDialog(
+  final PairingCode? existingCode;
+
+  static Future<void> show(
+    BuildContext context, {
+    PairingCode? existingCode,
+  }) {
+    return showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const PairingCodeDialog(),
+      useRootNavigator: false,
+      builder: (_) => PairingCodeDialog(existingCode: existingCode),
     );
   }
 
@@ -39,13 +46,48 @@ class _PairingCodeDialogState extends ConsumerState<PairingCodeDialog> {
   @override
   void initState() {
     super.initState();
-    _generateCode();
+    final existing = widget.existingCode;
+    if (existing != null && existing.isValid) {
+      _applyCode(existing.code, existing.expiresAt);
+    } else {
+      _generateCode();
+    }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     super.dispose();
+  }
+
+  void _applyCode(String code, DateTime expiresAt) {
+    final remaining = expiresAt.difference(DateTime.now()).inSeconds;
+    if (remaining <= 0) {
+      setState(() {
+        _code = null;
+        _isGenerating = false;
+      });
+      return;
+    }
+
+    _timer?.cancel();
+    _remainingSeconds = remaining;
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_remainingSeconds <= 0) {
+        timer.cancel();
+        if (mounted) {
+          setState(() => _code = null);
+        }
+      } else if (mounted) {
+        setState(() => _remainingSeconds--);
+      }
+    });
+
+    setState(() {
+      _code = code;
+      _isGenerating = false;
+      _errorMessage = null;
+    });
   }
 
   Future<void> _generateCode() async {
@@ -60,25 +102,10 @@ class _PairingCodeDialogState extends ConsumerState<PairingCodeDialog> {
 
       if (!mounted) return;
 
-      _remainingSeconds = AppConstants.pairingCodeExpiry.inSeconds;
-      _timer?.cancel();
-      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (_remainingSeconds <= 0) {
-          timer.cancel();
-          if (mounted) {
-            setState(() => _code = null);
-          }
-        } else {
-          if (mounted) {
-            setState(() => _remainingSeconds--);
-          }
-        }
-      });
-
-      setState(() {
-        _code = code;
-        _isGenerating = false;
-      });
+      _applyCode(
+        code,
+        DateTime.now().add(AppConstants.pairingCodeExpiry),
+      );
     } catch (error) {
       if (!mounted) return;
       setState(() {

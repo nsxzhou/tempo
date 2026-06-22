@@ -100,7 +100,8 @@ class SiyuanPairingService {
           .select()
           .eq('user_id', userId)
           .order('created_at', ascending: false)
-          .limit(1);
+          .limit(1)
+          .timeout(const Duration(seconds: 8));
 
       if (rows.isEmpty) return null;
 
@@ -124,7 +125,8 @@ class SiyuanPairingService {
           .from(AppConstants.tableSiyuanBindings)
           .select()
           .eq('user_id', userId)
-          .maybeSingle();
+          .maybeSingle()
+          .timeout(const Duration(seconds: 8));
 
       if (row == null) {
         return SiyuanBindingStatus(

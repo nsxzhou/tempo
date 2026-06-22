@@ -201,6 +201,18 @@ final siyuanPairingServiceProvider = Provider<SiyuanPairingService>((ref) {
   );
 });
 
+/// 登录后预取思源绑定状态；设置页与其它 UI 共用同一份缓存。
+final siyuanBindingStatusProvider =
+    FutureProvider<SiyuanBindingStatus>((ref) async {
+  final userId = ref.watch(currentUserIdProvider);
+  if (userId == null) {
+    return const SiyuanBindingStatus(isPaired: false);
+  }
+
+  final service = ref.read(siyuanPairingServiceProvider);
+  return service.getBindingStatus().timeout(const Duration(seconds: 8));
+});
+
 // ── FeedbackService ──
 
 final feedbackServiceProvider = Provider<FeedbackService>((ref) {

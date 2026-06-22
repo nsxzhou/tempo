@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app_providers.dart';
-import '../data/auth_service.dart';
 
 /// Auth 状态监听 Widget。
 ///
@@ -26,8 +25,12 @@ class AuthStateWidget extends ConsumerStatefulWidget {
 class _AuthStateWidgetState extends ConsumerState<AuthStateWidget> {
   @override
   Widget build(BuildContext context) {
-    // 监听 auth 状态，确保 Widget 树在 auth 变化时重建
     final session = ref.watch(authStateProvider).valueOrNull;
+
+    // 登录后立即预取思源绑定状态，进入「我的」前数据已就绪。
+    if (session != null) {
+      ref.watch(siyuanBindingStatusProvider);
+    }
 
     // 当用户登录时，启动 SyncService
     // 使用 listen 避免在 build 中直接执行副作用

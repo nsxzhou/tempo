@@ -45,11 +45,7 @@ class TempoTabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final tabCount = _tabs.length;
 
-    return Positioned(
-      left: 0,
-      right: 0,
-      bottom: 0,
-      child: Container(
+    return Container(
         decoration: const BoxDecoration(
           color: AppTheme.bg,
           border: Border(
@@ -136,8 +132,7 @@ class TempoTabBar extends StatelessWidget {
             },
           ),
         ),
-      ),
-    );
+      );
   }
 }
 

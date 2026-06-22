@@ -9,7 +9,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app_providers.dart';
 import '../../../../core/constants/app_constants.dart';
-import '../../../../core/debug/agent_debug_log.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/motion/tempo_sheet.dart';
 import '../../../../core/widgets/tempo/tempo.dart';
@@ -263,23 +262,6 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
-    final screenHeight = MediaQuery.of(context).size.height;
-
-    // #region agent log
-    agentDebugLog(
-      location: 'quick_create_sheet.dart:build',
-      message: 'QuickCreateSheet keyboard inset',
-      hypothesisId: 'H1',
-      data: {
-        'keyboardHeight': keyboardHeight,
-        'screenHeight': screenHeight,
-        'sheetHandlesKeyboardInset': false,
-        'hasFocus': _titleFocus.hasFocus,
-      },
-    );
-    // #endregion
-
     return Container(
         decoration: const BoxDecoration(
           color: AppTheme.bg,

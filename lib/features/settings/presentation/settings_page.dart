@@ -299,17 +299,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _handleSiyuanTap(SiyuanBindingStatus status) async {
-    if (status.isPaired || status.hasPendingCode) {
+    if (status.isPaired) {
       await _showSiyuanMenu();
-    } else {
-      await PairingCodeDialog.show(context);
-      _refreshSiyuanStatus();
+      return;
     }
+
+    await PairingCodeDialog.show(
+      context,
+      existingCode: status.pendingCode?.isValid == true
+          ? status.pendingCode
+          : null,
+    );
+    _refreshSiyuanStatus();
   }
 
   Future<void> _showSiyuanMenu() async {
     final action = await showModalBottomSheet<String>(
       context: context,
+      useRootNavigator: false,
       backgroundColor: Colors.transparent,
       barrierColor: const Color(0x73000000),
       shape: const RoundedRectangleBorder(

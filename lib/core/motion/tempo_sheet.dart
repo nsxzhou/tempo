@@ -3,7 +3,6 @@
 
 import 'package:flutter/material.dart';
 
-import '../debug/agent_debug_log.dart';
 import '../theme/app_theme.dart';
 
 /// Tempo 统一 bottom sheet 入口
@@ -28,20 +27,6 @@ class TempoSheet {
         final bottomInset = isScrollControlled
             ? MediaQuery.viewInsetsOf(dialogContext).bottom
             : 0.0;
-
-        // #region agent log
-        agentDebugLog(
-          location: 'tempo_sheet.dart:pageBuilder',
-          message: 'TempoSheet keyboard inset',
-          hypothesisId: 'H1',
-          data: {
-            'bottomInset': bottomInset,
-            'isScrollControlled': isScrollControlled,
-            'viewPaddingBottom':
-                MediaQuery.viewPaddingOf(dialogContext).bottom,
-          },
-        );
-        // #endregion
 
         return SafeArea(
           top: false,

@@ -51,3 +51,12 @@ verify_jwt = false
 
 [functions.voice-task]
 verify_jwt = false
+
+[functions.asr-session]
+verify_jwt = false
+
+[functions.asr-relay]
+verify_jwt = false
+
+[edge_runtime]
+policy = "per_worker"

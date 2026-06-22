@@ -18,6 +18,7 @@ class VoiceTaskException implements Exception {
 }
 
 abstract class VoiceTaskService {
+  /// Legacy：multipart 音频上传路径（流式 ASR 不可用时的降级）。
   Future<VoiceTaskParseResult> parseAudioFile(String path);
 
   Future<VoiceTaskParseResult> parseAudioBytes(

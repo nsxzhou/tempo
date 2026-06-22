@@ -30,6 +30,7 @@ dependencies:
   dio: ^5.7.0
   supabase_flutter: ^2.8.3
   flutter_dotenv: ^5.2.1
+  web_socket_channel: ^3.0.2
 
   # Utilities
   freezed_annotation: ^2.4.4
@@ -43,7 +44,6 @@ dependencies:
   path_provider: ^2.1.5
   connectivity_plus: ^6.1.0
   timezone: ^0.9.4
-  sensors_plus: ^6.1.1
 
 dev_dependencies:
   flutter_test:

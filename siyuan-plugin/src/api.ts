@@ -2,13 +2,28 @@
 // api.ts — Supabase 客户端封装
 // ============================================================
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import {
+  createClient,
+  PostgrestError,
+  SupabaseClient,
+} from '@supabase/supabase-js';
 import { loadAuth, saveAuth, StoredAuth } from './storage';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from './config';
 
 /** 当前 Supabase 客户端 */
 let client: SupabaseClient | null = null;
 let currentAuth: StoredAuth | null = null;
+
+function isAuthError(error: PostgrestError | null): boolean {
+  if (!error) return false;
+  const message = error.message.toLowerCase();
+  return (
+    error.code === 'PGRST301' ||
+    message.includes('jwt') ||
+    message.includes('401') ||
+    message.includes('invalid claim')
+  );
+}
 
 /** 初始化 Supabase 客户端 */
 export function initClient(auth: StoredAuth): SupabaseClient {
@@ -36,6 +51,12 @@ export function getClient(): SupabaseClient | null {
     }
   }
   return client;
+}
+
+/** 重置客户端（解绑时） */
+export function resetClient(): void {
+  client = null;
+  currentAuth = null;
 }
 
 /** 刷新 session（access_token 过期时） */
@@ -80,22 +101,49 @@ export async function refreshSession(): Promise<boolean> {
   }
 }
 
-async function withAuthRetry<T>(action: () => Promise<T>): Promise<T> {
-  try {
-    return await action();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes('JWT') || message.includes('401')) {
-      const refreshed = await refreshSession();
-      if (refreshed) {
-        return await action();
-      }
+/** Supabase 请求失败时尝试刷新 token 并重试 */
+export async function withAuthRetry<T>(
+  action: () => Promise<{ data: T | null; error: PostgrestError | null }>
+): Promise<T> {
+  let result = await action();
+
+  if (result.error && isAuthError(result.error)) {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      result = await action();
     }
-    throw error;
+  }
+
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+
+  if (result.data === null) {
+    throw new Error('Supabase 返回空数据');
+  }
+
+  return result.data;
+}
+
+/** 无返回体的 Supabase 写操作 */
+export async function withAuthRetryVoid(
+  action: () => Promise<{ error: PostgrestError | null }>
+): Promise<void> {
+  let result = await action();
+
+  if (result.error && isAuthError(result.error)) {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      result = await action();
+    }
+  }
+
+  if (result.error) {
+    throw new Error(result.error.message);
   }
 }
 
-/** 通过 RPC 创建任务（思源导入） */
+/** 通过 RPC 创建任务（思源导入，v2 预留） */
 export async function createTaskFromSiyuan(
   title: string,
   siyuanBlockId: string,
@@ -107,16 +155,13 @@ export async function createTaskFromSiyuan(
     const supabase = getClient();
     if (!supabase) throw new Error('未绑定 Tempo 账号');
 
-    const { data, error } = await supabase.rpc('create_task_from_siyuan', {
+    return supabase.rpc('create_task_from_siyuan', {
       p_title: title,
       p_siyuan_block_id: siyuanBlockId,
       p_description: description ?? null,
       p_due_date: dueDate ?? null,
       p_priority: priority ?? 0,
     });
-
-    if (error) throw error;
-    return data as string;
   });
 }
 

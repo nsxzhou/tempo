@@ -9,8 +9,9 @@ declare module 'siyuan' {
     data: unknown;
   }
 
-  export interface IDock {
+  export interface ITab {
     element: HTMLElement;
+    data?: IObject;
   }
 
   export interface IPluginDockConfig {
@@ -22,14 +23,63 @@ declare module 'siyuan' {
 
   export class Plugin {
     name: string;
+    app: unknown;
+    addTab(options: {
+      type: string;
+      init: (custom: ITab) => void;
+      destroy?: (custom: ITab) => void;
+      update?: (custom: ITab) => void;
+      beforeDestroy?: (custom: ITab) => void;
+      resize?: (custom: ITab) => void;
+    }): unknown;
+    addTopBar(options: {
+      icon: string;
+      title: string;
+      callback: () => void;
+    }): unknown;
+    addCommand(options: {
+      langKey: string;
+      langText?: string;
+      hotkey?: string;
+      callback?: () => void;
+      globalCallback?: () => void;
+    }): void;
     addDock(options: {
       config: IPluginDockConfig;
       data: IObject;
       type: string;
-      init: (dock: IDock) => void;
+      init: (dock: { element: HTMLElement }) => void;
       destroy?: () => void;
     }): void;
   }
+
+  export class Dialog {
+    element: HTMLElement;
+    constructor(options: {
+      title: string;
+      content: string;
+      width?: string;
+      height?: string;
+    });
+    destroy(): void;
+    bindInput?(element: HTMLElement, callback: () => void): void;
+  }
+
+  export function openTab(options: {
+    app: unknown;
+    custom: {
+      title: string;
+      icon: string;
+      id: string;
+    };
+    keepCursor?: boolean;
+  }): void;
+
+  export function confirm(
+    message: string,
+    confirmCallback: () => void,
+    cancelCallback?: () => void
+  ): void;
 
   export function fetchSyncPost(
     url: string,

@@ -30,7 +30,7 @@ class VoiceOverlay extends ConsumerStatefulWidget {
 }
 
 class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const _transcriptThrottle = Duration(milliseconds: 100);
 
   _VoicePhase _phase = _VoicePhase.idle;
@@ -38,10 +38,13 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
   String _transcript = '';
   String _pendingTranscript = '';
   bool _pipelineRunning = false;
+  bool _isClosing = false;
   StreamSubscription<String>? _transcriptSub;
   Timer? _transcriptThrottleTimer;
   late final TextEditingController _transcriptController;
   late final AnimationController _pulse;
+  late final AnimationController _enterController;
+  late final Animation<double> _enterAnimation;
   StreamingVoiceSession? _session;
 
   @override
@@ -52,6 +55,16 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
+    _enterController = AnimationController(
+      vsync: this,
+      duration: AppTheme.durationMedium,
+    );
+    _enterAnimation = CurvedAnimation(
+      parent: _enterController,
+      curve: AppTheme.curveOrganic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    _enterController.forward();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _session = ref.read(streamingVoiceSessionProvider);
@@ -65,6 +78,7 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
     _transcriptThrottleTimer?.cancel();
     _transcriptController.dispose();
     _pulse.dispose();
+    _enterController.dispose();
     if (!_pipelineRunning && _phase != _VoicePhase.recording) {
       unawaited(_session?.disposeSession());
     }
@@ -131,6 +145,14 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
     });
   }
 
+  Future<void> _animateClose(VoidCallback afterClose) async {
+    if (_isClosing) return;
+    _isClosing = true;
+    await _enterController.reverse();
+    if (!mounted) return;
+    afterClose();
+  }
+
   Future<void> _stopAndPipeline() async {
     _pipelineRunning = true;
     await _transcriptSub?.cancel();
@@ -157,7 +179,7 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
     } else if (!_pipelineRunning) {
       await ref.read(streamingVoiceSessionProvider).disposeSession();
     }
-    widget.onClose();
+    await _animateClose(widget.onClose);
   }
 
   String _formatStartError(Object error) {
@@ -170,17 +192,35 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
   @override
   Widget build(BuildContext context) {
     return Positioned.fill(
-      child: Material(
-        color: Colors.transparent,
-        child: GestureDetector(
-          onTap: _handleClose,
-          behavior: HitTestBehavior.opaque,
-          child: Container(
-            color: const Color(0x73000000),
-            alignment: Alignment.bottomCenter,
-            child: GestureDetector(
-              onTap: () {},
-              child: _buildSheet(),
+      child: AnimatedBuilder(
+        animation: _enterAnimation,
+        builder: (context, child) {
+          final t = _enterAnimation.value;
+          return Opacity(
+            opacity: t,
+            child: Transform.scale(
+              scale: 0.95 + t * 0.05,
+              alignment: Alignment.bottomCenter,
+              child: child,
+            ),
+          );
+        },
+        child: Material(
+          color: Colors.transparent,
+          child: GestureDetector(
+            onTap: _handleClose,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              color: Color.lerp(
+                Colors.transparent,
+                AppTheme.sheetBarrierColor,
+                _enterAnimation.value,
+              ),
+              alignment: Alignment.bottomCenter,
+              child: GestureDetector(
+                onTap: () {},
+                child: _buildSheet(),
+              ),
             ),
           ),
         ),

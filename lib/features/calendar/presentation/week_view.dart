@@ -2,9 +2,8 @@
 // 7 列日期 chip,选中态黑底白字 + 圆点
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/date_utils.dart';
 import '../../tasks/domain/task.dart';
 
 class WeekView extends StatelessWidget {
@@ -41,10 +40,10 @@ class WeekView extends StatelessWidget {
       child: Row(
         children: List.generate(7, (i) {
           final day = days[i];
-          final isSel = _sameDay(day, selectedDate);
-          final isToday = _sameDay(day, now);
+          final isSel = isSameDay(day, selectedDate);
+          final isToday = isSameDay(day, now);
           final hasTask = tasks.any((t) =>
-              t.dueDate != null && _sameDay(t.dueDate!, day));
+              t.dueDate != null && isSameDay(t.dueDate!, day));
           return Expanded(
             child: Padding(
               padding: EdgeInsets.only(left: i == 0 ? 0 : 4),
@@ -122,6 +121,4 @@ class WeekView extends StatelessWidget {
     return labels[(wd - 1) % 7];
   }
 
-  bool _sameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
 }

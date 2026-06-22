@@ -2,9 +2,7 @@
 // 7x6 网格 + 3px 优先级点 + 选中态黑底圆
 
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:tempo/core/utils/date_utils.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../tasks/domain/task.dart';
@@ -21,19 +19,6 @@ class MonthView extends StatelessWidget {
     required this.onSelectDate,
   });
 
-  Color _priorityColor(int p) {
-    switch (p) {
-      case 1:
-        return AppTheme.priorityP0;
-      case 2:
-        return AppTheme.priorityP1;
-      case 3:
-        return AppTheme.priorityP2;
-      default:
-        return AppTheme.fgMuted;
-    }
-  }
-
   List<Color> _dotsForDay(DateTime day) {
     final dayTasks = tasks.where((t) {
       if (t.dueDate == null || t.isCompleted) return false;
@@ -45,7 +30,7 @@ class MonthView extends StatelessWidget {
     final dots = <Color>[];
     for (final t in dayTasks) {
       if (seen.add(t.priority.value)) {
-        dots.add(_priorityColor(t.priority.value));
+        dots.add(AppTheme.priorityColor(t.priority.value));
         if (dots.length >= 3) break;
       }
     }
@@ -117,8 +102,8 @@ class MonthView extends StatelessWidget {
                     child: _DayCell(
                       cell: cell,
                       dots: _dotsForDay(cell.date),
-                      isToday: _sameDay(cell.date, now),
-                      isSelected: _sameDay(cell.date, selectedDate) && !cell.isOtherMonth,
+                      isToday: isSameDay(cell.date, now),
+                      isSelected: isSameDay(cell.date, selectedDate) && !cell.isOtherMonth,
                       onTap: cell.isOtherMonth
                           ? null
                           : () => onSelectDate(cell.date),
@@ -132,8 +117,6 @@ class MonthView extends StatelessWidget {
     );
   }
 
-  bool _sameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
 class _MonthCell {

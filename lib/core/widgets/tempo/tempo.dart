@@ -16,7 +16,6 @@ export 'src/tempo_property_row.dart';
 export 'src/tempo_user_card.dart';
 export 'src/tempo_integration_row.dart';
 export 'src/tempo_stat_tile.dart';
-export 'src/tempo_priority_dot.dart';
 export 'src/tempo_snackbar.dart';
 export 'src/tempo_date_picker.dart';
 export 'src/tempo_confirm_dialog.dart';

@@ -31,7 +31,6 @@ class OnboardingPage extends ConsumerStatefulWidget {
 
 class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   final _pageController = PageController();
-  final _onboardingManager = OnboardingManager();
   int _currentPage = 0;
 
   @override
@@ -117,7 +116,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   }
 
   Future<void> _completeOnboarding() async {
-    await _onboardingManager.setCompleted();
+    await ref.read(onboardingManagerProvider).setCompleted();
     if (!mounted) return;
     context.go(AppConstants.routeTasks);
   }

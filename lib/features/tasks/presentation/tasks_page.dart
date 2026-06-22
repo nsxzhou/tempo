@@ -9,12 +9,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app_providers.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/motion/motion.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/tempo/tempo.dart';
@@ -65,7 +67,7 @@ class _TasksPageState extends ConsumerState<TasksPage> {
                     // 头部
                     _buildHeader(),
                     // 搜索框(可展开)
-                    if (_showSearch) _buildSearchBar(),
+                    _buildSearchBar(),
                     // Bento 4 卡
                     _buildBentoStats(tasks),
                     // 工作/生活 segmented
@@ -180,43 +182,57 @@ class _TasksPageState extends ConsumerState<TasksPage> {
   }
 
   Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppTheme.bgMuted,
-          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          children: [
-            const Icon(
-              LucideIcons.search,
-              size: 14,
-              color: AppTheme.fgSubtle,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                onChanged: (v) => setState(() => _searchQuery = v),
-                style: const TextStyle(fontSize: 14),
-                decoration: InputDecoration(
-                  isDense: true,
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  filled: false,
-                  contentPadding: EdgeInsets.zero,
-                  hintText: '检索日常任务或内容…',
-                  hintStyle: AppTheme.mono(
-                    size: 12,
-                    color: AppTheme.fgSubtle,
+    return AnimatedSize(
+      duration: AppTheme.durationMedium,
+      curve: AppTheme.curveOrganic,
+      alignment: Alignment.topCenter,
+      clipBehavior: Clip.hardEdge,
+      child: AnimatedOpacity(
+        duration: AppTheme.durationMedium,
+        curve: AppTheme.curveOrganic,
+        opacity: _showSearch ? 1 : 0,
+        child: _showSearch
+            ? Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppTheme.bgMuted,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        LucideIcons.search,
+                        size: 14,
+                        color: AppTheme.fgSubtle,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          onChanged: (v) => setState(() => _searchQuery = v),
+                          style: const TextStyle(fontSize: 14),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            filled: false,
+                            contentPadding: EdgeInsets.zero,
+                            hintText: '检索日常任务或内容…',
+                            hintStyle: AppTheme.mono(
+                              size: 12,
+                              color: AppTheme.fgSubtle,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ),
-          ],
-        ),
+              )
+            : const SizedBox(width: double.infinity, height: 0),
       ),
     );
   }
@@ -419,26 +435,30 @@ class _TasksPageState extends ConsumerState<TasksPage> {
 
     final active = tasks.where((t) => !t.isCompleted).toList();
     final completed = tasks.where((t) => t.isCompleted).toList();
+    final listKey =
+        '${_timeFilter.name}_${_categoryFilter.name}_${_searchQuery.trim()}';
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+    return SlidableAutoCloseBehavior(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
         if (active.isNotEmpty) ...[
           TempoSectionHeader(label: '待办 · ${active.length}'),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-            child: Column(
+            child: StaggeredReveal(
+              key: ValueKey('active-$listKey'),
+              listKey: 'active-$listKey',
               children: [
-                for (int i = 0; i < active.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
+                for (final task in active)
                   TaskTile(
-                    task: active[i],
-                    onTap: () => _navigateToDetail(active[i]),
-                    onToggleComplete: () => _toggleTask(active[i]),
+                    key: ValueKey('task-${task.id}'),
+                    task: task,
+                    onTap: () => _navigateToDetail(task),
+                    onToggleComplete: () => _toggleTask(task),
                     showDelete: true,
-                    onDelete: () => _deleteTask(active[i]),
+                    onDelete: () => _deleteTask(task),
                   ),
-                ],
               ],
             ),
           ),
@@ -451,26 +471,25 @@ class _TasksPageState extends ConsumerState<TasksPage> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-            child: Column(
+            child: StaggeredReveal(
+              key: ValueKey('completed-$listKey'),
+              listKey: 'completed-$listKey',
               children: [
-                for (int i = 0; i < completed.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
-                  Opacity(
-                    opacity: 0.6,
-                    child: TaskTile(
-                      task: completed[i],
-                      onTap: () => _navigateToDetail(completed[i]),
-                      onToggleComplete: () => _toggleTask(completed[i]),
-                      showDelete: true,
-                      onDelete: () => _deleteTask(completed[i]),
-                    ),
+                for (final task in completed)
+                  TaskTile(
+                    key: ValueKey('task-${task.id}'),
+                    task: task,
+                    onTap: () => _navigateToDetail(task),
+                    onToggleComplete: () => _toggleTask(task),
+                    showDelete: true,
+                    onDelete: () => _deleteTask(task),
                   ),
-                ],
               ],
             ),
           ),
         ],
-      ],
+        ],
+      ),
     );
   }
 
@@ -541,7 +560,7 @@ class _TasksPageState extends ConsumerState<TasksPage> {
 
 // ══════════════ 子组件 ══════════════
 
-class _BentoCard extends StatelessWidget {
+class _BentoCard extends StatefulWidget {
   final String label;
   final String value;
   final String unit;
@@ -563,32 +582,78 @@ class _BentoCard extends StatelessWidget {
   });
 
   @override
+  State<_BentoCard> createState() => _BentoCardState();
+}
+
+class _BentoCardState extends State<_BentoCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    if (widget.dotPulse) {
+      _pulseController.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(_BentoCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.dotPulse && !_pulseController.isAnimating) {
+      _pulseController.repeat(reverse: true);
+    } else if (!widget.dotPulse && _pulseController.isAnimating) {
+      _pulseController.stop();
+      _pulseController.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final bg = selected
-        ? (errorTone ? const Color(0xFF450A0A) : AppTheme.fg)
-        : (errorTone ? const Color(0xFFFEF2F2) : AppTheme.bg);
-    final fg = selected
-        ? (errorTone ? const Color(0xFFFEE2E2) : AppTheme.bg)
-        : (errorTone ? const Color(0xFFB91C1C) : AppTheme.fg);
-    final subtle = selected
-        ? (errorTone ? const Color(0xFFFCA5A5) : AppTheme.fgMuted)
+    final bg = widget.selected
+        ? (widget.errorTone ? const Color(0xFF450A0A) : AppTheme.fg)
+        : (widget.errorTone ? const Color(0xFFFEF2F2) : AppTheme.bg);
+    final fg = widget.selected
+        ? (widget.errorTone ? const Color(0xFFFEE2E2) : AppTheme.bg)
+        : (widget.errorTone ? const Color(0xFFB91C1C) : AppTheme.fg);
+    final subtle = widget.selected
+        ? (widget.errorTone ? const Color(0xFFFCA5A5) : AppTheme.fgMuted)
         : AppTheme.fgMuted;
-    final border = selected
+    final border = widget.selected
         ? bg
-        : (errorTone ? const Color(0xFFFECACA) : AppTheme.borderStrong);
+        : (widget.errorTone ? const Color(0xFFFECACA) : AppTheme.borderStrong);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
         borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        child: Container(
+        child: AnimatedScale(
+          scale: widget.selected ? 1.0 : 0.98,
+          duration: AppTheme.durationMedium,
+          curve: AppTheme.curveOrganic,
+          child: AnimatedContainer(
+          duration: AppTheme.durationMedium,
+          curve: AppTheme.curveOrganic,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-            border: Border.all(color: border, width: 0.8),
-            boxShadow: selected ? null : AppTheme.shadowSm,
+            border: Border.all(
+              color: border,
+              width: widget.selected ? 1.2 : 0.8,
+            ),
+            boxShadow: widget.selected ? null : AppTheme.shadowSm,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -598,7 +663,7 @@ class _BentoCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    label.toUpperCase(),
+                    widget.label.toUpperCase(),
                     style: AppTheme.mono(
                       size: 9,
                       weight: FontWeight.w700,
@@ -606,14 +671,7 @@ class _BentoCard extends StatelessWidget {
                       letterSpacing: 1.0,
                     ),
                   ),
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: dotColor,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
+                  _buildDot(),
                 ],
               ),
               Row(
@@ -621,7 +679,7 @@ class _BentoCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    value,
+                    widget.value,
                     style: AppTheme.mono(
                       size: 22,
                       weight: FontWeight.w700,
@@ -632,7 +690,7 @@ class _BentoCard extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 3),
                     child: Text(
-                      unit,
+                      widget.unit,
                       style: AppTheme.mono(
                         size: 9,
                         weight: FontWeight.w700,
@@ -646,7 +704,48 @@ class _BentoCard extends StatelessWidget {
             ],
           ),
         ),
+        ),
       ),
+    );
+  }
+
+  Widget _buildDot() {
+    if (!widget.dotPulse) {
+      return Container(
+        width: 6,
+        height: 6,
+        decoration: BoxDecoration(
+          color: widget.dotColor,
+          shape: BoxShape.circle,
+        ),
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, child) {
+        final t = _pulseController.value;
+        return Container(
+          width: 6 + t * 4,
+          height: 6 + t * 4,
+          alignment: Alignment.center,
+          child: Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: widget.dotColor.withValues(alpha: 0.55 + t * 0.45),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: widget.dotColor.withValues(alpha: t * 0.35),
+                  blurRadius: 4 + t * 4,
+                  spreadRadius: t * 1.5,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

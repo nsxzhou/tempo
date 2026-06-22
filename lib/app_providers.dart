@@ -1,17 +1,12 @@
 // ============================================================
 // app_providers — 全局 Riverpod Provider 配置
 // 包含: Dio / Supabase / Auth / Database / Repository / SyncService
-//       / NotificationService / TextParseService / VoiceTaskService
+//       / NotificationService / TextParseService
 //       / SiyuanPairingService / FeedbackService / Connectivity
 // ============================================================
 
-import 'dart:async';
-
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/constants/app_constants.dart';
 import 'core/providers/database_provider.dart';
@@ -26,22 +21,13 @@ import 'features/tasks/data/streaming_voice_session.dart';
 import 'features/tasks/data/task_creation_orchestrator.dart';
 import 'features/tasks/data/text_parse_service.dart';
 import 'features/tasks/data/voice_recorder.dart';
-import 'features/tasks/data/voice_task_service.dart';
 import 'features/tasks/data/volcengine_streaming_asr.dart';
 import 'features/tasks/domain/task.dart';
 
 // Re-export auth providers so consumers of app_providers can access them.
 export 'features/auth/data/auth_service.dart';
 
-// ── Shell / Messenger ──
-
-/// 根 ScaffoldMessenger Key（Snackbar 全局显示，避免被 TabBar 遮挡）。
-final scaffoldMessengerKeyProvider =
-    Provider<GlobalKey<ScaffoldMessengerState>>((ref) {
-  return GlobalKey<ScaffoldMessengerState>(debugLabel: 'tempo_messenger');
-});
-
-/// Shell 底部 TabBar 可见性（快速创建/语音/Snackbar 期间可隐藏）。
+// ── Shell ──
 final shellTabBarVisibleProvider = StateProvider<bool>((ref) => true);
 
 // ── Dio ──
@@ -83,7 +69,7 @@ final defaultListIdProvider = FutureProvider<String>((ref) async {
   final supabase = ref.watch(supabaseProvider);
 
   if (userId == null) {
-    return 'local-inbox';
+    return AppConstants.defaultListId;
   }
 
   try {
@@ -101,7 +87,7 @@ final defaultListIdProvider = FutureProvider<String>((ref) async {
     // 查询失败，使用本地默认值
   }
 
-  return 'local-inbox';
+  return AppConstants.defaultListId;
 });
 
 final taskRepositoryProvider = Provider<TaskRepository>((ref) {
@@ -109,7 +95,8 @@ final taskRepositoryProvider = Provider<TaskRepository>((ref) {
   final supabase = ref.watch(supabaseProvider);
   final userId = ref.watch(currentUserIdProvider);
   final connectivity = ref.watch(connectivityProvider);
-  final listId = ref.watch(defaultListIdProvider).valueOrNull ?? 'local-inbox';
+  final listId =
+      ref.watch(defaultListIdProvider).valueOrNull ?? AppConstants.defaultListId;
 
   return SyncTaskRepository(
     localDb: db,
@@ -166,20 +153,6 @@ final taskCreationOrchestratorProvider =
   );
 });
 
-// ── VoiceTaskService ──
-
-final voiceTaskServiceProvider = Provider<VoiceTaskService>((ref) {
-  final dio = ref.watch(dioProvider);
-  return DioVoiceTaskService(
-    dio: dio,
-    endpoint: AppConstants.parseTaskEndpoint,
-    headers: {
-      'Authorization': 'Bearer ${AppConstants.supabaseAnonKey}',
-      'apikey': AppConstants.supabaseAnonKey,
-    },
-  );
-});
-
 // ── VoiceRecorder ──
 
 final voiceRecorderProvider = Provider<VoiceRecorder>((ref) {
@@ -197,20 +170,14 @@ final asrSessionClientProvider = Provider<AsrSessionClient>((ref) {
   return DioAsrSessionClient(
     dio: dio,
     endpoint: AppConstants.asrSessionEndpoint,
-    headers: {
-      'Authorization': 'Bearer ${AppConstants.supabaseAnonKey}',
-      'apikey': AppConstants.supabaseAnonKey,
-    },
+    headers: AppConstants.supabaseEdgeHeaders,
   );
 });
 
 final volcengineStreamingAsrProvider = Provider<VolcengineStreamingAsr>((ref) {
   return VolcengineStreamingAsrService(
     sessionClient: ref.watch(asrSessionClientProvider),
-    relayHeaders: {
-      'Authorization': 'Bearer ${AppConstants.supabaseAnonKey}',
-      'apikey': AppConstants.supabaseAnonKey,
-    },
+    relayHeaders: AppConstants.supabaseEdgeHeaders,
   );
 });
 

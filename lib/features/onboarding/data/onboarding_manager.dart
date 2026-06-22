@@ -2,6 +2,7 @@
 // OnboardingManager — SharedPreferences 读写 onboarding_completed
 // ============================================================
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/constants/app_constants.dart';
@@ -28,3 +29,8 @@ class OnboardingManager {
     await prefs.remove(AppConstants.prefOnboardingCompleted);
   }
 }
+
+/// Onboarding 状态 Riverpod Provider（路由守卫与 OnboardingPage 共用）。
+final onboardingManagerProvider = Provider<OnboardingManager>((ref) {
+  return OnboardingManager();
+});

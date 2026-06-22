@@ -19,7 +19,6 @@ import '../../../app_providers.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/tempo/tempo.dart';
-import '../../tasks/domain/task.dart';
 import '../data/siyuan_pairing_service.dart';
 import 'feedback_dialog.dart';
 import 'pairing_code_dialog.dart';

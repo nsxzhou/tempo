@@ -74,9 +74,6 @@ class AppTheme {
 
   /// 兼容旧名(勿在新代码使用)— 暂保留以减少改动面
   static const Color errorColor = priorityP0;
-  static const Color warningColor = priorityP1;
-  static const Color successColor = success;
-  static const Color infoColor = priorityP2;
 
   /// primary 已切换为 fg(黑色)。旧 import 仍能跑,视觉从紫变黑。
   static const Color primaryColor = fg;
@@ -111,6 +108,20 @@ class AppTheme {
 
   /// 所有页面主区域水平内边距(对应 prototype `px-5`)
   static const double pageHorizontalPadding = 20;
+
+  // ═══════════════════════════════════════════════════════════
+  // Motion token(B 美学: 300–400ms 有机缓动)
+  // ═══════════════════════════════════════════════════════════
+
+  static const Duration durationFast = Duration(milliseconds: 200);
+  static const Duration durationMedium = Duration(milliseconds: 350);
+  static const Duration durationSlow = Duration(milliseconds: 500);
+
+  static const Curve curveOrganic = Curves.easeOutCubic;
+  static const Curve curveSpring = Curves.easeOutBack;
+
+  /// Bottom sheet 遮罩色(black/45)
+  static const Color sheetBarrierColor = Color(0x73000000);
 
   // ═══════════════════════════════════════════════════════════
   // 阴影 token

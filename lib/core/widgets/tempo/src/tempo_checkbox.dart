@@ -30,8 +30,8 @@ class TempoCheckbox extends StatelessWidget {
         onTap: enabled && onChanged != null ? () => onChanged!(!value) : null,
         behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
+          duration: AppTheme.durationFast,
+          curve: AppTheme.curveOrganic,
           width: size,
           height: size,
           decoration: BoxDecoration(
@@ -44,8 +44,8 @@ class TempoCheckbox extends StatelessWidget {
           ),
           child: AnimatedScale(
             scale: value ? 1.0 : 0.5,
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutBack,
+            duration: AppTheme.durationFast,
+            curve: AppTheme.curveSpring,
             child: value
             ? Icon(
                 LucideIcons.check,

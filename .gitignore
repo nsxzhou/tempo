@@ -45,3 +45,6 @@ Thumbs.db
 # Supabase CLI runtime cache
 supabase/.temp
 supabase/.branches
+
+# Siyuan plugin dependencies
+siyuan-plugin/node_modules/

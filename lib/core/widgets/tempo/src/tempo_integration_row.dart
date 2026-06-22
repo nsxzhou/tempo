@@ -1,7 +1,6 @@
 // TempoIntegrationRow — 思源 / 系统日历集成行(对应 prototype SettingsView)
 
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 
 import '../../../theme/app_theme.dart';
 import 'tempo_pill_badge.dart';

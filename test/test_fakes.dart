@@ -8,7 +8,6 @@ import 'package:tempo/features/tasks/data/task_repository.dart';
 import 'package:tempo/features/tasks/data/text_parse_service.dart';
 import 'package:tempo/features/tasks/data/voice_recorder.dart';
 import 'package:tempo/features/tasks/data/voice_task_parse_result.dart';
-import 'package:tempo/features/tasks/data/voice_task_service.dart';
 import 'package:tempo/features/tasks/data/volcengine_streaming_asr.dart';
 import 'package:tempo/features/tasks/domain/task.dart';
 
@@ -42,7 +41,7 @@ class FakeTaskRepository implements TaskRepository {
     final now = DateTime(2026, 6, 18, 9, _nextId);
     final task = Task(
       id: 'task-${_nextId++}',
-      listId: DriftTaskRepository.defaultListId,
+      listId: AppConstants.defaultListId,
       title: title.trim(),
       description: description,
       priority: priority,
@@ -108,27 +107,6 @@ class FakeTaskRepository implements TaskRepository {
   }
 
   @override
-  Stream<List<Task>> watchTasksByList(String listId) {
-    scheduleMicrotask(() {
-      _controller.add(tasks.where((t) => t.listId == listId).toList());
-    });
-    return _controller.stream;
-  }
-
-  @override
-  Stream<List<Task>> watchTasksByDateRange(DateTime start, DateTime end) {
-    scheduleMicrotask(() {
-      _controller.add(
-        tasks.where((t) {
-          if (t.dueDate == null) return false;
-          return t.dueDate!.isAfter(start) && t.dueDate!.isBefore(end);
-        }).toList(),
-      );
-    });
-    return _controller.stream;
-  }
-
-  @override
   Future<Task?> getTaskById(String id) async {
     return tasks.where((t) => t.id == id).firstOrNull;
   }
@@ -151,34 +129,6 @@ class FakeTaskRepository implements TaskRepository {
     if (!_controller.isClosed) {
       _controller.add(List.unmodifiable(tasks));
     }
-  }
-}
-
-class FakeVoiceTaskService implements VoiceTaskService {
-  final VoiceTaskParseResult? result;
-  final Object? error;
-  final List<String> parsedFiles = [];
-
-  FakeVoiceTaskService({this.result, this.error});
-
-  @override
-  Future<VoiceTaskParseResult> parseAudioFile(String path) async {
-    parsedFiles.add(path);
-    if (error != null) {
-      throw error!;
-    }
-    return result!;
-  }
-
-  @override
-  Future<VoiceTaskParseResult> parseAudioBytes(
-    Uint8List bytes, {
-    String filename = 'voice-task.m4a',
-  }) async {
-    if (error != null) {
-      throw error!;
-    }
-    return result!;
   }
 }
 

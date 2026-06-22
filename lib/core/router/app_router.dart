@@ -4,20 +4,41 @@
 // ============================================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../app_providers.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/theme/app_theme.dart';
+import '../../core/widgets/feature_unavailable_page.dart';
 import '../../features/auth/data/auth_service.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/tasks/presentation/tasks_page.dart';
 import '../../features/tasks/presentation/task_detail_page.dart';
 import '../../features/calendar/presentation/calendar_page.dart';
-import '../../features/ai_planner/presentation/plan_placeholder_page.dart';
 import '../../features/settings/presentation/settings_page.dart';
+import '../../features/onboarding/data/onboarding_manager.dart';
 import '../../features/onboarding/presentation/onboarding_page.dart';
 import 'shell_scaffold.dart';
+
+/// Shell Tab 淡入淡出切换(350ms easeInOutCubic)
+CustomTransitionPage<void> _shellTabPage(Widget child) {
+  return CustomTransitionPage<void>(
+    child: child,
+    transitionDuration: AppTheme.durationMedium,
+    reverseTransitionDuration: AppTheme.durationMedium,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(
+        opacity: CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeInOutCubic,
+        ),
+        child: child,
+      );
+    },
+  );
+}
 
 /// 全局 Navigator Key。
 ///
@@ -42,9 +63,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       final currentPath = state.matchedLocation;
 
       // 检查 onboarding 是否完成
-      final prefs = await SharedPreferences.getInstance();
-      final onboardingCompleted =
-          prefs.getBool(AppConstants.prefOnboardingCompleted) ?? false;
+      final onboardingManager = ref.read(onboardingManagerProvider);
+      final onboardingCompleted = await onboardingManager.isCompleted();
 
       if (!onboardingCompleted && !publicRoutes.contains(currentPath)) {
         return AppConstants.routeOnboarding;
@@ -87,22 +107,27 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppConstants.routeTasks,
             pageBuilder: (context, state) =>
-                const NoTransitionPage(child: TasksPage()),
+                _shellTabPage(const TasksPage()),
           ),
           GoRoute(
             path: AppConstants.routeCalendar,
             pageBuilder: (context, state) =>
-                const NoTransitionPage(child: CalendarPage()),
+                _shellTabPage(const CalendarPage()),
           ),
           GoRoute(
             path: AppConstants.routePlan,
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: PlanPlaceholderPage()),
+            pageBuilder: (context, state) => _shellTabPage(
+              const FeatureUnavailablePage(
+                icon: LucideIcons.sparkles,
+                title: 'AI 计划即将上线',
+                subtitle: '智能排期与精力曲线功能开发中',
+              ),
+            ),
           ),
           GoRoute(
             path: AppConstants.routeSettings,
             pageBuilder: (context, state) =>
-                const NoTransitionPage(child: SettingsPage()),
+                _shellTabPage(const SettingsPage()),
           ),
         ],
       ),

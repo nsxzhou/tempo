@@ -5,14 +5,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app_providers.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/widgets/tempo/src/tempo_date_picker.dart';
-import '../../../../core/widgets/tempo/src/tempo_snackbar.dart';
+import '../../../../core/motion/tempo_sheet.dart';
 import '../../../../core/widgets/tempo/tempo.dart';
 import '../../data/task_creation_orchestrator.dart';
 import '../../data/voice_task_parse_result.dart';
@@ -77,16 +75,8 @@ class QuickCreateSheet extends ConsumerStatefulWidget {
 
   /// 从 TasksPage 弹出快速创建 bottom sheet
   static Future<void> show(BuildContext context) {
-    return showModalBottomSheet<void>(
+    return TempoSheet.show<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: const Color(0x73000000), // 和 VoiceOverlay 一致 black/45
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppTheme.radiusLg),
-        ),
-      ),
       builder: (_) => const QuickCreateSheet(),
     );
   }
@@ -97,16 +87,8 @@ class QuickCreateSheet extends ConsumerStatefulWidget {
     required Task task,
     required QuickUpdateCallback onUpdate,
   }) {
-    return showModalBottomSheet<Task?>(
+    return TempoSheet.show<Task?>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: const Color(0x73000000),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppTheme.radiusLg),
-        ),
-      ),
       builder: (_) => QuickCreateSheet(
         initialTask: task,
         onUpdate: onUpdate,
@@ -119,16 +101,8 @@ class QuickCreateSheet extends ConsumerStatefulWidget {
     BuildContext context, {
     required VoiceTaskParseResult draft,
   }) {
-    return showModalBottomSheet<void>(
+    return TempoSheet.show<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: const Color(0x73000000),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppTheme.radiusLg),
-        ),
-      ),
       builder: (_) => QuickCreateSheet(voiceDraft: draft),
     );
   }
@@ -357,8 +331,8 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
                 _buildExpandToggle(),
                 ClipRect(
                   child: AnimatedSize(
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeInOut,
+                    duration: AppTheme.durationMedium,
+                    curve: AppTheme.curveOrganic,
                     alignment: Alignment.topCenter,
                     child: _expanded
                         ? Column(
@@ -699,9 +673,9 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
     final isSelected = _selectedPriority == p;
     final label = p.label ?? p.name.toUpperCase();
     // 选中态用对应优先级色，未选中用中性色
-    final activeBg = _priorityActiveBg(p);
-    final activeFg = _priorityActiveFg(p);
-    final activeBorder = _priorityActiveBorder(p);
+    final activeBg = AppTheme.priorityBg(p.value);
+    final activeFg = AppTheme.priorityColor(p.value);
+    final activeBorder = AppTheme.priorityBorder(p.value);
 
     return GestureDetector(
       onTap: () {
@@ -736,36 +710,6 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
         ),
       ),
     );
-  }
-
-  Color _priorityActiveBg(TaskPriority p) {
-    return switch (p) {
-      TaskPriority.p0 => AppTheme.priorityP0Bg,
-      TaskPriority.p1 => AppTheme.priorityP1Bg,
-      TaskPriority.p2 => AppTheme.priorityP2Bg,
-      TaskPriority.p3 => AppTheme.priorityP3Bg,
-      TaskPriority.none => AppTheme.bgMuted,
-    };
-  }
-
-  Color _priorityActiveFg(TaskPriority p) {
-    return switch (p) {
-      TaskPriority.p0 => AppTheme.priorityP0,
-      TaskPriority.p1 => AppTheme.priorityP1,
-      TaskPriority.p2 => AppTheme.priorityP2,
-      TaskPriority.p3 => AppTheme.priorityP3,
-      TaskPriority.none => AppTheme.fgMuted,
-    };
-  }
-
-  Color _priorityActiveBorder(TaskPriority p) {
-    return switch (p) {
-      TaskPriority.p0 => AppTheme.priorityP0Border,
-      TaskPriority.p1 => AppTheme.priorityP1Border,
-      TaskPriority.p2 => AppTheme.priorityP2Border,
-      TaskPriority.p3 => AppTheme.priorityP3Border,
-      TaskPriority.none => AppTheme.borderStrong,
-    };
   }
 
   // ══════════════ 创建按钮 ══════════════

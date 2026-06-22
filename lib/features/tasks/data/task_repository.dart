@@ -45,13 +45,6 @@ abstract class TaskRepository {
   /// 删除任务。
   Future<void> deleteTask(String id);
 
-  /// 按 listId 过滤的响应式流。
-  Stream<List<domain.Task>> watchTasksByList(String listId);
-
-  /// 按日期范围过滤（日历视图用）。
-  Stream<List<domain.Task>> watchTasksByDateRange(
-      DateTime start, DateTime end);
-
   /// 获取单个任务（详情页用）。
   Future<domain.Task?> getTaskById(String id);
 
@@ -66,19 +59,9 @@ abstract class TaskRepository {
 /// 升级为 `Stream<List<ConnectivityResult>>`（多网卡场景）。
 class ConnectivityService {
   final Connectivity _connectivity;
-  ConnectivityResult _current = ConnectivityResult.none;
 
   ConnectivityService({Connectivity? connectivity})
-      : _connectivity = connectivity ?? Connectivity() {
-    _init();
-  }
-
-  void _init() {
-    _connectivity.onConnectivityChanged.listen((results) {
-      // 多网卡:取第一个,或 none 视为离线
-      _current = results.isEmpty ? ConnectivityResult.none : results.first;
-    });
-  }
+      : _connectivity = connectivity ?? Connectivity();
 
   /// 当前是否在线（非 none 即认为在线）。
   Future<bool> get isOnline async {
@@ -164,12 +147,13 @@ class SyncTaskRepository implements TaskRepository {
     );
 
     final isOnline = await _connectivity.isOnline;
-    if (isOnline && _userId != null) {
+    final userId = _userId;
+    if (isOnline && userId != null) {
       try {
         // 1. 写 Supabase
         final row = await _supabase
             .from(AppConstants.tableTasks)
-            .insert(task.toSupabaseJson(userId: _userId!))
+            .insert(task.toSupabaseJson(userId: userId))
             .select()
             .single();
         final remote = domain.TaskSupabase.fromSupabaseJson(row);
@@ -209,12 +193,13 @@ class SyncTaskRepository implements TaskRepository {
   Future<domain.Task> updateTask(domain.Task task) async {
     final updated = task.copyWith(updatedAt: DateTime.now());
     final isOnline = await _connectivity.isOnline;
+    final userId = _userId;
 
-    if (isOnline && _userId != null) {
+    if (isOnline && userId != null) {
       try {
         final row = await _supabase
             .from(AppConstants.tableTasks)
-            .update(updated.toSupabaseJson(userId: _userId!))
+            .update(updated.toSupabaseJson(userId: userId))
             .eq('id', updated.id)
             .select()
             .single();
@@ -291,35 +276,6 @@ class SyncTaskRepository implements TaskRepository {
   }
 
   @override
-  Stream<List<domain.Task>> watchTasksByList(String listId) {
-    final localStream = (_localDb.select(_localDb.tasks)
-          ..where((t) => t.listId.equals(listId))
-          ..orderBy([
-            (t) => OrderingTerm(expression: t.isCompleted),
-            (t) => OrderingTerm(expression: t.priority),
-            (t) => OrderingTerm.desc(t.createdAt),
-          ]))
-        .watch()
-        .map((rows) => rows.map(_mapTask).toList());
-
-    _refreshFromRemote();
-    return localStream;
-  }
-
-  @override
-  Stream<List<domain.Task>> watchTasksByDateRange(
-      DateTime start, DateTime end) {
-    final localStream = (_localDb.select(_localDb.tasks)
-          ..where((t) => t.dueDate.isBetweenValues(start, end))
-          ..orderBy([(t) => OrderingTerm(expression: t.dueDate)]))
-        .watch()
-        .map((rows) => rows.map(_mapTask).toList());
-
-    _refreshFromRemote();
-    return localStream;
-  }
-
-  @override
   Future<domain.Task?> getTaskById(String id) async {
     final row = await (_localDb.select(_localDb.tasks)
           ..where((t) => t.id.equals(id)))
@@ -333,7 +289,8 @@ class SyncTaskRepository implements TaskRepository {
   @override
   Future<void> pushPending() async {
     final isOnline = await _connectivity.isOnline;
-    if (!isOnline || _userId == null) return;
+    final userId = _userId;
+    if (!isOnline || userId == null) return;
 
     final pending = await (_localDb.select(_localDb.tasks)
           ..where((t) => t.syncPending.equals(true)))
@@ -345,7 +302,7 @@ class SyncTaskRepository implements TaskRepository {
         // last-write-wins: 直接 upsert
         await _supabase
             .from(AppConstants.tableTasks)
-            .upsert(task.toSupabaseJson(userId: _userId!));
+            .upsert(task.toSupabaseJson(userId: userId));
         // 清除 syncPending
         await (_localDb.update(_localDb.tasks)
               ..where((t) => t.id.equals(row.id)))
@@ -361,13 +318,14 @@ class SyncTaskRepository implements TaskRepository {
   /// 后台静默刷新云端数据到本地缓存。
   Future<void> _refreshFromRemote() async {
     final isOnline = await _connectivity.isOnline;
-    if (!isOnline || _userId == null) return;
+    final userId = _userId;
+    if (!isOnline || userId == null) return;
 
     try {
       final rows = await _supabase
           .from(AppConstants.tableTasks)
           .select()
-          .eq('user_id', _userId!);
+          .eq('user_id', userId);
 
       for (final row in rows as List) {
         final remote = domain.TaskSupabase.fromSupabaseJson(
@@ -422,188 +380,6 @@ class SyncTaskRepository implements TaskRepository {
   }
 
   /// 将 Drift 行映射为领域模型 Task。
-  domain.Task _mapTask(db.Task row) {
-    return domain.Task(
-      id: row.id,
-      listId: row.listId,
-      title: row.title,
-      description: row.description,
-      priority: domain.TaskPriority.fromValue(row.priority),
-      dueDate: row.dueDate,
-      isAllDay: row.isAllDay,
-      isCompleted: row.isCompleted,
-      completedAt: row.completedAt,
-      siyuanBlockId: row.siyuanBlockId,
-      sortOrder: row.sortOrder,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      creationSource: row.creationSource,
-      tag: row.tag,
-      syncPending: row.syncPending,
-    );
-  }
-}
-
-// ── 保留旧类名以兼容测试 ──
-/// @deprecated 使用 SyncTaskRepository 替代。
-class DriftTaskRepository implements TaskRepository {
-  static const String defaultListId = 'local-inbox';
-  static const String defaultUserId = 'local-user';
-
-  final db.AppDatabase _database;
-  final Uuid _uuid;
-
-  DriftTaskRepository(this._database, {Uuid? uuid})
-      : _uuid = uuid ?? const Uuid();
-
-  @override
-  Stream<List<domain.Task>> watchTasks() async* {
-    final query = _database.select(_database.tasks)
-      ..orderBy([
-        (t) => OrderingTerm(expression: t.isCompleted),
-        (t) => OrderingTerm.desc(t.createdAt),
-      ]);
-    yield* query.watch().map((rows) => rows.map(_mapTask).toList());
-  }
-
-  @override
-  Future<domain.Task> createTask({
-    required String title,
-    String? description,
-    DateTime? dueDate,
-    bool isAllDay = false,
-    domain.TaskPriority priority = domain.TaskPriority.none,
-    String creationSource = AppConstants.sourceText,
-    String? tag,
-  }) async {
-    final now = DateTime.now();
-    final trimmedTitle = title.trim();
-    final id = _uuid.v4();
-
-    if (trimmedTitle.isEmpty) {
-      throw ArgumentError.value(title, 'title', 'Task title cannot be empty');
-    }
-
-    final companion = db.TasksCompanion.insert(
-      id: id,
-      listId: defaultListId,
-      title: trimmedTitle,
-      description: Value(description?.trim()),
-      priority: Value(priority.value),
-      dueDate: Value(dueDate),
-      isAllDay: Value(isAllDay),
-      createdAt: Value(now),
-      updatedAt: Value(now),
-      creationSource: Value(creationSource),
-      tag: Value(tag),
-    );
-
-    await _database.into(_database.tasks).insert(companion);
-
-    return domain.Task(
-      id: id,
-      listId: defaultListId,
-      title: trimmedTitle,
-      description: description?.trim(),
-      priority: priority,
-      dueDate: dueDate,
-      isAllDay: isAllDay,
-      createdAt: now,
-      updatedAt: now,
-      creationSource: creationSource,
-      tag: tag,
-    );
-  }
-
-  @override
-  Future<domain.Task> createVoiceTask(VoiceTaskParseResult result) {
-    final description = result.description?.isNotEmpty == true
-        ? result.description
-        : '识别内容: ${result.rawTranscript}';
-
-    return createTask(
-      title: result.title,
-      description: description,
-      dueDate: result.dueDate,
-      isAllDay: result.isAllDay,
-      priority: result.priority,
-      creationSource: AppConstants.sourceVoice,
-      tag: result.tag,
-    );
-  }
-
-  @override
-  Future<domain.Task> updateTask(domain.Task task) async {
-    final updated = task.copyWith(updatedAt: DateTime.now());
-    await (_database.update(_database.tasks)
-          ..where((t) => t.id.equals(updated.id)))
-        .write(db.TasksCompanion(
-      title: Value(updated.title),
-      description: Value(updated.description),
-      priority: Value(updated.priority.value),
-      dueDate: Value(updated.dueDate),
-      isAllDay: Value(updated.isAllDay),
-      updatedAt: Value(updated.updatedAt),
-    ));
-    return updated;
-  }
-
-  @override
-  Future<domain.Task> toggleComplete(String id) async {
-    final row = await (_database.select(_database.tasks)
-          ..where((t) => t.id.equals(id)))
-        .getSingle();
-    final now = DateTime.now();
-    final newCompleted = !row.isCompleted;
-    await (_database.update(_database.tasks)
-          ..where((t) => t.id.equals(id)))
-        .write(db.TasksCompanion(
-      isCompleted: Value(newCompleted),
-      completedAt: Value(newCompleted ? now : null),
-      updatedAt: Value(now),
-    ));
-    return _mapTask(row).copyWith(
-      isCompleted: newCompleted,
-      completedAt: newCompleted ? now : null,
-      updatedAt: now,
-    );
-  }
-
-  @override
-  Future<void> deleteTask(String id) {
-    return (_database.delete(_database.tasks)
-          ..where((t) => t.id.equals(id)))
-        .go();
-  }
-
-  @override
-  Stream<List<domain.Task>> watchTasksByList(String listId) {
-    return (_database.select(_database.tasks)
-          ..where((t) => t.listId.equals(listId)))
-        .watch()
-        .map((rows) => rows.map(_mapTask).toList());
-  }
-
-  @override
-  Stream<List<domain.Task>> watchTasksByDateRange(
-      DateTime start, DateTime end) {
-    return (_database.select(_database.tasks)
-          ..where((t) => t.dueDate.isBetweenValues(start, end)))
-        .watch()
-        .map((rows) => rows.map(_mapTask).toList());
-  }
-
-  @override
-  Future<domain.Task?> getTaskById(String id) async {
-    final row = await (_database.select(_database.tasks)
-          ..where((t) => t.id.equals(id)))
-        .getSingleOrNull();
-    return row == null ? null : _mapTask(row);
-  }
-
-  @override
-  Future<void> pushPending() async {}
-
   domain.Task _mapTask(db.Task row) {
     return domain.Task(
       id: row.id,

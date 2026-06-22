@@ -6,6 +6,7 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/date_utils.dart';
 import '../../tasks/domain/task.dart';
 
 class DayView extends StatelessWidget {
@@ -23,7 +24,7 @@ class DayView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final isToday = _sameDay(selectedDate, now);
+    final isToday = isSameDay(selectedDate, now);
     final isFuture = selectedDate.isAfter(
         DateTime(now.year, now.month, now.day));
 
@@ -94,8 +95,6 @@ class DayView extends StatelessWidget {
     return labels[(wd - 1) % 7];
   }
 
-  bool _sameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
 class _NavBtn extends StatelessWidget {

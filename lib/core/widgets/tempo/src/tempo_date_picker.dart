@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../../motion/tempo_sheet.dart';
+import '../../../utils/date_utils.dart';
 
 /// Tempo 风格日历选择器
 ///
@@ -20,16 +22,8 @@ class TempoDatePicker {
     required DateTime firstDate,
     required DateTime lastDate,
   }) {
-    return showModalBottomSheet<DateTime>(
+    return TempoSheet.show<DateTime>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: const Color(0x73000000),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppTheme.radiusLg),
-        ),
-      ),
       builder: (_) => _DatePickerSheet(
         initialDate: initialDate,
         firstDate: firstDate,
@@ -109,11 +103,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
     return !d.isBefore(first) && !d.isAfter(last);
   }
 
-  bool _isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
-
-  bool _isToday(DateTime date) => _isSameDay(date, DateTime.now());
+  bool _isToday(DateTime date) => isSameDay(date, DateTime.now());
 
   // ─── 格式化 ───
 
@@ -313,7 +303,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
   }
 
   Widget _buildDayCell(DateTime date) {
-    final isSelected = _selectedDate != null && _isSameDay(date, _selectedDate!);
+    final isSelected = _selectedDate != null && isSameDay(date, _selectedDate!);
     final isToday = _isToday(date);
     final inRange = _isInRange(date);
 

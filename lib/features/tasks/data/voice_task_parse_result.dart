@@ -7,6 +7,7 @@ class VoiceTaskParseResult {
   final String title;
   final String? description;
   final DateTime? dueDate;
+  final bool isAllDay;
   final TaskPriority priority;
   final double confidence;
   final String rawTranscript;
@@ -16,6 +17,7 @@ class VoiceTaskParseResult {
     required this.title,
     required this.description,
     required this.dueDate,
+    this.isAllDay = false,
     required this.priority,
     required this.confidence,
     required this.rawTranscript,
@@ -32,6 +34,7 @@ class VoiceTaskParseResult {
       title: _readString(json['title']).trim(),
       description: _readNullableString(json['description'])?.trim(),
       dueDate: _readDateTime(json['due_date']),
+      isAllDay: _readBool(json['is_all_day']),
       priority: _readPriority(json['priority']),
       confidence: confidence.clamp(0, 1).toDouble(),
       rawTranscript: _readString(json['raw_transcript']).trim(),
@@ -47,6 +50,7 @@ class VoiceTaskParseResult {
     String? title,
     String? description,
     DateTime? dueDate,
+    bool? isAllDay,
     TaskPriority? priority,
     double? confidence,
     String? rawTranscript,
@@ -56,6 +60,7 @@ class VoiceTaskParseResult {
       title: title ?? this.title,
       description: description ?? this.description,
       dueDate: dueDate ?? this.dueDate,
+      isAllDay: isAllDay ?? this.isAllDay,
       priority: priority ?? this.priority,
       confidence: confidence ?? this.confidence,
       rawTranscript: rawTranscript ?? this.rawTranscript,
@@ -103,6 +108,15 @@ DateTime? _readDateTime(Object? value) {
     return null;
   }
   return DateTime.tryParse(value);
+}
+
+bool _readBool(Object? value) {
+  if (value is bool) return value;
+  if (value is String) {
+    final normalized = value.trim().toLowerCase();
+    return normalized == 'true' || normalized == '1';
+  }
+  return false;
 }
 
 TaskPriority _readPriority(Object? value) {

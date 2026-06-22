@@ -1,29 +1,28 @@
-// VoiceOverlay — 语音录入底部抽屉(对应 prototype VoiceOverlay.tsx)
-// 黑色半透遮罩 + 白色圆角抽屉 + 麦克风脉冲 + 转写 + 低置信度草稿确认
-// 交互:tap 麦克风开始 → tap 停止 → 自动解析 → 高置信度自动创建 / 低置信度草稿确认
+// VoiceOverlay — 语音录入底部抽屉
+// 流式 ASR 边录边出字 → 停止后立即关层 → 后台 ASR 收尾 + LLM 解析
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../../app_providers.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/widgets/tempo/tempo.dart';
-import '../../data/voice_task_parse_result.dart';
-import '../../data/voice_task_service.dart';
-import '../../domain/task.dart';
+import '../../data/streaming_voice_session.dart';
+import '../../data/task_creation_orchestrator.dart';
+import '../../data/volcengine_streaming_asr.dart';
 
-enum _VoicePhase { idle, recording, processing, draft }
+enum _VoicePhase { idle, recording }
 
 class VoiceOverlay extends ConsumerStatefulWidget {
   final VoidCallback onClose;
-  final Future<void> Function(VoiceTaskParseResult result) onAutoCreate;
+  final VoiceDraftConfirmCallback onNeedDraftConfirm;
 
   const VoiceOverlay({
     super.key,
     required this.onClose,
-    required this.onAutoCreate,
+    required this.onNeedDraftConfirm,
   });
 
   @override
@@ -32,29 +31,43 @@ class VoiceOverlay extends ConsumerStatefulWidget {
 
 class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
     with SingleTickerProviderStateMixin {
+  static const _transcriptThrottle = Duration(milliseconds: 100);
+
   _VoicePhase _phase = _VoicePhase.idle;
   String? _error;
-  VoiceTaskParseResult? _draft;
-  late final TextEditingController _titleController;
-  late final TextEditingController _descController;
+  String _transcript = '';
+  String _pendingTranscript = '';
+  bool _pipelineRunning = false;
+  StreamSubscription<String>? _transcriptSub;
+  Timer? _transcriptThrottleTimer;
+  late final TextEditingController _transcriptController;
   late final AnimationController _pulse;
+  StreamingVoiceSession? _session;
 
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController();
-    _descController = TextEditingController();
+    _transcriptController = TextEditingController();
     _pulse = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _session = ref.read(streamingVoiceSessionProvider);
+      unawaited(_session!.prepare());
+    });
   }
 
   @override
   void dispose() {
-    _titleController.dispose();
-    _descController.dispose();
+    _transcriptSub?.cancel();
+    _transcriptThrottleTimer?.cancel();
+    _transcriptController.dispose();
     _pulse.dispose();
+    if (!_pipelineRunning && _phase != _VoicePhase.recording) {
+      unawaited(_session?.disposeSession());
+    }
     super.dispose();
   }
 
@@ -62,77 +75,96 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
 
   Future<void> _toggleRecording() async {
     if (_phase == _VoicePhase.recording) {
-      await _stopAndParse();
+      await _stopAndPipeline();
     } else if (_phase == _VoicePhase.idle) {
       await _start();
     }
   }
 
   Future<void> _start() async {
-    setState(() => _error = null);
-    final recorder = ref.read(voiceRecorderProvider);
-    final hasPermission = await recorder.hasPermission();
-    if (!mounted) return;
-    if (!hasPermission) {
-      setState(() => _error = '需要麦克风权限才能语音创建任务。');
-      return;
-    }
-    try {
-      await recorder.start();
-      if (!mounted) return;
-      setState(() => _phase = _VoicePhase.recording);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = '录音启动失败:$e');
-    }
-  }
+    setState(() {
+      _error = null;
+      _transcript = '';
+      _pendingTranscript = '';
+      _transcriptController.clear();
+      _phase = _VoicePhase.recording;
+    });
 
-  Future<void> _stopAndParse() async {
-    setState(() => _phase = _VoicePhase.processing);
     try {
-      final path = await ref.read(voiceRecorderProvider).stop();
-      if (path == null) throw StateError('录音文件为空');
-      final result =
-          await ref.read(voiceTaskServiceProvider).parseAudioFile(path);
+      final session = ref.read(streamingVoiceSessionProvider);
+      await session.startRecording();
       if (!mounted) return;
-      if (result.canAutoCreate) {
-        await widget.onAutoCreate(result);
-        widget.onClose();
-      } else {
-        setState(() {
-          _draft = result;
-          _titleController.text = result.title;
-          _descController.text = result.description ?? '';
-          _phase = _VoicePhase.draft;
-        });
-      }
+
+      _transcriptSub?.cancel();
+      _transcriptSub = session.transcriptStream.listen(_onTranscriptUpdate);
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = _formatVoiceError(e);
+        _error = _formatStartError(e);
         _phase = _VoicePhase.idle;
       });
     }
   }
 
-  String _formatVoiceError(Object error) {
-    if (error is VoiceTaskException) {
-      return error.message;
-    }
-    return '语音创建失败，请稍后重试。';
+  void _onTranscriptUpdate(String text) {
+    if (!mounted) return;
+    _pendingTranscript = text;
+    if (_transcriptThrottleTimer?.isActive ?? false) return;
+
+    _applyTranscript(text);
+    _transcriptThrottleTimer = Timer(_transcriptThrottle, () {
+      if (!mounted) return;
+      if (_pendingTranscript != _transcript) {
+        _applyTranscript(_pendingTranscript);
+      }
+    });
+
+    ref.read(textParseServiceProvider).parseTextDebounced(text);
   }
 
-  Future<void> _confirmDraft() async {
-    final draft = _draft;
-    if (draft == null) return;
-    final title = _titleController.text.trim();
-    final desc = _descController.text.trim();
-    final edited = draft.copyWith(
-      title: title.isEmpty ? draft.title : title,
-      description: desc.isEmpty ? null : desc,
-    );
-    await widget.onAutoCreate(edited);
+  void _applyTranscript(String text) {
+    setState(() {
+      _transcript = text;
+      _transcriptController
+        ..text = text
+        ..selection = TextSelection.collapsed(offset: text.length);
+    });
+  }
+
+  Future<void> _stopAndPipeline() async {
+    _pipelineRunning = true;
+    await _transcriptSub?.cancel();
+    _transcriptSub = null;
+    _transcriptThrottleTimer?.cancel();
+    _transcriptThrottleTimer = null;
+
+    final session = ref.read(streamingVoiceSessionProvider);
+    final orchestrator = ref.read(taskCreationOrchestratorProvider);
+
     widget.onClose();
+
+    unawaited(
+      orchestrator.enqueueVoicePipeline(
+        session: session,
+        onNeedDraftConfirm: widget.onNeedDraftConfirm,
+      ),
+    );
+  }
+
+  Future<void> _handleClose() async {
+    if (_phase == _VoicePhase.recording) {
+      await ref.read(streamingVoiceSessionProvider).cancel();
+    } else if (!_pipelineRunning) {
+      await ref.read(streamingVoiceSessionProvider).disposeSession();
+    }
+    widget.onClose();
+  }
+
+  String _formatStartError(Object error) {
+    if (error is StreamingVoiceException) return error.message;
+    if (error is AsrSessionException) return error.message;
+    if (error is VolcengineStreamingAsrException) return error.message;
+    return '录音启动失败：$error';
   }
 
   @override
@@ -141,10 +173,10 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
       child: Material(
         color: Colors.transparent,
         child: GestureDetector(
-          onTap: widget.onClose,
+          onTap: _handleClose,
           behavior: HitTestBehavior.opaque,
           child: Container(
-            color: const Color(0x73000000), // black/45
+            color: const Color(0x73000000),
             alignment: Alignment.bottomCenter,
             child: GestureDetector(
               onTap: () {},
@@ -192,8 +224,7 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
             _buildErrorBar(),
             const SizedBox(height: 12),
           ],
-          if (_phase == _VoicePhase.draft) _buildDraftMode()
-          else _buildRecordMode(),
+          _buildRecordMode(),
         ],
       ),
     );
@@ -214,7 +245,11 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
           Expanded(
             child: Text(
               _error!,
-              style: TextStyle(fontSize: 11, color: AppTheme.priorityP0, height: 1.4),
+              style: TextStyle(
+                fontSize: 11,
+                color: AppTheme.priorityP0,
+                height: 1.4,
+              ),
             ),
           ),
         ],
@@ -234,6 +269,7 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
             borderRadius: BorderRadius.circular(AppTheme.radiusMd),
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildMicButton(),
               const SizedBox(width: 16),
@@ -242,7 +278,7 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _statusText(),
+                      _isRecording ? '语音采音中 · 点击停止' : '点击麦克风开始采音',
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -252,7 +288,7 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Gemini Whisper V2 Engine',
+                      '豆包 Seed ASR 2.0 · 流式识别',
                       style: AppTheme.mono(size: 10, color: AppTheme.fgSubtle),
                     ),
                   ],
@@ -261,9 +297,41 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
             ],
           ),
         ),
+        if (_isRecording || _transcript.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _buildTranscriptBox(),
+        ],
         const SizedBox(height: 16),
         _buildCancelButton(),
       ],
+    );
+  }
+
+  Widget _buildTranscriptBox() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.bgMuted,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        border: Border.all(color: AppTheme.borderStrong, width: 0.8),
+      ),
+      child: TextField(
+        controller: _transcriptController,
+        readOnly: !_isRecording,
+        maxLines: 3,
+        minLines: 1,
+        style: const TextStyle(
+          fontSize: 13,
+          color: AppTheme.fgSecondary,
+          height: 1.5,
+        ),
+        decoration: InputDecoration(
+          isDense: true,
+          border: InputBorder.none,
+          hintText: _isRecording ? '实时转写将显示在这里…' : null,
+          hintStyle: TextStyle(color: AppTheme.fgSubtle, fontSize: 13),
+        ),
+      ),
     );
   }
 
@@ -298,7 +366,7 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
             ),
           GestureDetector(
             key: const ValueKey('voice-mic'),
-            onTap: _phase == _VoicePhase.processing ? null : _toggleRecording,
+            onTap: _toggleRecording,
             child: Container(
               width: 44,
               height: 44,
@@ -310,182 +378,21 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
                     : Border.all(color: AppTheme.borderStrong, width: 0.8),
               ),
               alignment: Alignment.center,
-              child: _phase == _VoicePhase.processing
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppTheme.bg,
-                      ),
-                    )
-                  : Icon(
-                      recording ? LucideIcons.square : LucideIcons.mic,
-                      size: 18,
-                      color: recording ? AppTheme.bg : AppTheme.fg,
-                    ),
+              child: Icon(
+                recording ? LucideIcons.square : LucideIcons.mic,
+                size: 18,
+                color: recording ? AppTheme.bg : AppTheme.fg,
+              ),
             ),
           ),
         ],
       ),
     );
-  }
-
-  String _statusText() {
-    switch (_phase) {
-      case _VoicePhase.recording:
-        return '语音采音中 · 点击麦克风停止';
-      case _VoicePhase.processing:
-        return '语音识别中 · 可能需要几秒…';
-      default:
-        return '点击麦克风开始采音';
-    }
-  }
-
-  Widget _buildDraftMode() {
-    final draft = _draft;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const Text(
-          '需要确认语音任务',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: AppTheme.fg,
-            letterSpacing: -0.2,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          '置信度低于阈值,请确认后创建',
-          style: AppTheme.mono(size: 10, color: AppTheme.fgMuted),
-        ),
-        const SizedBox(height: 14),
-        TextField(
-          controller: _titleController,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: AppTheme.fg,
-          ),
-          decoration: InputDecoration(
-            hintText: '任务标题',
-            hintStyle: TextStyle(color: AppTheme.fgSubtle),
-            filled: true,
-            fillColor: AppTheme.bgSubtle,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-              borderSide: const BorderSide(color: AppTheme.borderStrong),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-              borderSide: const BorderSide(color: AppTheme.borderStrong),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-              borderSide: const BorderSide(color: AppTheme.fg, width: 2),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 12,
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _descController,
-          maxLines: 2,
-          style: const TextStyle(
-            fontSize: 12,
-            color: AppTheme.fgSecondary,
-            height: 1.5,
-          ),
-          decoration: InputDecoration(
-            hintText: '描述(可选)',
-            hintStyle: TextStyle(color: AppTheme.fgSubtle),
-            filled: true,
-            fillColor: AppTheme.bgSubtle,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-              borderSide: const BorderSide(color: AppTheme.borderStrong),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-              borderSide: const BorderSide(color: AppTheme.borderStrong),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-              borderSide: const BorderSide(color: AppTheme.fg, width: 2),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 12,
-            ),
-          ),
-        ),
-        if (draft != null) ...[
-          const SizedBox(height: 12),
-          _buildNlpTags(draft),
-        ],
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(child: _buildCancelButton()),
-            const SizedBox(width: 10),
-            Expanded(child: _buildCreateButton()),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildNlpTags(VoiceTaskParseResult draft) {
-    final tags = <Widget>[];
-    if (draft.dueDate != null) {
-      tags.add(
-        TempoPillBadge(
-          label: DateFormat('MM/dd HH:mm').format(draft.dueDate!),
-          kind: TempoBadgeKind.tag,
-          icon: LucideIcons.calendar,
-          fontSize: 10,
-        ),
-      );
-    }
-    tags.add(
-      TempoPillBadge(
-        label: _priorityLabel(draft.priority),
-        kind: _priorityKind(draft.priority),
-        icon: LucideIcons.flag,
-        fontSize: 10,
-      ),
-    );
-    return Wrap(spacing: 6, runSpacing: 6, children: tags);
-  }
-
-  String _priorityLabel(TaskPriority p) {
-    return switch (p) {
-      TaskPriority.p0 => 'P0 紧急',
-      TaskPriority.p1 => 'P1 高',
-      TaskPriority.p2 => 'P2 中',
-      TaskPriority.p3 => 'P3 低',
-      TaskPriority.none => '无优先级',
-    };
-  }
-
-  TempoBadgeKind _priorityKind(TaskPriority p) {
-    return switch (p) {
-      TaskPriority.p0 => TempoBadgeKind.p0,
-      TaskPriority.p1 => TempoBadgeKind.p1,
-      TaskPriority.p2 => TempoBadgeKind.p2,
-      TaskPriority.p3 => TempoBadgeKind.p3,
-      TaskPriority.none => TempoBadgeKind.neutral,
-    };
   }
 
   Widget _buildCancelButton() {
     return GestureDetector(
-      onTap: widget.onClose,
+      onTap: _handleClose,
       child: Container(
         height: 40,
         decoration: BoxDecoration(
@@ -500,28 +407,6 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
             fontSize: 13,
             fontWeight: FontWeight.w600,
             color: AppTheme.fgMuted,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCreateButton() {
-    return GestureDetector(
-      onTap: _confirmDraft,
-      child: Container(
-        height: 40,
-        decoration: BoxDecoration(
-          color: AppTheme.fg,
-          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-        ),
-        alignment: Alignment.center,
-        child: const Text(
-          '创建任务',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.bg,
           ),
         ),
       ),

@@ -21,9 +21,13 @@ import 'features/settings/data/siyuan_pairing_service.dart';
 import 'features/tasks/data/notification_service.dart';
 import 'features/tasks/data/sync_service.dart';
 import 'features/tasks/data/task_repository.dart';
+import 'core/router/app_router.dart';
+import 'features/tasks/data/streaming_voice_session.dart';
+import 'features/tasks/data/task_creation_orchestrator.dart';
 import 'features/tasks/data/text_parse_service.dart';
 import 'features/tasks/data/voice_recorder.dart';
 import 'features/tasks/data/voice_task_service.dart';
+import 'features/tasks/data/volcengine_streaming_asr.dart';
 import 'features/tasks/domain/task.dart';
 
 // Re-export auth providers so consumers of app_providers can access them.
@@ -148,6 +152,20 @@ final textParseServiceProvider = Provider<TextParseService>((ref) {
   );
 });
 
+// ── TaskCreationOrchestrator ──
+
+final taskCreationOrchestratorProvider =
+    Provider<TaskCreationOrchestrator>((ref) {
+  return TaskCreationOrchestrator(
+    repository: ref.watch(taskRepositoryProvider),
+    parseService: ref.watch(textParseServiceProvider),
+    notificationService: ref.watch(notificationServiceProvider),
+    showSnackbar: createGlobalSnackbar(
+      navigatorKey: ref.watch(appNavigatorKeyProvider),
+    ),
+  );
+});
+
 // ── VoiceTaskService ──
 
 final voiceTaskServiceProvider = Provider<VoiceTaskService>((ref) {
@@ -170,6 +188,37 @@ final voiceRecorderProvider = Provider<VoiceRecorder>((ref) {
     recorder.dispose();
   });
   return recorder;
+});
+
+// ── Volcengine Streaming ASR ──
+
+final asrSessionClientProvider = Provider<AsrSessionClient>((ref) {
+  final dio = ref.watch(dioProvider);
+  return DioAsrSessionClient(
+    dio: dio,
+    endpoint: AppConstants.asrSessionEndpoint,
+    headers: {
+      'Authorization': 'Bearer ${AppConstants.supabaseAnonKey}',
+      'apikey': AppConstants.supabaseAnonKey,
+    },
+  );
+});
+
+final volcengineStreamingAsrProvider = Provider<VolcengineStreamingAsr>((ref) {
+  return VolcengineStreamingAsrService(
+    sessionClient: ref.watch(asrSessionClientProvider),
+    relayHeaders: {
+      'Authorization': 'Bearer ${AppConstants.supabaseAnonKey}',
+      'apikey': AppConstants.supabaseAnonKey,
+    },
+  );
+});
+
+final streamingVoiceSessionProvider = Provider<StreamingVoiceSession>((ref) {
+  return LiveStreamingVoiceSession(
+    recorder: ref.watch(voiceRecorderProvider),
+    asr: ref.watch(volcengineStreamingAsrProvider),
+  );
 });
 
 // ── SiyuanPairingService ──

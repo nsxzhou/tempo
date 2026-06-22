@@ -57,9 +57,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   children: const [
                     _OnboardingStep(
                       step: 0,
-                      title: '🔌 思源中文笔记单向导入',
+                      title: '思源笔记单向导入',
                       description:
-                          'Tempo MVP 2.0 聚焦解决个人知识和行动系统的分裂。您可以在思源笔记中撰写任务列表,然后一键同步拉取,无需在工具间手动搬运数据。',
+                          '在思源中安装 Tempo 插件，将文档里的待办任务块（- [ ]）导入 Tempo。需在「我的」生成配对码后在思源插件中绑定。',
                     ),
                     _OnboardingStep(
                       step: 1,

@@ -535,16 +535,31 @@
 
 <!-- ==================== HEADER ==================== -->
 <div class="doc-header">
-  <h1>Tempo — MVP 实验设计<span class="version-badge">v2.1</span></h1>
+  <h1>Tempo — MVP 实验设计<span class="version-badge">v2.2</span></h1>
   <div class="subtitle">智能待办 App（Flutter）+ 思源笔记集成 · 基于 MVP 实验方法论重构</div>
   <div class="meta">
-    <span>v2.1 实施交付版</span>
-    <span>2026-06-18</span>
+    <span>v2.2 实现对齐版</span>
+    <span>2026-06-22</span>
     <span>Flutter · Supabase · TypeScript</span>
   </div>
 </div>
 
 <!-- ==================== CHANGELOG ==================== -->
+<div class="changelog">
+  <h4>📋 v2.2 变更摘要（实现对齐 · UX 诚实化）</h4>
+  <ul>
+    <li><span class="label label-new">完成</span> 语音创建产品化：火山流式 ASR（asr-session / asr-relay）+ parse-task 已部署；Spike 升级为正式功能</li>
+    <li><span class="label label-new">完成</span> 全天任务 <code>is_all_day</code>：仅日期无具体时间（如「星期四去吃 KFC」）不再默认 9:00</li>
+    <li><span class="label label-new">完成</span> 工作/生活分类 + 列表 Tab「全部」；餐饮类语音任务自动归「生活」</li>
+    <li><span class="label label-new">完成</span> 任务到期提醒真实开关：设置页 Switch 控制；全天任务不推送；有具体时间才调度通知</li>
+    <li><span class="label label-new">完成</span> 思源真实集成 MVP：官方 Plugin 子类 + esbuild 打包 <code>tempo-sync.zip</code>；<code>siyuan_bindings</code> 表 + 配对状态回读</li>
+    <li><span class="label label-chg">诚实化</span> 系统日历、AI 智能排期设置项改为「即将推出」占位，移除假 subtitle</li>
+    <li><span class="label label-cut">移除</span> 摇一摇反馈（sensors_plus）；仅保留「我的」页反馈入口 → Supabase <code>feedback</code> 表</li>
+    <li><span class="label label-chg">优化</span> 任务列表点击区域扩大；任务详情页交互修复</li>
+    <li><span class="label label-new">测试</span> 54 项 Flutter 测试通过；迁移 0004（is_all_day）、0005（siyuan_sync）已 push</li>
+  </ul>
+</div>
+
 <div class="changelog">
   <h4>📋 v2.1 变更摘要（Phase 1 实施交付版）</h4>
   <ul>
@@ -582,18 +597,18 @@
 <!-- ==================== 实现进度 ==================== -->
 <div class="section">
   <span class="section-number">实现进度</span>
-  <h2>Phase 1 实施交付状态（v2.1）</h2>
+  <h2>当前实现状态（v2.2）</h2>
 
   <div class="status-legend">
     <span><span class="status status-done">✅ 已完成</span></span>
     <span><span class="status status-partial">🔧 部分完成</span></span>
-    <span><span class="status status-todo">⬜ 未开始</span></span>
+    <span><span class="status status-todo">⬜ 未开始 / 即将推出</span></span>
   </div>
 
   <div class="progress-bar-wrap" style="height: 14px;">
     <div class="progress-bar-fill" style="width: 100%;"></div>
   </div>
-  <div class="progress-text">Phase 1 整体进度 100%（11/11 项完成）— 2026-06-18 由团队 SOP 走完交付（PM→架构→工程→QA 2 轮）</div>
+  <div class="progress-text">Phase 1 核心闭环 100%（14/14 项）— 2026-06-22 实现对齐更新；54 项测试通过</div>
 
   <table>
     <thead>
@@ -615,9 +630,14 @@
         <td>文本 inline 创建 + Checkbox 完成切换 + 左滑删除 + 详情页编辑 + 排序分组 + 5s 撤回；Drift v2 schema + Tasks Companion 新增 syncPending</td>
       </tr>
       <tr>
-        <td>语音创建任务（客户端 + 后端）</td>
+        <td>语音创建任务（流式 ASR + LLM）</td>
         <td><span class="status status-done">✅ 已完成</span></td>
-        <td>Flutter 客户端完整（push-to-talk、录音、服务层、5s 撤回、草稿确认）；后端统一为 parse-task Edge Function（multipart 语音路径 + json 文本路径），待部署</td>
+        <td>VolcengineStreamingAsr + asr-session / asr-relay 已部署；parse-task 解析标题/日期/分类/置信度；全天任务 is_all_day；餐饮→生活；5s 撤回 + 草稿确认</td>
+      </tr>
+      <tr>
+        <td>工作/生活分类 + 列表筛选</td>
+        <td><span class="status status-done">✅ 已完成</span></td>
+        <td>任务 Tab 工作·生活·全部；语音/文本解析自动分类；全天任务展示优化</td>
       </tr>
       <tr>
         <td>本地缓存 + 在线优先同步</td>
@@ -635,9 +655,9 @@
         <td>TextParseService 调 parse-task json 路径；网络失败 / 解析失败 / 置信度不足 → null → DatePicker 降级；dueDate 合理性校验（不早于 now-1 天）</td>
       </tr>
       <tr>
-        <td>本地通知提醒</td>
+        <td>任务到期提醒（可开关）</td>
         <td><span class="status status-done">✅ 已完成</span></td>
-        <td>NotificationService zonedSchedule 双通知（reminder=dueDate-15min、due=dueDate）；完成 / 删除任务取消通知；tap → router.go('/tasks/:id') 跳详情页</td>
+        <td>设置页「任务到期提醒」Switch 真实接入；isRemindersEnabled 持久化；全天任务不推送；有具体时间才调度 reminder+due 双通知；完成/删除取消</td>
       </tr>
       <tr>
         <td>Supabase Auth + 数据同步</td>
@@ -645,9 +665,9 @@
         <td>AuthService Magic Link 登录 + session 流；routerProvider redirect 守卫（onboarding → login → tasks）；Deep Link tempo:// 唤起 + 自动登录</td>
       </tr>
       <tr>
-        <td>思源 Petal 插件（单向导入）</td>
+        <td>思源 Petal 插件（单向导入 MVP）</td>
         <td><span class="status status-done">✅ 已完成</span></td>
-        <td>TypeScript 插件完整：plugin.json / index / api / pairing / storage / ui / scanner / sync；配对码绑定（6 位码 5 分钟有效）+ token 交换 + localStorage 存储；扫描任务块 + custom-tempo-id 幂等写回</td>
+        <td>官方 Plugin 子类 + fetchSyncPost 扫描；esbuild 打包 dist/tempo-sync.zip；siyuan_bindings 表 + create_task_from_siyuan RPC 幂等；App 配对码 + 真实绑定状态回读</td>
       </tr>
       <tr>
         <td>首次使用引导（3 屏 onboarding）</td>
@@ -657,12 +677,12 @@
       <tr>
         <td>App 内反馈入口</td>
         <td><span class="status status-done">✅ 已完成</span></td>
-        <td>ShakeDetector 加速度传感器 + 阈值防抖（仅登录用户启用）；FeedbackDialog 文字 + 设备信息 → Supabase feedback 表；SettingsPage 含反馈按钮</td>
+        <td>「我的」页 FeedbackDialog → Supabase feedback 表（含设备信息）；已移除摇一摇入口</td>
       </tr>
       <tr>
         <td>AI 智能排期</td>
-        <td><span class="status status-todo">⬜ Phase 2</span></td>
-        <td>页面占位，React 原型仅作参考；需 Phase 0 Wizard-of-Oz 实验 + LLM 排期 Benchmark 验证 H1/H3</td>
+        <td><span class="status status-todo">⬜ 即将推出</span></td>
+        <td>计划页占位 + 设置项「即将推出」；需 Phase 0 Wizard-of-Oz 实验 + LLM 排期 Benchmark 验证 H1/H3</td>
       </tr>
       <tr>
         <td>子任务 / 标签 / 重复规则</td>
@@ -671,8 +691,8 @@
       </tr>
       <tr>
         <td>系统日历订阅</td>
-        <td><span class="status status-todo">⬜ Phase 2</span></td>
-        <td>无相关依赖或代码</td>
+        <td><span class="status status-todo">⬜ 即将推出</span></td>
+        <td>设置项占位「即将推出」；无 device_calendar 等依赖</td>
       </tr>
       <tr>
         <td>Android / iOS Widget</td>
@@ -683,9 +703,10 @@
   </table>
 
   <div class="highlight-box green" style="margin-top: 20px;">
-    <strong>🎉 Phase 1 全部 11 项功能已交付</strong>
-    v2.1 实施记录（含 PRD + 系统设计 + 12 个任务实现）保存在 <code>deliverables/software-tempo-phase1/</code>：prd.md / design.md / class-diagram.mermaid / sequence-diagram.mermaid。<br>
-    遗留：① widget_test.dart smoke test 需 mock Supabase；② sync_service_test.dart / task_repository_test.dart 待补；③ Deep Link 当前用 custom scheme <code>tempo://</code>，公开测试前迁移 Universal Link / App Link。
+    <strong>🎉 Phase 1 核心闭环已交付并持续迭代</strong>
+    v2.2 新增：流式语音产品化、全天任务、分类筛选、提醒开关、思源真实 MVP、设置页诚实化。<br>
+    测试：54 项 <code>flutter test</code> 通过。迁移 0004（is_all_day）、0005（siyuan_sync）已 push。<br>
+    遗留：① Deep Link 当前用 custom scheme <code>tempo://</code>，公开测试前迁移 Universal Link / App Link；② 思源状态回写仍为 Phase 3。
   </div>
 </div>
 
@@ -724,8 +745,8 @@
       </tr>
       <tr>
         <td><span class="tag tag-orange">重要</span></td>
-        <td>H4：火山引擎 ASR 真实环境识别准确率达标</td>
-        <td>下一步技术 Spike（Flutter 按住说话 → 后端代理 → 本地创建）</td>
+        <td>H4：火山引擎流式 ASR 真实环境识别准确率达标</td>
+        <td>Phase 1 已产品化（v2.2）；持续监控撤回率与字段正确率</td>
       </tr>
       <tr>
         <td><span class="tag tag-orange">重要</span></td>
@@ -827,12 +848,13 @@
     <div class="card">
       <div class="card-header">
         <div class="card-icon" style="background: var(--green-light);">📋</div>
-        <div class="card-title">任务管理（基础版）<span class="status status-partial">🔧 部分完成</span></div>
+        <div class="card-title">任务管理（基础版）<span class="status status-done">✅ 已完成</span></div>
       </div>
       <ul class="feature-list">
-        <li class="done">任务 CRUD：标题、优先级、截止日期、列表组织</li>
+        <li class="done">任务 CRUD：标题、优先级、截止日期、工作/生活分类</li>
+        <li class="done">全天任务 is_all_day（仅日期无具体时间）</li>
+        <li class="done">列表 Tab：工作 · 生活 · 全部</li>
         <li class="cut">智能过滤器（今天 / 本周 / 已过期 / 自定义）— 延后到 Phase 2</li>
-        <li class="cut">自然语言日期解析（本地规则引擎，不用 LLM）— 未开始</li>
         <li class="cut">子任务、标签、重复规则 — 延后到 Phase 2</li>
       </ul>
     </div>
@@ -840,11 +862,11 @@
     <div class="card">
       <div class="card-header">
         <div class="card-icon" style="background: var(--blue-light);">📅</div>
-        <div class="card-title">日历视图（精简版）<span class="status status-todo">⬜ 未开始</span></div>
+        <div class="card-title">日历视图（精简版）<span class="status status-done">✅ 已完成</span></div>
       </div>
       <ul class="feature-list">
-        <li>月视图：任务按日期标记，点击展开列表</li>
-        <li>周视图：时间轴 + 任务块</li>
+        <li class="done">月视图：任务按日期标记，点击展开列表</li>
+        <li class="done">周视图：时间轴 + 任务块</li>
         <li class="cut">日视图 — 延后到 Phase 2</li>
         <li class="cut">系统日历订阅 — 延后到 Phase 2</li>
         <li class="cut">拖拽排期 — 延后到 Phase 2</li>
@@ -854,12 +876,13 @@
     <div class="card">
       <div class="card-header">
         <div class="card-icon" style="background: var(--orange-light);">🔗</div>
-        <div class="card-title">思源单向同步 <span class="tag tag-new" style="font-size:10px;margin-left:4px;">提前</span><span class="status status-todo">⬜ 未开始</span></div>
+        <div class="card-title">思源单向同步 <span class="tag tag-new" style="font-size:10px;margin-left:4px;">MVP</span><span class="status status-done">✅ 已完成</span></div>
       </div>
       <ul class="feature-list">
-        <li>思源 Petal 插件：扫描文档中未完成任务块</li>
-        <li>一键导入到 Tempo，自动写入 custom-tempo-id 关联</li>
-        <li>Supabase webhook 接收导入请求</li>
+        <li class="done">思源 Petal 插件 tempo-sync.zip（esbuild 打包，可安装）</li>
+        <li class="done">配对码绑定 + siyuan_bindings 状态回读</li>
+        <li class="done">扫描任务块 → create_task_from_siyuan RPC 幂等导入</li>
+        <li class="done">写回 custom-tempo-id 关联</li>
         <li class="cut">状态回写 — 延后到 Phase 3</li>
         <li class="cut">Widget 嵌入 — 延后到 Phase 3</li>
       </ul>
@@ -868,13 +891,14 @@
     <div class="card">
       <div class="card-header">
         <div class="card-icon" style="background: var(--purple-light);">🧭</div>
-        <div class="card-title">体验基础 <span class="tag tag-new" style="font-size:10px;margin-left:4px;">新增</span><span class="status status-todo">⬜ 未开始</span></div>
+        <div class="card-title">体验基础 <span class="status status-done">✅ 已完成</span></div>
       </div>
       <ul class="feature-list">
-        <li class="new">简单 onboarding（首次打开 3 屏引导）</li>
-        <li class="new">App 内反馈入口（摇一摇 / 设置页按钮）</li>
-        <li>本地通知提醒（到期前 15 分钟 / 到期时）</li>
-        <li>本地缓存 + 在线优先同步（简化离线方案）</li>
+        <li class="done">3 屏 Onboarding（欢迎 / 功能 / 通知权限）</li>
+        <li class="done">「我的」页反馈入口 → Supabase feedback 表</li>
+        <li class="done">任务到期提醒（可开关；全天任务不推送）</li>
+        <li class="done">本地缓存 + 在线优先同步</li>
+        <li class="done">流式语音创建（按住说话 → ASR → LLM → 自动/草稿）</li>
       </ul>
     </div>
   </div>
@@ -890,7 +914,7 @@
       <tr><td>精力曲线设置页</td><td><span class="tag tag-blue">→ 简化为默认配置</span></td><td>Phase 2 用默认模式（上高/中中/下低），手动设置在验证通过后做</td></tr>
       <tr><td>每日摘要推送</td><td><span class="tag tag-red">砍掉</span></td><td>验证排期质量前，推送不准确的排期损害用户信任</td></tr>
       <tr><td>完整离线优先</td><td><span class="tag tag-blue">→ 简化为本地缓存+在线优先</span></td><td>保留 Drift 本地缓存，完整的冲突解决逻辑延后到 Phase 2</td></tr>
-      <tr><td>语音创建任务</td><td><span class="tag tag-accent">→ 下一步 Spike</span></td><td>不做完整语音产品化，先验证火山 ASR + 豆包解析 + 无感创建是否可行</td></tr>
+      <tr><td>语音创建任务</td><td><span class="tag tag-green">✅ Phase 1 已交付</span></td><td>v2.2 流式 ASR 产品化；全天任务 + 分类解析</td></tr>
       <tr><td>思源双向同步 & Widget</td><td><span class="tag tag-purple">→ Phase 3</span></td><td>单向同步即足够验证"笔记↔任务"价值假设</td></tr>
       <tr><td>子任务 & 标签 & 重复规则</td><td><span class="tag tag-orange">→ Phase 2</span></td><td>基础 CRUD 已够 MVP 验证，高级组织功能延后</td></tr>
     </tbody>
@@ -899,7 +923,7 @@
   <h3>P1 — Phase 2 AI 差异化（Phase 1 验证通过后启动）</h3>
   <div style="margin: 8px 0;">
     <span class="tag tag-purple">AI 智能排期</span>
-    <span class="tag tag-purple">语音创建产品化（Spike 通过后）</span>
+    <span class="tag tag-purple">语音优化（字幕/快捷入口）</span>
     <span class="tag tag-purple">日视图 + 拖拽排期</span>
     <span class="tag tag-purple">系统日历订阅</span>
     <span class="tag tag-purple">精力曲线（默认配置版）</span>
@@ -920,12 +944,12 @@
       <tr><th>功能</th><th>滴答清单</th><th>Todoist</th><th>Tempo Phase 1</th><th>Tempo Phase 2+</th></tr>
     </thead>
     <tbody>
-      <tr><td>自然语言创建</td><td>✅ 日期识别</td><td>✅ 日期+项目+优先级</td><td>✅ 日期识别（本地规则）</td><td>✅ LLM 增强解析</td></tr>
-      <tr><td>AI 排期</td><td>❌</td><td>❌</td><td>—</td><td>✅ 原生 AI 排入时间块</td></tr>
+      <tr><td>自然语言创建</td><td>✅ 日期识别</td><td>✅ 日期+项目+优先级</td><td>✅ LLM 解析（parse-task）</td><td>✅ 增强 + AI 排期</td></tr>
+      <tr><td>AI 排期</td><td>❌</td><td>❌</td><td>— 占位</td><td>✅ 原生 AI 排入时间块</td></tr>
       <tr><td>AI 任务拆解</td><td>❌</td><td>✅ Todoist Assist</td><td>—</td><td>✅ LLM 拆解</td></tr>
-      <tr><td>日历视图</td><td>✅ 年/月/周/日</td><td>✅ 周/月</td><td>✅ 月/周</td><td>✅ 月/周/日</td></tr>
-      <tr><td>笔记同步</td><td>❌</td><td>❌</td><td>✅ 思源单向导入</td><td>✅ 双向同步 + Widget</td></tr>
-      <tr><td>语音创建</td><td>✅ Siri 快捷指令</td><td>❌</td><td>—</td><td>✅ 流式 ASR + NLP</td></tr>
+      <tr><td>日历视图</td><td>✅ 年/月/周/日</td><td>✅ 周/月</td><td>✅ 月/周（应用内）</td><td>✅ 月/周/日 + 系统日历</td></tr>
+      <tr><td>笔记同步</td><td>❌</td><td>❌</td><td>✅ 思源单向导入 MVP</td><td>✅ 双向同步 + Widget</td></tr>
+      <tr><td>语音创建</td><td>✅ Siri 快捷指令</td><td>❌</td><td>✅ 流式 ASR + LLM</td><td>✅ 优化 + 系统级入口</td></tr>
     </tbody>
   </table>
 </div>
@@ -959,13 +983,13 @@
         <strong>思源 HTTP API</strong>
         <small>localhost:6806</small>
       </div>
-      <div class="arch-box">
-        <strong>LLM API</strong>
-        <small>语音 Spike 用于文本解析</small>
-      </div>
       <div class="arch-box" style="background: var(--red-light); border-color: #fecaca;">
         <strong>火山引擎 ASR</strong>
-        <small>语音 Spike 接入</small>
+        <small>asr-session · asr-relay 流式识别</small>
+      </div>
+      <div class="arch-box" style="background: var(--blue-light); border-color: #bfdbfe;">
+        <strong>豆包 LLM</strong>
+        <small>parse-task 文本/语音解析</small>
       </div>
     </div>
   </div>
@@ -980,7 +1004,8 @@
       <tr><td>日历组件</td><td><code>table_calendar</code> + 自定义</td><td>月视图用现成组件，周视图自定义实现</td></tr>
       <tr><td>网络请求</td><td><code>dio</code></td><td>拦截器、重试、Token 刷新成熟</td></tr>
       <tr><td>本地通知</td><td><code>flutter_local_notifications</code></td><td>跨平台通知标准方案</td></tr>
-      <tr><td>NLP 解析</td><td>本地规则（chrono 库）</td><td>Phase 1 不做 LLM 调用，用 chrono 解析中文日期</td></tr>
+      <tr><td>NLP 解析</td><td>豆包 LLM（parse-task Edge Function）</td><td>文本/语音统一解析；离线降级 DatePicker；全天 is_all_day</td></tr>
+      <tr><td>流式 ASR</td><td>VolcengineStreamingAsr + WebSocket</td><td>asr-relay 中继；密钥仅存 Edge Function</td></tr>
     </tbody>
   </table>
 
@@ -1009,6 +1034,7 @@
   description  TEXT,
   priority     SMALLINT DEFAULT 0,
   due_date     TIMESTAMPTZ,
+  is_all_day   BOOLEAN DEFAULT false,
   is_completed BOOLEAN DEFAULT false,
   completed_at TIMESTAMPTZ,
   siyuan_block_id TEXT,
@@ -1016,6 +1042,14 @@
   created_at   TIMESTAMPTZ DEFAULT now(),
   updated_at   TIMESTAMPTZ DEFAULT now(),
   creation_source TEXT DEFAULT 'text'
+);
+
+<span class="comment">-- v2.2 新增：思源绑定状态</span>
+<span class="keyword">CREATE TABLE</span> <span class="type">siyuan_bindings</span> (
+  user_id       UUID PRIMARY KEY REFERENCES auth.users(id),
+  notebook_id   TEXT,
+  last_sync_at  TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ DEFAULT now()
 );
 
 <span class="comment">-- Phase 2 新增字段：parent_id, start_date, duration_min, repeat_rule, tags</span>
@@ -1028,7 +1062,23 @@
   <span class="section-number">05</span>
   <h2>思源笔记集成方案</h2>
 
-  <h3>Phase 1 单向同步（思源 → Tempo）</h3>
+  <h3>Phase 1 单向同步（思源 → Tempo）— 已实现</h3>
+  <div class="flow-steps">
+    <div class="flow-step">Tempo 生成配对码</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">插件输入配对码换 token</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">扫描 - [ ] 任务块</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">RPC 幂等创建 + custom-tempo-id</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">App 展示 + 绑定状态</div>
+  </div>
+  <p style="font-size: 13px; color: var(--text-secondary); margin-top: 8px;">
+    插件安装包：<code>siyuan-plugin/dist/tempo-sync.zip</code>。详见 <code>siyuan-plugin/README.zh-CN.md</code>。
+  </p>
+
+  <h3>Phase 1 原设计流程（保留参考）</h3>
   <div class="flow-steps">
     <div class="flow-step">用户写 ☐ 买牛奶</div>
     <div class="flow-arrow">→</div>
@@ -1064,7 +1114,7 @@
   <h2>AI 排期设计（Phase 2 交付，Phase 0 前置验证）</h2>
 
   <div class="highlight-box purple">
-    <strong>⚠️ 前置条件：</strong>AI 排期不进入 Phase 1 代码开发，计划页也不进入近期实现。当前唯一前置 AI 工程验证是语音创建任务 Spike；AI 排期保留为后续独立验证项。
+    <strong>⚠️ 前置条件：</strong>AI 排期不进入 Phase 1 代码开发，计划页标记「即将推出」。语音创建已于 v2.2 产品化；AI 排期保留为 Phase 2 独立验证项。
   </div>
 
   <h3>排期算法流程（设计保留，Phase 2 实现）</h3>
@@ -1094,24 +1144,20 @@
   <span class="section-number">07</span>
   <h2>分期路线图（v2.0 重构）</h2>
   <div class="lead">
-    相比 v1.1，新增 Phase 0（零代码验证）和 Phase 1.5（反馈期），Phase 1 范围收窄约 30%。当前执行顺序调整为：先完成语音创建任务技术 Spike，计划页 / AI 排期暂不进入近期实现。
+    相比 v1.1，新增 Phase 0（零代码验证）和 Phase 1.5（反馈期）。Phase 1 已于 2026-06 交付；v2.2 完成语音产品化与 UX 诚实化。下一步：Phase 1.5 Dogfooding → Phase 2 AI 排期 / 系统日历。
   </div>
 
   <div class="phase pre-dev">
-    <div class="phase-title">Next Spike — AI 语音创建任务技术验证 <span class="phase-status partial">🔧 客户端完成，后端待部署</span></div>
-    <div class="phase-duration">预估 2-4 天，技术 Spike</div>
+    <div class="phase-title">语音创建任务 <span class="phase-status done">✅ 已产品化</span></div>
+    <div class="phase-duration">v2.2 由 Spike 升级为正式功能</div>
     <div class="card" style="margin-top: 8px;">
       <ul class="feature-list">
-        <li class="done">Flutter App：按住麦克风录音，松手提交，滑开取消</li>
-        <li>后端代理：App 不存密钥，由 Supabase Edge Function 调火山 ASR + 豆包文本模型</li>
-        <li class="done">LLM 解析核心字段：标题、描述、截止时间、优先级、置信度、原始转写</li>
-        <li class="done">无感创建：高置信度自动写入本地 Drift，低置信度进入可编辑草稿</li>
-        <li class="done">5 秒撤回：自动创建后可撤销，避免误识别污染任务库</li>
+        <li class="done">Flutter：按住麦克风录音，松手提交，滑开取消</li>
+        <li class="done">流式 ASR：asr-session + asr-relay WebSocket 中继</li>
+        <li class="done">parse-task：标题、描述、截止时间、分类、is_all_day、置信度</li>
+        <li class="done">无感创建 + 5 秒撤回 + 低置信度草稿确认</li>
+        <li class="done">餐饮类 → 生活；仅日期 → 全天任务</li>
       </ul>
-      <div style="margin-top: 12px;">
-        <span class="tag tag-accent">近期唯一 AI 工程验证</span>
-        <span class="tag tag-blue">计划页暂缓</span>
-      </div>
     </div>
   </div>
 
@@ -1134,20 +1180,20 @@
   </div>
 
   <div class="phase">
-    <div class="phase-title">Phase 1 — 待办核心 + 日历 + 思源单向同步（最小闭环）<span class="phase-status partial">🔧 进行中</span></div>
-    <div class="phase-duration">预估 6-8 周</div>
+    <div class="phase-title">Phase 1 — 待办核心 + 日历 + 思源 + 语音（最小闭环）<span class="phase-status done">✅ 已交付</span></div>
+    <div class="phase-duration">6-8 周（2026-06 交付，v2.2 持续迭代）</div>
     <div class="card" style="margin-top: 8px;">
       <ul class="feature-list">
         <li class="done">Flutter 项目脚手架（Riverpod + GoRouter + Drift）</li>
-        <li class="partial">任务 CRUD（基础版）：标题、优先级、截止日期、列表组织</li>
-        <li>月视图 + 周视图日历</li>
-        <li>自然语言日期解析（本地 chrono 规则引擎）</li>
-        <li>本地通知提醒（到期前 15 分钟 / 到期时）</li>
-        <li>Supabase 接入：Auth + 基础数据同步</li>
-        <li>思源 Petal 插件：扫描未完成任务块 → 一键导入 Tempo</li>
-        <li>首次使用引导（3 屏 onboarding）</li>
-        <li>App 内反馈入口（摇一摇 / 设置页按钮）</li>
-        <li class="partial">本地缓存 + 在线优先同步</li>
+        <li class="done">任务 CRUD + 工作/生活分类 + 全天任务</li>
+        <li class="done">月视图 + 周视图日历</li>
+        <li class="done">LLM 自然语言日期解析（parse-task）</li>
+        <li class="done">任务到期提醒（可开关）</li>
+        <li class="done">Supabase Auth + 在线优先同步</li>
+        <li class="done">思源插件 MVP + 配对 + 单向导入</li>
+        <li class="done">3 屏 Onboarding</li>
+        <li class="done">「我的」页反馈入口</li>
+        <li class="done">流式语音创建任务</li>
       </ul>
       <div style="margin-top: 12px;">
         <span class="tag tag-green">内部 Dogfooding</span>
@@ -1182,7 +1228,7 @@
         <li>AI 日计划排期（精力曲线默认配置 + 日历空闲）</li>
         <li>日视图时间线 + 拖拽排期</li>
         <li>系统日历订阅（iOS/Android）</li>
-        <li>语音创建产品化：基于 Spike 结果决定是否做流式字幕、快捷入口和使用率优化</li>
+        <li>语音创建优化：流式字幕、快捷入口、使用率数据（基础能力已交付）</li>
         <li>计划页验证：AI 日计划排期需另行验证，不作为近期实现范围</li>
         <li>子任务、标签、重复规则</li>
       </ul>
@@ -1263,7 +1309,7 @@
     <div class="highlight-box red">
       <strong>🔴 单人技能广度风险</strong>
       项目需同时精通 Flutter + Supabase + TypeScript（思源插件）+ LLM Prompt 工程 + 火山引擎 ASR。单人同时覆盖 5 个领域，容易每个模块都做 60 分。<br>
-      应对：Phase 1 不做完整 LLM / ASR 产品化；仅把语音创建任务作为短周期技术 Spike，验证通过后再决定是否产品化。
+      应对：Phase 1 语音已产品化（v2.2）；Phase 2 AI 排期前做成本测算与 Benchmark。
     </div>
     <div class="highlight-box orange">
       <strong>🟠 LLM API 成本随使用增长</strong>
@@ -1281,9 +1327,9 @@
       应对：Phase 2 日视图拖拽前先做平台行为调研，必要时用 platform channel 调用原生组件。
     </div>
     <div class="highlight-box blue">
-      <strong>🟡 火山引擎 ASR 网络依赖 + 无 Flutter SDK</strong>
-      流式识别需稳定网络；可能需通过 platform channel 或 WebSocket 直连。<br>
-      应对：下一步先做 Flutter 按住说话 + Supabase Edge Function 代理 Spike；真实凭据只放后端，App 不直连火山或豆包。
+      <strong>🟡 火山引擎 ASR 网络依赖</strong>
+      流式识别需稳定网络；Flutter 通过 WebSocket 经 asr-relay 中继，密钥仅存 Edge Function。<br>
+      应对：v2.2 已产品化；监控撤回率；弱网时降级为文本创建。
     </div>
   </div>
 </div>
@@ -1320,7 +1366,7 @@
     </tbody>
   </table>
 
-  <h3>Next Spike 验收指标（语音创建任务）</h3>
+  <h3>语音创建验收指标（v2.2 已达标）</h3>
   <table>
     <thead><tr><th>指标</th><th>目标</th><th>度量方式</th></tr></thead>
     <tbody>
@@ -1538,8 +1584,8 @@
 
 <!-- ==================== FOOTER ==================== -->
 <div class="doc-footer">
-  <p>Tempo MVP 实验设计 · v2.1 · 2026-06-18</p>
-  <p style="margin-top: 4px;">v2.1 = v2.0 方法论 + Phase 1 实施交付版。Phase 1 全部 10 项功能 + 语音后端 Spike 已完成，~52 个文件（PRD+设计+Flutter+Supabase+思源插件），团队 SOP 走完（PM→架构→工程→QA 2 轮）。设计 / PRD / 实施记录同存于 <code>deliverables/software-tempo-phase1/</code>。Phase 0、Phase 1.5、Phase 2-4 仍保留为后续方向验证框架。</p>
+  <p>Tempo MVP 实验设计 · v2.2 · 2026-06-22</p>
+  <p style="margin-top: 4px;">v2.2 = v2.1 Phase 1 交付 + 实现对齐：流式语音产品化、全天任务、分类筛选、提醒开关、思源真实 MVP、设置诚实化、移除摇一摇。54 项测试通过。详见 <code>README.md</code>。</p>
   <p style="margin-top: 8px; font-size: 11px; color: var(--accent);">审查方：OPC 一人公司专家团 · MVP 实验设计师 验真</p>
 </div>
 

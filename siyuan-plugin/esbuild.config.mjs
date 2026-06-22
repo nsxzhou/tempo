@@ -45,7 +45,12 @@ await esbuild.build({
   format: 'cjs',
   platform: 'browser',
   target: ['es2020'],
+  minify: true,
+  legalComments: 'none',
   external: ['siyuan'],
+  loader: {
+    '.css': 'text',
+  },
   define: {
     __SUPABASE_URL__: JSON.stringify(supabaseUrl),
     __SUPABASE_ANON_KEY__: JSON.stringify(supabaseAnonKey),

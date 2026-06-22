@@ -3,19 +3,25 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIST="$ROOT/dist"
-PKG="$DIST/package"
-ZIP="$DIST/tempo-sync.zip"
+STAGE="$DIST/package"
+PLUGIN_NAME="$(node -p "require('$ROOT/plugin.json').name")"
+PKG="$STAGE/$PLUGIN_NAME"
+ZIP="$DIST/${PLUGIN_NAME}.zip"
+LEGACY_ZIP="$DIST/tempo-sync.zip"
 
 cd "$ROOT"
 
 npm run build
 
-rm -rf "$PKG"
+rm -rf "$STAGE"
 mkdir -p "$PKG"
 
 cp "$ROOT/dist/index.js" "$PKG/index.js"
 cp "$ROOT/plugin.json" "$PKG/plugin.json"
 cp "$ROOT/README.zh-CN.md" "$PKG/README.zh-CN.md"
+if [[ -d "$ROOT/i18n" ]]; then
+  cp -R "$ROOT/i18n" "$PKG/i18n"
+fi
 
 if [[ ! -f "$ROOT/icon.png" ]]; then
   python3 - <<'PY'
@@ -44,7 +50,19 @@ fi
 
 cp "$ROOT/icon.png" "$PKG/icon.png"
 
-rm -f "$ZIP"
-(cd "$PKG" && zip -r "$ZIP" .)
+rm -f "$ZIP" "$LEGACY_ZIP"
+(cd "$STAGE" && zip -r "$ZIP" "$PLUGIN_NAME")
+cp "$ZIP" "$LEGACY_ZIP"
 
-echo "Package ready: $ZIP"
+if ! unzip -Z1 "$ZIP" | grep -qx "${PLUGIN_NAME}/plugin.json"; then
+  echo "ERROR: zip must contain ${PLUGIN_NAME}/plugin.json (folder name must match plugin.json name)"
+  exit 1
+fi
+
+echo "Package ready: $ZIP (also copied to $LEGACY_ZIP)"
+echo "Install folder must be: data/plugins/${PLUGIN_NAME}/"
+SIZE_KB=$(( $(stat -f%z "$PKG/index.js" 2>/dev/null || stat -c%s "$PKG/index.js") / 1024 ))
+echo "index.js size: ${SIZE_KB} KB"
+if [ "$SIZE_KB" -gt 500 ]; then
+  echo "WARNING: index.js exceeds 500KB; SiYuan may fail to load the plugin."
+fi

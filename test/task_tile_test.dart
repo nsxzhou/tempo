@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tempo/core/constants/app_constants.dart';
 import 'package:tempo/core/theme/app_theme.dart';
@@ -9,6 +10,7 @@ Task _task({
   String title = '牛奶',
   String? description,
   DateTime? dueDate,
+  bool isAllDay = false,
   TaskPriority priority = TaskPriority.none,
   String? tag,
 }) {
@@ -19,6 +21,7 @@ Task _task({
     title: title,
     description: description,
     dueDate: dueDate,
+    isAllDay: isAllDay,
     priority: priority,
     tag: tag,
     createdAt: now,
@@ -64,5 +67,34 @@ void main() {
     );
 
     expect(find.text('@生活'), findsOneWidget);
+  });
+
+  testWidgets('all-day task shows date without time', (tester) async {
+    await tester.pumpWidget(
+      wrap(TaskTile(
+        task: _task(
+          dueDate: DateTime(2026, 6, 25),
+          isAllDay: true,
+        ),
+      )),
+    );
+
+    expect(find.text('6月25日'), findsOneWidget);
+    expect(find.textContaining(':'), findsNothing);
+  });
+
+  testWidgets('tap on chevron triggers onTap', (tester) async {
+    var tapped = false;
+    await tester.pumpWidget(
+      wrap(TaskTile(
+        task: _task(),
+        onTap: () => tapped = true,
+      )),
+    );
+
+    await tester.tap(find.byIcon(LucideIcons.chevron_right));
+    await tester.pump();
+
+    expect(tapped, isTrue);
   });
 }

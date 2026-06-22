@@ -19,5 +19,28 @@ void main() {
       expect(isDueInWeekRange(inSixDays, now), isTrue);
       expect(isDueInWeekRange(afterWeek, now), isFalse);
     });
+
+    test('isTaskOverdue treats all-day tasks as due until end of day', () {
+      final due = DateTime(2026, 6, 19);
+      final morning = DateTime(2026, 6, 19, 9);
+      final nextDay = DateTime(2026, 6, 20, 1);
+
+      expect(
+        isTaskOverdue(dueDate: due, isAllDay: true, isCompleted: false, now: morning),
+        isFalse,
+      );
+      expect(
+        isTaskOverdue(dueDate: due, isAllDay: true, isCompleted: false, now: nextDay),
+        isTrue,
+      );
+    });
+
+    test('formatTaskDueLabel hides time for all-day tasks', () {
+      final due = DateTime(2026, 6, 25);
+      expect(
+        formatTaskDueLabel(dueDate: due, isAllDay: true),
+        '6月25日',
+      );
+    });
   });
 }

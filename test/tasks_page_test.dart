@@ -1,11 +1,15 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:tempo/core/constants/app_constants.dart';
 import 'package:tempo/app_providers.dart';
+import 'package:tempo/core/router/app_router.dart';
 import 'package:tempo/features/tasks/data/notification_service.dart';
+import 'package:tempo/features/tasks/data/text_parse_service.dart';
 import 'package:tempo/features/tasks/data/voice_task_parse_result.dart';
-import 'package:tempo/features/tasks/data/voice_task_service.dart';
 import 'package:tempo/features/tasks/domain/task.dart';
 import 'package:tempo/features/tasks/presentation/tasks_page.dart';
 
@@ -19,79 +23,183 @@ void main() {
   testWidgets('high confidence voice parse creates task and supports undo',
       (tester) async {
     final repository = FakeTaskRepository();
-    final recorder = FakeVoiceRecorder();
-    final service = FakeVoiceTaskService(result: _voiceResult());
+    final session = FakeStreamingVoiceSession();
+    final parseService = FakeTextParseService(result: _voiceResult());
 
     await _pumpTasksPage(
       tester,
       repository: repository,
-      recorder: recorder,
-      service: service,
+      session: session,
+      parseService: parseService,
     );
 
     await _submitVoice(tester);
 
-    expect(recorder.started, isTrue);
-    expect(recorder.stopped, isTrue);
-    expect(service.parsedFiles, ['/tmp/voice.m4a']);
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 4));
+
+    expect(session.started, isTrue);
+    expect(session.stopped, isTrue);
     expect(repository.tasks, hasLength(1));
     expect(repository.tasks.single.title, '提交设计稿');
     expect(repository.tasks.single.creationSource, 'voice');
     expect(find.textContaining('已创建语音任务'), findsOneWidget);
 
     await tester.tap(find.text('撤回'));
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(repository.deletedTaskIds, ['task-0']);
     await repository.dispose();
+    await session.dispose();
   });
 
   testWidgets('low confidence voice parse opens editable draft', (tester) async {
     final repository = FakeTaskRepository();
-    final recorder = FakeVoiceRecorder();
-    final service =
-        FakeVoiceTaskService(result: _voiceResult(confidence: 0.52));
+    final session = FakeStreamingVoiceSession();
+    final parseService =
+        FakeTextParseService(result: _voiceResult(confidence: 0.52));
 
     await _pumpTasksPage(
       tester,
       repository: repository,
-      recorder: recorder,
-      service: service,
+      session: session,
+      parseService: parseService,
     );
 
     await _submitVoice(tester);
 
-    expect(repository.tasks, isEmpty);
-    expect(find.text('需要确认语音任务'), findsOneWidget);
-
-    await tester.tap(find.text('创建任务'));
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
+
+    expect(repository.tasks, isEmpty);
+    expect(find.text('确认语音任务'), findsOneWidget);
+
+    await tester.tap(find.text('创建'));
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 4));
 
     expect(repository.tasks, hasLength(1));
     expect(repository.tasks.single.title, '提交设计稿');
     await repository.dispose();
+    await session.dispose();
   });
 
   testWidgets('backend error does not create a task', (tester) async {
     final repository = FakeTaskRepository();
-    final recorder = FakeVoiceRecorder();
-    final service = FakeVoiceTaskService(
-      error: const VoiceTaskException('语音解析服务暂时不可用（500）。', statusCode: 500),
-    );
+    final session = FakeStreamingVoiceSession();
+    final parseService = FakeTextParseService();
 
     await _pumpTasksPage(
       tester,
       repository: repository,
-      recorder: recorder,
-      service: service,
+      session: session,
+      parseService: parseService,
     );
 
     await _submitVoice(tester);
 
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
     expect(repository.tasks, isEmpty);
-    expect(find.textContaining('语音解析服务暂时不可用'), findsOneWidget);
+    expect(find.textContaining('创建失败'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 4));
+    await repository.dispose();
+    await session.dispose();
+  });
+
+  testWidgets('list delete removes task and supports undo', (tester) async {
+    final repository = FakeTaskRepository();
+    final session = FakeStreamingVoiceSession();
+    final parseService = FakeTextParseService();
+
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await repository.createTask(title: '面包');
+    await _pumpTasksPage(
+      tester,
+      repository: repository,
+      session: session,
+      parseService: parseService,
+    );
+
+    expect(find.text('面包'), findsOneWidget);
+    final deleteFinder = find.byKey(const ValueKey('task-delete-task-0'));
+    await tester.ensureVisible(deleteFinder);
+    await tester.tap(deleteFinder);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(repository.tasks, isEmpty);
+    expect(repository.deletedTaskIds, ['task-0']);
+    expect(find.textContaining('已删除:面包'), findsOneWidget);
+
+    await tester.tap(find.text('撤回'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(repository.tasks, hasLength(1));
+    expect(repository.tasks.single.title, '面包');
+    await repository.dispose();
+    await session.dispose();
+  });
+
+  testWidgets('category filter shows all segment and filters untagged tasks',
+      (tester) async {
+    final repository = FakeTaskRepository();
+    await repository.createTask(
+      title: '海底捞',
+      tag: AppConstants.tagLife,
+    );
+    await repository.createTask(title: '去吃KFC');
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          taskRepositoryProvider.overrideWithValue(repository),
+          streamingVoiceSessionProvider
+              .overrideWithValue(FakeStreamingVoiceSession()),
+          textParseServiceProvider.overrideWithValue(FakeTextParseService()),
+          notificationServiceProvider.overrideWithValue(_NoopNotificationService()),
+        ],
+        child: const MaterialApp(home: TasksPage()),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('海底捞'), findsOneWidget);
+    expect(find.text('去吃KFC'), findsOneWidget);
+    expect(find.text('全部'), findsOneWidget);
+
+    await tester.tap(find.text('生活'));
+    await tester.pump();
+
+    expect(find.text('海底捞'), findsOneWidget);
+    expect(find.text('去吃KFC'), findsNothing);
+
+    await tester.tap(find.text('全部'));
+    await tester.pump();
+
+    expect(find.text('去吃KFC'), findsOneWidget);
     await repository.dispose();
   });
 }
@@ -99,37 +207,42 @@ void main() {
 Future<void> _pumpTasksPage(
   WidgetTester tester, {
   required FakeTaskRepository repository,
-  required FakeVoiceRecorder recorder,
-  required FakeVoiceTaskService service,
+  required FakeStreamingVoiceSession session,
+  required FakeTextParseService parseService,
 }) async {
+  final navigatorKey = GlobalKey<NavigatorState>();
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         taskRepositoryProvider.overrideWithValue(repository),
-        voiceRecorderProvider.overrideWithValue(recorder),
-        voiceTaskServiceProvider.overrideWithValue(service),
+        streamingVoiceSessionProvider.overrideWithValue(session),
+        textParseServiceProvider.overrideWithValue(parseService),
         notificationServiceProvider.overrideWithValue(_NoopNotificationService()),
+        appNavigatorKeyProvider.overrideWithValue(navigatorKey),
       ],
-      child: const MaterialApp(home: TasksPage()),
+      child: MaterialApp(
+        navigatorKey: navigatorKey,
+        home: const TasksPage(),
+      ),
     ),
   );
   await tester.pump();
 }
 
 Future<void> _submitVoice(WidgetTester tester) async {
-  // 打开语音浮层
   await tester.tap(find.byKey(const ValueKey('voice-fab')));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 300));
-  // 点击 mic 开始录音
   await tester.tap(find.byKey(const ValueKey('voice-mic')));
   await tester.pump();
-  // 点击 mic 停止 → 触发解析
-  await tester.tap(find.byKey(const ValueKey('voice-mic')));
   await tester.pump();
-  // 等待 async 解析 + snackbar
-  await tester.pump(const Duration(milliseconds: 500));
-  await tester.pump(const Duration(milliseconds: 500));
+  expect(find.textContaining('语音采音中'), findsOneWidget);
+  await tester.tap(find.byKey(const ValueKey('voice-mic')));
+  await tester.runAsync(() async {
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+  });
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 VoiceTaskParseResult _voiceResult({double confidence = 0.86}) {
@@ -161,4 +274,13 @@ class _NoopNotificationService implements NotificationService {
 
   @override
   Future<void> cancelAll() async {}
+
+  @override
+  Future<bool> isRemindersEnabled() async => true;
+
+  @override
+  Future<void> setRemindersEnabled(bool enabled) async {}
+
+  @override
+  Future<void> rescheduleAllTasks(Iterable<Task> tasks) async {}
 }

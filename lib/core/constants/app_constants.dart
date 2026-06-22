@@ -10,7 +10,6 @@ class AppConstants {
   static const String appVersion = '0.1.0';
 
   // ── 路由路径 ──
-  static const String routeHome = '/';
   static const String routeTasks = '/tasks';
   static const String routeCalendar = '/calendar';
   static const String routePlan = '/plan';
@@ -19,18 +18,9 @@ class AppConstants {
   static const String routeLogin = '/login';
   static const String routeTaskDetail = '/tasks/:id';
 
-  // ── 优先级 ──
-  static const int priorityNone = 0;
-  static const int priorityP0 = 1; // 紧急
-  static const int priorityP1 = 2; // 高
-  static const int priorityP2 = 3; // 中
-  static const int priorityP3 = 4; // 低
-
   // ── 任务来源 ──
   static const String sourceText = 'text';
-  static const String sourceSiyuan = 'siyuan';
   static const String sourceVoice = 'voice';
-  static const String sourceAi = 'ai';
 
   // ── 任务分类 tag ──
   static const String tagWork = 'work';
@@ -65,6 +55,12 @@ class AppConstants {
       ).isNotEmpty
       ? const String.fromEnvironment('SUPABASE_ANON_KEY')
       : (dotenv.env['SUPABASE_ANON_KEY'] ?? _localAnonKey);
+
+  /// Supabase Edge Function 请求头（Authorization + apikey）。
+  static Map<String, String> get supabaseEdgeHeaders => {
+        'Authorization': 'Bearer $supabaseAnonKey',
+        'apikey': supabaseAnonKey,
+      };
 
   // ── Deep Link ──
   /// Custom URL scheme（方案 B 降级，公开测试前迁移到 Universal Links / App Links）。
@@ -114,4 +110,5 @@ class AppConstants {
 
   // ── 默认列表 ──
   static const String defaultListName = 'Inbox';
+  static const String defaultListId = 'local-inbox';
 }

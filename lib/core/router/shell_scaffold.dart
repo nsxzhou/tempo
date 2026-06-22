@@ -1,7 +1,6 @@
 // ShellScaffold — 底部 4 Tab 自绘容器
 // 用 Stack 包裹 child + 绝对定位 TempoTabBar
-// 替换原 Material NavigationBar
-// 顶部状态栏改用系统原生 + SafeArea(不再自绘 TempoStatusBar)
+// TabBar 与 sheet 同步：AnimatedSlide + AnimatedOpacity
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,7 +28,6 @@ class ShellScaffold extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final index = _currentIndex(context);
     final tabBarVisible = ref.watch(shellTabBarVisibleProvider);
-    // 构造一条伪 path 给 TempoTabBar 用
     final paths = const [
       AppConstants.routeTasks,
       AppConstants.routeCalendar,
@@ -42,7 +40,20 @@ class ShellScaffold extends ConsumerWidget {
       body: Stack(
         children: [
           Positioned.fill(child: child),
-          if (tabBarVisible) TempoTabBar(currentPath: paths[index]),
+          AnimatedSlide(
+            duration: AppTheme.durationMedium,
+            curve: AppTheme.curveOrganic,
+            offset: tabBarVisible ? Offset.zero : const Offset(0, 1),
+            child: AnimatedOpacity(
+              duration: AppTheme.durationMedium,
+              curve: AppTheme.curveOrganic,
+              opacity: tabBarVisible ? 1 : 0,
+              child: IgnorePointer(
+                ignoring: !tabBarVisible,
+                child: TempoTabBar(currentPath: paths[index]),
+              ),
+            ),
+          ),
         ],
       ),
     );

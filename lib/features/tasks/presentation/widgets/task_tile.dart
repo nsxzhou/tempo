@@ -1,23 +1,24 @@
 // ============================================================
 // TaskTile — 任务列表项
-// 自适应布局：仅标题紧凑居中；有描述显示摘要；有 meta 显示 pills
+// 紧凑单行：标题 + 右对齐分类；左滑删除；44px 勾选热区
+// 完成：删除线 → 高度折叠 + 淡出至 0.6 → 移入已完成区
+// 删除：左滑 + 淡出
 // ============================================================
 
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/utils/date_utils.dart';
 import '../../../../core/widgets/tempo/tempo.dart';
 import '../../domain/task.dart';
 
-class TaskTile extends StatelessWidget {
+class TaskTile extends StatefulWidget {
   final Task task;
   final VoidCallback? onTap;
   final VoidCallback? onToggleComplete;
   final VoidCallback? onDelete;
-  final VoidCallback? onTagClick;
   final bool showDelete;
 
   const TaskTile({
@@ -26,230 +27,250 @@ class TaskTile extends StatelessWidget {
     this.onTap,
     this.onToggleComplete,
     this.onDelete,
-    this.onTagClick,
     this.showDelete = false,
   });
 
-  String get _deadlineText {
-    if (task.dueDate == null) return '';
-    if (task.isCompleted) return '已完成';
-    return formatTaskDueLabel(
-      dueDate: task.dueDate!,
-      isAllDay: task.isAllDay,
+  @override
+  State<TaskTile> createState() => _TaskTileState();
+}
+
+class _TaskTileState extends State<TaskTile> {
+  static const double _tileHeight = 52;
+  static const double _checkboxHitSize = 44;
+  static const double _deleteActionExtentRatio = 0.14;
+
+  bool _localCompleted = false;
+  bool _isCollapsing = false;
+  bool _isDeleting = false;
+  double _contentOpacity = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _localCompleted = widget.task.isCompleted;
+    _contentOpacity = widget.task.isCompleted ? 0.6 : 1;
+  }
+
+  @override
+  void didUpdateWidget(TaskTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.task.id != oldWidget.task.id) {
+      _localCompleted = widget.task.isCompleted;
+      _isCollapsing = false;
+      _isDeleting = false;
+      _contentOpacity = widget.task.isCompleted ? 0.6 : 1;
+      return;
+    }
+    if (!oldWidget.task.isCompleted && widget.task.isCompleted && !_isCollapsing) {
+      _localCompleted = true;
+      _contentOpacity = 0.6;
+    } else if (widget.task.isCompleted != _localCompleted && !widget.task.isCompleted) {
+      _localCompleted = false;
+      _contentOpacity = 1;
+    }
+  }
+
+  String? get _categoryLabel {
+    if (widget.task.tag == AppConstants.tagWork) return '@工作';
+    if (widget.task.tag == AppConstants.tagLife) return '@生活';
+    return null;
+  }
+
+  BoxDecoration _shellDecoration(bool completed) => BoxDecoration(
+        color: AppTheme.bg,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        border: Border.all(
+          color: completed ? AppTheme.borderSubtle : AppTheme.borderStrong,
+          width: 0.8,
+        ),
+        boxShadow: completed ? null : AppTheme.shadowSm,
+      );
+
+  Future<void> _handleToggle() async {
+    if (_localCompleted) {
+      widget.onToggleComplete?.call();
+      return;
+    }
+
+    setState(() => _localCompleted = true);
+
+    await Future<void>.delayed(AppTheme.durationFast);
+    if (!mounted) return;
+
+    setState(() {
+      _isCollapsing = true;
+      _contentOpacity = 0.6;
+    });
+
+    await Future<void>.delayed(AppTheme.durationMedium);
+    if (!mounted) return;
+
+    widget.onToggleComplete?.call();
+  }
+
+  Future<void> _handleDelete() async {
+    if (_isDeleting) return;
+    setState(() => _isDeleting = true);
+    await Future<void>.delayed(AppTheme.durationFast);
+    if (!mounted) return;
+    widget.onDelete?.call();
+  }
+
+  Widget _buildRowContent() {
+    final category = _categoryLabel;
+    final completed = _localCompleted;
+
+    return Row(
+      children: [
+        SizedBox(
+          width: _checkboxHitSize,
+          height: _checkboxHitSize,
+          child: Center(
+            child: TempoCheckbox(
+              value: completed,
+              onChanged: (_) => _handleToggle(),
+            ),
+          ),
+        ),
+        Expanded(
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: widget.onTap,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  right: category != null ? 8 : 12,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: AnimatedDefaultTextStyle(
+                        duration: AppTheme.durationFast,
+                        curve: AppTheme.curveOrganic,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: completed ? AppTheme.fgMuted : AppTheme.fg,
+                          decoration: completed
+                              ? TextDecoration.lineThrough
+                              : null,
+                          letterSpacing: -0.2,
+                          height: 1.2,
+                        ),
+                        child: Text(
+                          widget.task.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    if (category != null)
+                      Text(
+                        category,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.fgMuted,
+                          letterSpacing: -0.1,
+                          height: 1.2,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  bool get _hasDescription =>
-      task.description != null && task.description!.trim().isNotEmpty;
-
-  List<Widget> _buildMetaPills() {
-    final isOverdue = task.dueDate != null &&
-        isTaskOverdue(
-          dueDate: task.dueDate!,
-          isAllDay: task.isAllDay,
-          isCompleted: task.isCompleted,
-        );
-    final pills = <Widget>[];
-
-    if (task.priority.value != 0) {
-      pills.add(
-        TempoPillBadge(
-          label: 'P${task.priority.value - 1}',
-          kind: switch (task.priority.value) {
-            1 => TempoBadgeKind.p0,
-            2 => TempoBadgeKind.p1,
-            3 => TempoBadgeKind.p2,
-            _ => TempoBadgeKind.p3,
-          },
+  Widget _buildAnimatedShell({required Widget child}) {
+    return AnimatedOpacity(
+      opacity: _isDeleting ? 0 : _contentOpacity,
+      duration: AppTheme.durationFast,
+      curve: Curves.easeInCubic,
+      child: AnimatedSlide(
+        offset: _isDeleting ? const Offset(-0.15, 0) : Offset.zero,
+        duration: AppTheme.durationFast,
+        curve: Curves.easeInCubic,
+        child: AnimatedSize(
+          duration: AppTheme.durationMedium,
+          curve: AppTheme.curveOrganic,
+          alignment: Alignment.topCenter,
+          clipBehavior: Clip.hardEdge,
+          child: _isCollapsing
+              ? const SizedBox(width: double.infinity, height: 0)
+              : SizedBox(
+                  height: _tileHeight,
+                  width: double.infinity,
+                  child: child,
+                ),
         ),
-      );
-    }
-
-    if (isOverdue && !task.isCompleted) {
-      pills.add(
-        TempoPillBadge(
-          label: '已过期',
-          kind: TempoBadgeKind.error,
-          icon: LucideIcons.circle_alert,
-        ),
-      );
-    } else if (task.dueDate != null) {
-      pills.add(
-        TempoPillBadge(
-          label: _deadlineText,
-          kind: TempoBadgeKind.neutral,
-          uppercase: false,
-          fontSize: 10,
-        ),
-      );
-    }
-
-    if (task.tag == AppConstants.tagWork) {
-      pills.add(_tagPill('@工作'));
-    } else if (task.tag == AppConstants.tagLife) {
-      pills.add(_tagPill('@生活'));
-    }
-
-    if (task.creationSource == AppConstants.sourceSiyuan) {
-      pills.add(
-        TempoPillBadge(
-          label: '思源',
-          kind: TempoBadgeKind.tag,
-          icon: LucideIcons.link_2,
-        ),
-      );
-    } else if (task.creationSource == AppConstants.sourceVoice) {
-      pills.add(
-        TempoPillBadge(
-          label: '语音',
-          kind: TempoBadgeKind.tag,
-          icon: LucideIcons.mic,
-        ),
-      );
-    }
-
-    return pills;
+      ),
+    );
   }
 
-  Widget _tagPill(String label) {
-    return GestureDetector(
-      onTap: onTagClick,
-      child: TempoPillBadge(
-        label: label,
-        kind: TempoBadgeKind.tag,
-        uppercase: false,
-        fontSize: 10,
+  Widget _buildStandaloneCard() {
+    return Material(
+      color: AppTheme.bg,
+      child: DecoratedBox(
+        decoration: _shellDecoration(_localCompleted),
+        child: _buildAnimatedShell(child: _buildRowContent()),
+      ),
+    );
+  }
+
+  Widget _buildSlidableShell() {
+    return DecoratedBox(
+      decoration: _shellDecoration(_localCompleted),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        child: Slidable(
+          key: ValueKey('task-slidable-${widget.task.id}'),
+          closeOnScroll: true,
+          endActionPane: ActionPane(
+            motion: const BehindMotion(),
+            extentRatio: _deleteActionExtentRatio,
+            dragDismissible: false,
+            children: [
+              CustomSlidableAction(
+                onPressed: (_) => _handleDelete(),
+                backgroundColor: AppTheme.priorityP0,
+                foregroundColor: AppTheme.bg,
+                padding: EdgeInsets.zero,
+                borderRadius: BorderRadius.zero,
+                child: Semantics(
+                  button: true,
+                  label: '删除',
+                  child: Center(
+                    child: Icon(
+                      LucideIcons.trash_2,
+                      size: 16,
+                      color: AppTheme.bg,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          child: Material(
+            color: AppTheme.bg,
+            child: _buildAnimatedShell(child: _buildRowContent()),
+          ),
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final metaPills = _buildMetaPills();
-    final hasMeta = metaPills.isNotEmpty;
-    final rowAlign = (!_hasDescription && !hasMeta)
-        ? CrossAxisAlignment.center
-        : CrossAxisAlignment.start;
-
-    return Material(
-      color: AppTheme.bg,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppTheme.bg,
-            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-            border: Border.all(
-              color: task.isCompleted
-                  ? AppTheme.borderSubtle
-                  : AppTheme.borderStrong,
-              width: 0.8,
-            ),
-            boxShadow: task.isCompleted ? null : AppTheme.shadowSm,
-          ),
-          child: Row(
-            crossAxisAlignment: rowAlign,
-            children: [
-              GestureDetector(
-                behavior: HitTestBehavior.deferToChild,
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 2),
-                  child: TempoCheckbox(
-                    value: task.isCompleted,
-                    onChanged: (_) => onToggleComplete?.call(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      task.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color:
-                            task.isCompleted ? AppTheme.fgMuted : AppTheme.fg,
-                        decoration: task.isCompleted
-                            ? TextDecoration.lineThrough
-                            : null,
-                        letterSpacing: -0.2,
-                        height: 1.3,
-                      ),
-                    ),
-                    if (_hasDescription) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        task.description!.trim(),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.fgSubtle,
-                          height: 1.35,
-                          letterSpacing: -0.1,
-                        ),
-                      ),
-                    ],
-                    if (hasMeta) ...[
-                      SizedBox(height: _hasDescription ? 6 : 6),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: metaPills,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (task.siyuanBlockId != null) ...[
-                    const Icon(
-                      LucideIcons.link_2,
-                      size: 14,
-                      color: AppTheme.fgMuted,
-                    ),
-                    const SizedBox(width: 4),
-                  ],
-                  if (showDelete && onDelete != null)
-                    GestureDetector(
-                      key: ValueKey('task-delete-${task.id}'),
-                      onTap: onDelete,
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 4),
-                        child: Icon(
-                          LucideIcons.trash_2,
-                          size: 14,
-                          color: AppTheme.fgMuted,
-                        ),
-                      ),
-                    ),
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onTap,
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                      child: Icon(
-                        LucideIcons.chevron_right,
-                        size: 12,
-                        color: AppTheme.fgFaint,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    final canSwipeDelete = widget.showDelete && widget.onDelete != null;
+    if (!canSwipeDelete) {
+      return _buildStandaloneCard();
+    }
+    return _buildSlidableShell();
   }
 }

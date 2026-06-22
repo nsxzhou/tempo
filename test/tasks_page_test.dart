@@ -1,14 +1,13 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:tempo/core/constants/app_constants.dart';
+import 'package:tempo/core/theme/app_theme.dart';
 import 'package:tempo/app_providers.dart';
 import 'package:tempo/core/router/app_router.dart';
 import 'package:tempo/features/tasks/data/notification_service.dart';
-import 'package:tempo/features/tasks/data/text_parse_service.dart';
 import 'package:tempo/features/tasks/data/voice_task_parse_result.dart';
 import 'package:tempo/features/tasks/domain/task.dart';
 import 'package:tempo/features/tasks/presentation/tasks_page.dart';
@@ -143,9 +142,11 @@ void main() {
     );
 
     expect(find.text('面包'), findsOneWidget);
-    final deleteFinder = find.byKey(const ValueKey('task-delete-task-0'));
-    await tester.ensureVisible(deleteFinder);
-    await tester.tap(deleteFinder);
+    await tester.drag(find.byType(Slidable), const Offset(-200, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('删除'));
+    await tester.pump();
+    await tester.pump(AppTheme.durationFast);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -153,12 +154,14 @@ void main() {
     expect(repository.deletedTaskIds, ['task-0']);
     expect(find.textContaining('已删除:面包'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('撤回'));
     await tester.tap(find.text('撤回'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(repository.tasks, hasLength(1));
     expect(repository.tasks.single.title, '面包');
+    await _settleAnimations(tester);
     await repository.dispose();
     await session.dispose();
   });
@@ -200,8 +203,13 @@ void main() {
     await tester.pump();
 
     expect(find.text('去吃KFC'), findsOneWidget);
+    await _settleAnimations(tester);
     await repository.dispose();
   });
+}
+
+Future<void> _settleAnimations(WidgetTester tester) async {
+  await tester.pumpAndSettle(const Duration(milliseconds: 100));
 }
 
 Future<void> _pumpTasksPage(

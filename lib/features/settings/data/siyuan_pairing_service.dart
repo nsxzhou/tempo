@@ -91,19 +91,20 @@ class SiyuanPairingService {
 
   /// 查询当前用户最近一条配对码。
   Future<PairingCode?> getActiveCode() async {
-    if (_userId == null) return null;
+    final userId = _userId;
+    if (userId == null) return null;
 
     try {
       final rows = await _supabase
           .from(AppConstants.tableSiyuanPairingCodes)
           .select()
-          .eq('user_id', _userId!)
+          .eq('user_id', userId)
           .order('created_at', ascending: false)
           .limit(1);
 
       if (rows.isEmpty) return null;
 
-      final row = rows[0] as Map<String, dynamic>;
+      final row = rows[0];
       return _mapPairingCode(row);
     } catch (_) {
       return null;
@@ -112,7 +113,8 @@ class SiyuanPairingService {
 
   /// 读取绑定与同步状态。
   Future<SiyuanBindingStatus> getBindingStatus() async {
-    if (_userId == null) {
+    final userId = _userId;
+    if (userId == null) {
       return const SiyuanBindingStatus(isPaired: false);
     }
 
@@ -121,7 +123,7 @@ class SiyuanPairingService {
       final row = await _supabase
           .from(AppConstants.tableSiyuanBindings)
           .select()
-          .eq('user_id', _userId!)
+          .eq('user_id', userId)
           .maybeSingle();
 
       if (row == null) {

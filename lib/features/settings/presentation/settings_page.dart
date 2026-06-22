@@ -32,31 +32,31 @@ class SettingsPage extends ConsumerStatefulWidget {
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _notificationEnabled = true;
-  SiyuanBindingStatus? _siyuanStatus;
 
   @override
   void initState() {
     super.initState();
-    _loadSettings();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_loadSettings());
+    });
   }
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    if (mounted) {
-      setState(() {
-        _notificationEnabled =
-            prefs.getBool(AppConstants.prefNotificationEnabled) ?? true;
-      });
-    }
-    await _loadSiyuanStatus();
+    if (!mounted) return;
+    setState(() {
+      _notificationEnabled =
+          prefs.getBool(AppConstants.prefNotificationEnabled) ?? true;
+    });
   }
 
-  Future<void> _loadSiyuanStatus() async {
-    final pairingService = ref.read(siyuanPairingServiceProvider);
-    final status = await pairingService.getBindingStatus();
-    if (mounted) {
-      setState(() => _siyuanStatus = status);
-    }
+  void _refreshSiyuanStatus() {
+    ref.invalidate(siyuanBindingStatusProvider);
+  }
+
+  SiyuanBindingStatus _displaySiyuanStatus(AsyncValue<SiyuanBindingStatus> async) {
+    return async.valueOrNull ?? const SiyuanBindingStatus(isPaired: false);
   }
 
   String _siyuanSubtitle(SiyuanBindingStatus status) {
@@ -91,6 +91,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final userEmail = ref.watch(currentUserEmailProvider);
     final emailText = userEmail ?? '未登录';
     final tasksAsync = ref.watch(taskListProvider);
+    final siyuanStatusAsync = ref.watch(siyuanBindingStatusProvider);
+    final siyuanStatus = _displaySiyuanStatus(siyuanStatusAsync);
 
     final stats = tasksAsync.maybeWhen(
       data: (tasks) {
@@ -170,16 +172,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     iconBg: AppTheme.priorityP1Bg,
                     iconBorder: AppTheme.priorityP1Border,
                     title: '思源外部笔记 Petal 连接',
-                    subtitle: _siyuanStatus != null
-                        ? _siyuanSubtitle(_siyuanStatus!)
-                        : '加载中…',
-                    badgeKind: _siyuanStatus != null
-                        ? _siyuanBadge(_siyuanStatus!).kind
-                        : TempoBadgeKind.neutral,
-                    badgeLabel: _siyuanStatus != null
-                        ? _siyuanBadge(_siyuanStatus!).label
-                        : '…',
-                    onTap: () => _handleSiyuanTap(),
+                    subtitle: _siyuanSubtitle(siyuanStatus),
+                    badgeKind: _siyuanBadge(siyuanStatus).kind,
+                    badgeLabel: _siyuanBadge(siyuanStatus).label,
+                    onTap: () => _handleSiyuanTap(siyuanStatus),
                   ),
                   TempoIntegrationRow(
                     icon: LucideIcons.calendar_days,
@@ -302,13 +298,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
-  Future<void> _handleSiyuanTap() async {
-    final status = _siyuanStatus;
-    if (status != null && (status.isPaired || status.hasPendingCode)) {
+  Future<void> _handleSiyuanTap(SiyuanBindingStatus status) async {
+    if (status.isPaired || status.hasPendingCode) {
       await _showSiyuanMenu();
     } else {
       await PairingCodeDialog.show(context);
-      await _loadSiyuanStatus();
+      _refreshSiyuanStatus();
     }
   }
 
@@ -363,11 +358,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
     if (action == 'pair' && mounted) {
       await PairingCodeDialog.show(context);
-      await _loadSiyuanStatus();
+      _refreshSiyuanStatus();
     } else if (action == 'unpair' && mounted) {
       await ref.read(siyuanPairingServiceProvider).clearBinding();
       if (!mounted) return;
-      await _loadSiyuanStatus();
+      _refreshSiyuanStatus();
       TempoSnackbar.show(
         context,
         message: '已解除 App 侧绑定，请在思源插件中点击解绑',

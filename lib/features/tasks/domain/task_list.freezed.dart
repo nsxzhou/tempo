@@ -231,8 +231,15 @@ class _$TaskListImpl implements _TaskList {
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, id, userId, name, sortOrder, createdAt, syncPending);
+  int get hashCode => Object.hash(
+    runtimeType,
+    id,
+    userId,
+    name,
+    sortOrder,
+    createdAt,
+    syncPending,
+  );
 
   /// Create a copy of TaskList
   /// with the given fields replaced by the non-null parameter values.

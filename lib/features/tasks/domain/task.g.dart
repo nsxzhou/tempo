@@ -17,6 +17,7 @@ _$TaskImpl _$$TaskImplFromJson(Map<String, dynamic> json) => _$TaskImpl(
   dueDate: json['dueDate'] == null
       ? null
       : DateTime.parse(json['dueDate'] as String),
+  isAllDay: json['isAllDay'] as bool? ?? false,
   isCompleted: json['isCompleted'] as bool? ?? false,
   completedAt: json['completedAt'] == null
       ? null
@@ -38,6 +39,7 @@ Map<String, dynamic> _$$TaskImplToJson(_$TaskImpl instance) =>
       'description': instance.description,
       'priority': _$TaskPriorityEnumMap[instance.priority]!,
       'dueDate': instance.dueDate?.toIso8601String(),
+      'isAllDay': instance.isAllDay,
       'isCompleted': instance.isCompleted,
       'completedAt': instance.completedAt?.toIso8601String(),
       'siyuanBlockId': instance.siyuanBlockId,

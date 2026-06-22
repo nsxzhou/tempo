@@ -33,6 +33,7 @@ class Task with _$Task {
     String? description,
     @Default(TaskPriority.none) TaskPriority priority,
     DateTime? dueDate,
+    @Default(false) bool isAllDay,
     @Default(false) bool isCompleted,
     DateTime? completedAt,
     String? siyuanBlockId,
@@ -58,6 +59,7 @@ extension TaskSupabase on Task {
         'description': description,
         'priority': priority.value,
         'due_date': dueDate?.toUtc().toIso8601String(),
+        'is_all_day': isAllDay,
         'is_completed': isCompleted,
         'completed_at': completedAt?.toUtc().toIso8601String(),
         'siyuan_block_id': siyuanBlockId,
@@ -78,6 +80,7 @@ extension TaskSupabase on Task {
         dueDate: json['due_date'] != null
             ? DateTime.parse(json['due_date'] as String).toLocal()
             : null,
+        isAllDay: json['is_all_day'] as bool? ?? false,
         isCompleted: json['is_completed'] as bool? ?? false,
         completedAt: json['completed_at'] != null
             ? DateTime.parse(json['completed_at'] as String).toLocal()

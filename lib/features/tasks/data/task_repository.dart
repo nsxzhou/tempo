@@ -27,6 +27,7 @@ abstract class TaskRepository {
     required String title,
     String? description,
     DateTime? dueDate,
+    bool isAllDay = false,
     domain.TaskPriority priority = domain.TaskPriority.none,
     String creationSource = AppConstants.sourceText,
     String? tag,
@@ -134,6 +135,7 @@ class SyncTaskRepository implements TaskRepository {
     required String title,
     String? description,
     DateTime? dueDate,
+    bool isAllDay = false,
     domain.TaskPriority priority = domain.TaskPriority.none,
     String creationSource = AppConstants.sourceText,
     String? tag,
@@ -153,6 +155,7 @@ class SyncTaskRepository implements TaskRepository {
       description: description?.trim(),
       priority: priority,
       dueDate: dueDate,
+      isAllDay: isAllDay,
       createdAt: now,
       updatedAt: now,
       creationSource: creationSource,
@@ -195,6 +198,7 @@ class SyncTaskRepository implements TaskRepository {
       title: result.title,
       description: description,
       dueDate: result.dueDate,
+      isAllDay: result.isAllDay,
       priority: result.priority,
       creationSource: AppConstants.sourceVoice,
       tag: result.tag,
@@ -247,22 +251,21 @@ class SyncTaskRepository implements TaskRepository {
 
   @override
   Future<void> deleteTask(String id) async {
-    // 先删本地
     await (_localDb.delete(_localDb.tasks)
           ..where((t) => t.id.equals(id)))
         .go();
 
-    // 尝试删云端（失败静默忽略，本地已删）
+    unawaited(_syncDeleteToCloud(id));
+  }
+
+  Future<void> _syncDeleteToCloud(String id) async {
     final isOnline = await _connectivity.isOnline;
-    if (isOnline && _userId != null) {
-      try {
-        await _supabase
-            .from(AppConstants.tableTasks)
-            .delete()
-            .eq('id', id);
-      } catch (_) {
-        // 静默忽略：本地已删除，云端会在下次同步时被忽略
-      }
+    if (!isOnline || _userId == null) return;
+
+    try {
+      await _supabase.from(AppConstants.tableTasks).delete().eq('id', id);
+    } catch (_) {
+      // 静默忽略：本地已删除
     }
   }
 
@@ -403,6 +406,7 @@ class SyncTaskRepository implements TaskRepository {
       description: Value(task.description),
       priority: Value(task.priority.value),
       dueDate: Value(task.dueDate),
+      isAllDay: Value(task.isAllDay),
       isCompleted: Value(task.isCompleted),
       completedAt: Value(task.completedAt),
       siyuanBlockId: Value(task.siyuanBlockId),
@@ -426,6 +430,7 @@ class SyncTaskRepository implements TaskRepository {
       description: row.description,
       priority: domain.TaskPriority.fromValue(row.priority),
       dueDate: row.dueDate,
+      isAllDay: row.isAllDay,
       isCompleted: row.isCompleted,
       completedAt: row.completedAt,
       siyuanBlockId: row.siyuanBlockId,
@@ -466,6 +471,7 @@ class DriftTaskRepository implements TaskRepository {
     required String title,
     String? description,
     DateTime? dueDate,
+    bool isAllDay = false,
     domain.TaskPriority priority = domain.TaskPriority.none,
     String creationSource = AppConstants.sourceText,
     String? tag,
@@ -485,6 +491,7 @@ class DriftTaskRepository implements TaskRepository {
       description: Value(description?.trim()),
       priority: Value(priority.value),
       dueDate: Value(dueDate),
+      isAllDay: Value(isAllDay),
       createdAt: Value(now),
       updatedAt: Value(now),
       creationSource: Value(creationSource),
@@ -500,6 +507,7 @@ class DriftTaskRepository implements TaskRepository {
       description: description?.trim(),
       priority: priority,
       dueDate: dueDate,
+      isAllDay: isAllDay,
       createdAt: now,
       updatedAt: now,
       creationSource: creationSource,
@@ -517,6 +525,7 @@ class DriftTaskRepository implements TaskRepository {
       title: result.title,
       description: description,
       dueDate: result.dueDate,
+      isAllDay: result.isAllDay,
       priority: result.priority,
       creationSource: AppConstants.sourceVoice,
       tag: result.tag,
@@ -533,6 +542,7 @@ class DriftTaskRepository implements TaskRepository {
       description: Value(updated.description),
       priority: Value(updated.priority.value),
       dueDate: Value(updated.dueDate),
+      isAllDay: Value(updated.isAllDay),
       updatedAt: Value(updated.updatedAt),
     ));
     return updated;
@@ -602,6 +612,7 @@ class DriftTaskRepository implements TaskRepository {
       description: row.description,
       priority: domain.TaskPriority.fromValue(row.priority),
       dueDate: row.dueDate,
+      isAllDay: row.isAllDay,
       isCompleted: row.isCompleted,
       completedAt: row.completedAt,
       siyuanBlockId: row.siyuanBlockId,

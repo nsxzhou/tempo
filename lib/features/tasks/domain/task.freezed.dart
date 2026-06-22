@@ -27,6 +27,7 @@ mixin _$Task {
   String? get description => throw _privateConstructorUsedError;
   TaskPriority get priority => throw _privateConstructorUsedError;
   DateTime? get dueDate => throw _privateConstructorUsedError;
+  bool get isAllDay => throw _privateConstructorUsedError;
   bool get isCompleted => throw _privateConstructorUsedError;
   DateTime? get completedAt => throw _privateConstructorUsedError;
   String? get siyuanBlockId => throw _privateConstructorUsedError;
@@ -58,6 +59,7 @@ abstract class $TaskCopyWith<$Res> {
     String? description,
     TaskPriority priority,
     DateTime? dueDate,
+    bool isAllDay,
     bool isCompleted,
     DateTime? completedAt,
     String? siyuanBlockId,
@@ -91,6 +93,7 @@ class _$TaskCopyWithImpl<$Res, $Val extends Task>
     Object? description = freezed,
     Object? priority = null,
     Object? dueDate = freezed,
+    Object? isAllDay = null,
     Object? isCompleted = null,
     Object? completedAt = freezed,
     Object? siyuanBlockId = freezed,
@@ -127,6 +130,10 @@ class _$TaskCopyWithImpl<$Res, $Val extends Task>
                 ? _value.dueDate
                 : dueDate // ignore: cast_nullable_to_non_nullable
                       as DateTime?,
+            isAllDay: null == isAllDay
+                ? _value.isAllDay
+                : isAllDay // ignore: cast_nullable_to_non_nullable
+                      as bool,
             isCompleted: null == isCompleted
                 ? _value.isCompleted
                 : isCompleted // ignore: cast_nullable_to_non_nullable
@@ -184,6 +191,7 @@ abstract class _$$TaskImplCopyWith<$Res> implements $TaskCopyWith<$Res> {
     String? description,
     TaskPriority priority,
     DateTime? dueDate,
+    bool isAllDay,
     bool isCompleted,
     DateTime? completedAt,
     String? siyuanBlockId,
@@ -214,6 +222,7 @@ class __$$TaskImplCopyWithImpl<$Res>
     Object? description = freezed,
     Object? priority = null,
     Object? dueDate = freezed,
+    Object? isAllDay = null,
     Object? isCompleted = null,
     Object? completedAt = freezed,
     Object? siyuanBlockId = freezed,
@@ -250,6 +259,10 @@ class __$$TaskImplCopyWithImpl<$Res>
             ? _value.dueDate
             : dueDate // ignore: cast_nullable_to_non_nullable
                   as DateTime?,
+        isAllDay: null == isAllDay
+            ? _value.isAllDay
+            : isAllDay // ignore: cast_nullable_to_non_nullable
+                  as bool,
         isCompleted: null == isCompleted
             ? _value.isCompleted
             : isCompleted // ignore: cast_nullable_to_non_nullable
@@ -301,6 +314,7 @@ class _$TaskImpl implements _Task {
     this.description,
     this.priority = TaskPriority.none,
     this.dueDate,
+    this.isAllDay = false,
     this.isCompleted = false,
     this.completedAt,
     this.siyuanBlockId,
@@ -330,6 +344,9 @@ class _$TaskImpl implements _Task {
   final DateTime? dueDate;
   @override
   @JsonKey()
+  final bool isAllDay;
+  @override
+  @JsonKey()
   final bool isCompleted;
   @override
   final DateTime? completedAt;
@@ -353,7 +370,7 @@ class _$TaskImpl implements _Task {
 
   @override
   String toString() {
-    return 'Task(id: $id, listId: $listId, title: $title, description: $description, priority: $priority, dueDate: $dueDate, isCompleted: $isCompleted, completedAt: $completedAt, siyuanBlockId: $siyuanBlockId, sortOrder: $sortOrder, createdAt: $createdAt, updatedAt: $updatedAt, creationSource: $creationSource, tag: $tag, syncPending: $syncPending)';
+    return 'Task(id: $id, listId: $listId, title: $title, description: $description, priority: $priority, dueDate: $dueDate, isAllDay: $isAllDay, isCompleted: $isCompleted, completedAt: $completedAt, siyuanBlockId: $siyuanBlockId, sortOrder: $sortOrder, createdAt: $createdAt, updatedAt: $updatedAt, creationSource: $creationSource, tag: $tag, syncPending: $syncPending)';
   }
 
   @override
@@ -369,6 +386,8 @@ class _$TaskImpl implements _Task {
             (identical(other.priority, priority) ||
                 other.priority == priority) &&
             (identical(other.dueDate, dueDate) || other.dueDate == dueDate) &&
+            (identical(other.isAllDay, isAllDay) ||
+                other.isAllDay == isAllDay) &&
             (identical(other.isCompleted, isCompleted) ||
                 other.isCompleted == isCompleted) &&
             (identical(other.completedAt, completedAt) ||
@@ -398,6 +417,7 @@ class _$TaskImpl implements _Task {
     description,
     priority,
     dueDate,
+    isAllDay,
     isCompleted,
     completedAt,
     siyuanBlockId,
@@ -431,6 +451,7 @@ abstract class _Task implements Task {
     final String? description,
     final TaskPriority priority,
     final DateTime? dueDate,
+    final bool isAllDay,
     final bool isCompleted,
     final DateTime? completedAt,
     final String? siyuanBlockId,
@@ -456,6 +477,8 @@ abstract class _Task implements Task {
   TaskPriority get priority;
   @override
   DateTime? get dueDate;
+  @override
+  bool get isAllDay;
   @override
   bool get isCompleted;
   @override

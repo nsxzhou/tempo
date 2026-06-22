@@ -8,6 +8,7 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/date_utils.dart';
 import '../../../../core/widgets/tempo/tempo.dart';
 import '../../domain/task.dart';
 
@@ -31,26 +32,23 @@ class TaskTile extends StatelessWidget {
 
   String get _deadlineText {
     if (task.dueDate == null) return '';
-    final now = DateTime.now();
-    final due = task.dueDate!;
     if (task.isCompleted) return '已完成';
-    if (due.isBefore(now)) return '已过期';
-    if (due.year == now.year && due.month == now.month && due.day == now.day) {
-      return '今天 ${_hm(due)}';
-    }
-    return '${due.month}月${due.day}日 ${_hm(due)}';
+    return formatTaskDueLabel(
+      dueDate: task.dueDate!,
+      isAllDay: task.isAllDay,
+    );
   }
-
-  String _hm(DateTime d) =>
-      '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
   bool get _hasDescription =>
       task.description != null && task.description!.trim().isNotEmpty;
 
   List<Widget> _buildMetaPills() {
     final isOverdue = task.dueDate != null &&
-        task.dueDate!.isBefore(DateTime.now()) &&
-        !task.isCompleted;
+        isTaskOverdue(
+          dueDate: task.dueDate!,
+          isAllDay: task.isAllDay,
+          isCompleted: task.isCompleted,
+        );
     final pills = <Widget>[];
 
     if (task.priority.value != 0) {
@@ -154,11 +152,9 @@ class TaskTile extends StatelessWidget {
             crossAxisAlignment: rowAlign,
             children: [
               GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: onToggleComplete,
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  margin: const EdgeInsets.only(right: 2),
+                behavior: HitTestBehavior.deferToChild,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 2),
                   child: TempoCheckbox(
                     value: task.isCompleted,
                     onChanged: (_) => onToggleComplete?.call(),
@@ -225,6 +221,7 @@ class TaskTile extends StatelessWidget {
                   ],
                   if (showDelete && onDelete != null)
                     GestureDetector(
+                      key: ValueKey('task-delete-${task.id}'),
                       onTap: onDelete,
                       child: const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 4),
@@ -235,10 +232,17 @@ class TaskTile extends StatelessWidget {
                         ),
                       ),
                     ),
-                  const Icon(
-                    LucideIcons.chevron_right,
-                    size: 12,
-                    color: AppTheme.fgFaint,
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onTap,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                      child: Icon(
+                        LucideIcons.chevron_right,
+                        size: 12,
+                        color: AppTheme.fgFaint,
+                      ),
+                    ),
                   ),
                 ],
               ),

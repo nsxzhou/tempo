@@ -21,9 +21,12 @@ import 'package:intl/intl.dart';
 import '../../../app_providers.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/database_provider.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/tempo/tempo.dart';
 import '../domain/task.dart';
+import 'widgets/quick_create_sheet.dart';
 
 class TaskDetailPage extends ConsumerStatefulWidget {
   final String taskId;
@@ -39,6 +42,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isEditingDesc = false;
+  Task? _lastDeletedTask;
   late final TextEditingController _descController;
 
   @override
@@ -96,7 +100,11 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
       backgroundColor: AppTheme.bg,
       body: Column(
         children: [
-          _TopBar(onBack: () => context.pop()),
+          _TopBar(
+            onBack: () => context.pop(),
+            onEdit: _openEditSheet,
+            onMore: _showMoreMenu,
+          ),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.only(bottom: 100),
@@ -189,8 +197,12 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   Widget _buildProperties(Task task) {
     final now = DateTime.now();
     final isOverdue = task.dueDate != null &&
-        task.dueDate!.isBefore(now) &&
-        !task.isCompleted;
+        isTaskOverdue(
+          dueDate: task.dueDate!,
+          isAllDay: task.isAllDay,
+          isCompleted: task.isCompleted,
+          now: now,
+        );
     return Container(
       decoration: const BoxDecoration(
         color: AppTheme.bg,
@@ -208,7 +220,10 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                 ? Row(
                     children: [
                       Text(
-                        DateFormat('M月d日 HH:mm').format(task.dueDate!),
+                        formatTaskDueDetail(
+                          dueDate: task.dueDate!,
+                          isAllDay: task.isAllDay,
+                        ),
                         style: AppTheme.mono(
                           size: 13,
                           weight: FontWeight.w500,
@@ -524,6 +539,127 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     }
   }
 
+  Future<void> _openEditSheet() async {
+    final task = _task;
+    if (task == null) return;
+
+    final updatedTask = await QuickCreateSheet.showEdit(
+      context,
+      task: task,
+      onUpdate: ({
+        required Task task,
+        required String title,
+        DateTime? dueDate,
+        TaskPriority priority = TaskPriority.none,
+        String? tag,
+      }) async {
+        final repository = ref.read(taskRepositoryProvider);
+        final updated = task.copyWith(
+          title: title,
+          dueDate: dueDate,
+          priority: priority,
+          tag: tag,
+          updatedAt: DateTime.now(),
+        );
+        final saved = await repository.updateTask(updated);
+        final notificationService = ref.read(notificationServiceProvider);
+        if (saved.isCompleted) {
+          await notificationService.cancelTaskReminders(saved.id);
+        } else {
+          await notificationService.scheduleTaskReminder(saved);
+        }
+        return saved;
+      },
+    );
+
+    if (!mounted || updatedTask == null) return;
+    setState(() => _task = updatedTask);
+    TempoSnackbar.show(context, message: '任务已更新');
+  }
+
+  Future<void> _showMoreMenu() async {
+    final task = _task;
+    if (task == null) return;
+
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppTheme.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusLg),
+        ),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(LucideIcons.trash_2, color: AppTheme.errorColor),
+              title: const Text(
+                '删除待办',
+                style: TextStyle(color: AppTheme.errorColor),
+              ),
+              onTap: () => Navigator.of(context).pop('delete'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (!mounted || action != 'delete') return;
+    await _confirmDelete(task);
+  }
+
+  Future<void> _confirmDelete(Task task) async {
+    final confirmed = await TempoConfirmDialog.show(
+      context,
+      title: '删除待办',
+      message: '确定删除「${task.title}」吗？此操作不可撤销。',
+      confirmLabel: '删除',
+      isDestructive: true,
+    );
+
+    if (confirmed == true) {
+      await _deleteTask(task);
+    }
+  }
+
+  Future<void> _deleteTask(Task task) async {
+    _lastDeletedTask = task;
+    final navigatorKey = ref.read(appNavigatorKeyProvider);
+    try {
+      await ref.read(taskRepositoryProvider).deleteTask(task.id);
+      if (!mounted) return;
+      context.pop();
+      unawaited(
+        ref.read(notificationServiceProvider).cancelTaskReminders(task.id),
+      );
+      TempoSnackbar.showGlobal(
+        navigatorKey: navigatorKey,
+        message: '已删除:${task.title}',
+        undoLabel: '撤回',
+        onUndo: () async {
+          if (_lastDeletedTask == null) return;
+          final restored = await ref.read(taskRepositoryProvider).createTask(
+                title: _lastDeletedTask!.title,
+                description: _lastDeletedTask!.description,
+                dueDate: _lastDeletedTask!.dueDate,
+                priority: _lastDeletedTask!.priority,
+                creationSource: _lastDeletedTask!.creationSource,
+                tag: _lastDeletedTask!.tag,
+              );
+          await ref
+              .read(notificationServiceProvider)
+              .scheduleTaskReminder(restored);
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      TempoSnackbar.show(context, message: '删除失败:$e');
+    }
+  }
+
   String _sourceTag(String s) {
     switch (s) {
       case 'voice':
@@ -553,7 +689,14 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
 
 class _TopBar extends StatelessWidget {
   final VoidCallback onBack;
-  const _TopBar({required this.onBack});
+  final VoidCallback onEdit;
+  final VoidCallback onMore;
+
+  const _TopBar({
+    required this.onBack,
+    required this.onEdit,
+    required this.onMore,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -572,9 +715,9 @@ class _TopBar extends StatelessWidget {
               ),
             ),
             const Spacer(),
-            _IconBtn(icon: LucideIcons.pencil, onTap: () {}),
+            _IconBtn(icon: LucideIcons.pencil, onTap: onEdit),
             const SizedBox(width: 6),
-            _IconBtn(icon: LucideIcons.ellipsis, onTap: () {}),
+            _IconBtn(icon: LucideIcons.ellipsis, onTap: onMore),
           ],
         ),
       ),

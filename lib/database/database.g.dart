@@ -482,6 +482,21 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _isAllDayMeta = const VerificationMeta(
+    'isAllDay',
+  );
+  @override
+  late final GeneratedColumn<bool> isAllDay = GeneratedColumn<bool>(
+    'is_all_day',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_all_day" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _isCompletedMeta = const VerificationMeta(
     'isCompleted',
   );
@@ -599,6 +614,7 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     description,
     priority,
     dueDate,
+    isAllDay,
     isCompleted,
     completedAt,
     siyuanBlockId,
@@ -661,6 +677,12 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
       context.handle(
         _dueDateMeta,
         dueDate.isAcceptableOrUnknown(data['due_date']!, _dueDateMeta),
+      );
+    }
+    if (data.containsKey('is_all_day')) {
+      context.handle(
+        _isAllDayMeta,
+        isAllDay.isAcceptableOrUnknown(data['is_all_day']!, _isAllDayMeta),
       );
     }
     if (data.containsKey('is_completed')) {
@@ -765,6 +787,10 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}due_date'],
       ),
+      isAllDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_all_day'],
+      )!,
       isCompleted: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_completed'],
@@ -819,6 +845,7 @@ class Task extends DataClass implements Insertable<Task> {
   /// 优先级: 0=无, 1=P0(紧急), 2=P1(高), 3=P2(中), 4=P3(低)
   final int priority;
   final DateTime? dueDate;
+  final bool isAllDay;
   final bool isCompleted;
   final DateTime? completedAt;
   final String? siyuanBlockId;
@@ -841,6 +868,7 @@ class Task extends DataClass implements Insertable<Task> {
     this.description,
     required this.priority,
     this.dueDate,
+    required this.isAllDay,
     required this.isCompleted,
     this.completedAt,
     this.siyuanBlockId,
@@ -864,6 +892,7 @@ class Task extends DataClass implements Insertable<Task> {
     if (!nullToAbsent || dueDate != null) {
       map['due_date'] = Variable<DateTime>(dueDate);
     }
+    map['is_all_day'] = Variable<bool>(isAllDay);
     map['is_completed'] = Variable<bool>(isCompleted);
     if (!nullToAbsent || completedAt != null) {
       map['completed_at'] = Variable<DateTime>(completedAt);
@@ -894,6 +923,7 @@ class Task extends DataClass implements Insertable<Task> {
       dueDate: dueDate == null && nullToAbsent
           ? const Value.absent()
           : Value(dueDate),
+      isAllDay: Value(isAllDay),
       isCompleted: Value(isCompleted),
       completedAt: completedAt == null && nullToAbsent
           ? const Value.absent()
@@ -922,6 +952,7 @@ class Task extends DataClass implements Insertable<Task> {
       description: serializer.fromJson<String?>(json['description']),
       priority: serializer.fromJson<int>(json['priority']),
       dueDate: serializer.fromJson<DateTime?>(json['dueDate']),
+      isAllDay: serializer.fromJson<bool>(json['isAllDay']),
       isCompleted: serializer.fromJson<bool>(json['isCompleted']),
       completedAt: serializer.fromJson<DateTime?>(json['completedAt']),
       siyuanBlockId: serializer.fromJson<String?>(json['siyuanBlockId']),
@@ -943,6 +974,7 @@ class Task extends DataClass implements Insertable<Task> {
       'description': serializer.toJson<String?>(description),
       'priority': serializer.toJson<int>(priority),
       'dueDate': serializer.toJson<DateTime?>(dueDate),
+      'isAllDay': serializer.toJson<bool>(isAllDay),
       'isCompleted': serializer.toJson<bool>(isCompleted),
       'completedAt': serializer.toJson<DateTime?>(completedAt),
       'siyuanBlockId': serializer.toJson<String?>(siyuanBlockId),
@@ -962,6 +994,7 @@ class Task extends DataClass implements Insertable<Task> {
     Value<String?> description = const Value.absent(),
     int? priority,
     Value<DateTime?> dueDate = const Value.absent(),
+    bool? isAllDay,
     bool? isCompleted,
     Value<DateTime?> completedAt = const Value.absent(),
     Value<String?> siyuanBlockId = const Value.absent(),
@@ -978,6 +1011,7 @@ class Task extends DataClass implements Insertable<Task> {
     description: description.present ? description.value : this.description,
     priority: priority ?? this.priority,
     dueDate: dueDate.present ? dueDate.value : this.dueDate,
+    isAllDay: isAllDay ?? this.isAllDay,
     isCompleted: isCompleted ?? this.isCompleted,
     completedAt: completedAt.present ? completedAt.value : this.completedAt,
     siyuanBlockId: siyuanBlockId.present
@@ -1000,6 +1034,7 @@ class Task extends DataClass implements Insertable<Task> {
           : this.description,
       priority: data.priority.present ? data.priority.value : this.priority,
       dueDate: data.dueDate.present ? data.dueDate.value : this.dueDate,
+      isAllDay: data.isAllDay.present ? data.isAllDay.value : this.isAllDay,
       isCompleted: data.isCompleted.present
           ? data.isCompleted.value
           : this.isCompleted,
@@ -1031,6 +1066,7 @@ class Task extends DataClass implements Insertable<Task> {
           ..write('description: $description, ')
           ..write('priority: $priority, ')
           ..write('dueDate: $dueDate, ')
+          ..write('isAllDay: $isAllDay, ')
           ..write('isCompleted: $isCompleted, ')
           ..write('completedAt: $completedAt, ')
           ..write('siyuanBlockId: $siyuanBlockId, ')
@@ -1052,6 +1088,7 @@ class Task extends DataClass implements Insertable<Task> {
     description,
     priority,
     dueDate,
+    isAllDay,
     isCompleted,
     completedAt,
     siyuanBlockId,
@@ -1072,6 +1109,7 @@ class Task extends DataClass implements Insertable<Task> {
           other.description == this.description &&
           other.priority == this.priority &&
           other.dueDate == this.dueDate &&
+          other.isAllDay == this.isAllDay &&
           other.isCompleted == this.isCompleted &&
           other.completedAt == this.completedAt &&
           other.siyuanBlockId == this.siyuanBlockId &&
@@ -1090,6 +1128,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
   final Value<String?> description;
   final Value<int> priority;
   final Value<DateTime?> dueDate;
+  final Value<bool> isAllDay;
   final Value<bool> isCompleted;
   final Value<DateTime?> completedAt;
   final Value<String?> siyuanBlockId;
@@ -1107,6 +1146,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.description = const Value.absent(),
     this.priority = const Value.absent(),
     this.dueDate = const Value.absent(),
+    this.isAllDay = const Value.absent(),
     this.isCompleted = const Value.absent(),
     this.completedAt = const Value.absent(),
     this.siyuanBlockId = const Value.absent(),
@@ -1125,6 +1165,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.description = const Value.absent(),
     this.priority = const Value.absent(),
     this.dueDate = const Value.absent(),
+    this.isAllDay = const Value.absent(),
     this.isCompleted = const Value.absent(),
     this.completedAt = const Value.absent(),
     this.siyuanBlockId = const Value.absent(),
@@ -1145,6 +1186,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Expression<String>? description,
     Expression<int>? priority,
     Expression<DateTime>? dueDate,
+    Expression<bool>? isAllDay,
     Expression<bool>? isCompleted,
     Expression<DateTime>? completedAt,
     Expression<String>? siyuanBlockId,
@@ -1163,6 +1205,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
       if (description != null) 'description': description,
       if (priority != null) 'priority': priority,
       if (dueDate != null) 'due_date': dueDate,
+      if (isAllDay != null) 'is_all_day': isAllDay,
       if (isCompleted != null) 'is_completed': isCompleted,
       if (completedAt != null) 'completed_at': completedAt,
       if (siyuanBlockId != null) 'siyuan_block_id': siyuanBlockId,
@@ -1183,6 +1226,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Value<String?>? description,
     Value<int>? priority,
     Value<DateTime?>? dueDate,
+    Value<bool>? isAllDay,
     Value<bool>? isCompleted,
     Value<DateTime?>? completedAt,
     Value<String?>? siyuanBlockId,
@@ -1201,6 +1245,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
       description: description ?? this.description,
       priority: priority ?? this.priority,
       dueDate: dueDate ?? this.dueDate,
+      isAllDay: isAllDay ?? this.isAllDay,
       isCompleted: isCompleted ?? this.isCompleted,
       completedAt: completedAt ?? this.completedAt,
       siyuanBlockId: siyuanBlockId ?? this.siyuanBlockId,
@@ -1234,6 +1279,9 @@ class TasksCompanion extends UpdateCompanion<Task> {
     }
     if (dueDate.present) {
       map['due_date'] = Variable<DateTime>(dueDate.value);
+    }
+    if (isAllDay.present) {
+      map['is_all_day'] = Variable<bool>(isAllDay.value);
     }
     if (isCompleted.present) {
       map['is_completed'] = Variable<bool>(isCompleted.value);
@@ -1277,6 +1325,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
           ..write('description: $description, ')
           ..write('priority: $priority, ')
           ..write('dueDate: $dueDate, ')
+          ..write('isAllDay: $isAllDay, ')
           ..write('isCompleted: $isCompleted, ')
           ..write('completedAt: $completedAt, ')
           ..write('siyuanBlockId: $siyuanBlockId, ')
@@ -1627,6 +1676,7 @@ typedef $$TasksTableCreateCompanionBuilder =
       Value<String?> description,
       Value<int> priority,
       Value<DateTime?> dueDate,
+      Value<bool> isAllDay,
       Value<bool> isCompleted,
       Value<DateTime?> completedAt,
       Value<String?> siyuanBlockId,
@@ -1646,6 +1696,7 @@ typedef $$TasksTableUpdateCompanionBuilder =
       Value<String?> description,
       Value<int> priority,
       Value<DateTime?> dueDate,
+      Value<bool> isAllDay,
       Value<bool> isCompleted,
       Value<DateTime?> completedAt,
       Value<String?> siyuanBlockId,
@@ -1710,6 +1761,11 @@ class $$TasksTableFilterComposer extends Composer<_$AppDatabase, $TasksTable> {
 
   ColumnFilters<DateTime> get dueDate => $composableBuilder(
     column: $table.dueDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isAllDay => $composableBuilder(
+    column: $table.isAllDay,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1816,6 +1872,11 @@ class $$TasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isAllDay => $composableBuilder(
+    column: $table.isAllDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get isCompleted => $composableBuilder(
     column: $table.isCompleted,
     builder: (column) => ColumnOrderings(column),
@@ -1910,6 +1971,9 @@ class $$TasksTableAnnotationComposer
 
   GeneratedColumn<DateTime> get dueDate =>
       $composableBuilder(column: $table.dueDate, builder: (column) => column);
+
+  GeneratedColumn<bool> get isAllDay =>
+      $composableBuilder(column: $table.isAllDay, builder: (column) => column);
 
   GeneratedColumn<bool> get isCompleted => $composableBuilder(
     column: $table.isCompleted,
@@ -2006,6 +2070,7 @@ class $$TasksTableTableManager
                 Value<String?> description = const Value.absent(),
                 Value<int> priority = const Value.absent(),
                 Value<DateTime?> dueDate = const Value.absent(),
+                Value<bool> isAllDay = const Value.absent(),
                 Value<bool> isCompleted = const Value.absent(),
                 Value<DateTime?> completedAt = const Value.absent(),
                 Value<String?> siyuanBlockId = const Value.absent(),
@@ -2023,6 +2088,7 @@ class $$TasksTableTableManager
                 description: description,
                 priority: priority,
                 dueDate: dueDate,
+                isAllDay: isAllDay,
                 isCompleted: isCompleted,
                 completedAt: completedAt,
                 siyuanBlockId: siyuanBlockId,
@@ -2042,6 +2108,7 @@ class $$TasksTableTableManager
                 Value<String?> description = const Value.absent(),
                 Value<int> priority = const Value.absent(),
                 Value<DateTime?> dueDate = const Value.absent(),
+                Value<bool> isAllDay = const Value.absent(),
                 Value<bool> isCompleted = const Value.absent(),
                 Value<DateTime?> completedAt = const Value.absent(),
                 Value<String?> siyuanBlockId = const Value.absent(),
@@ -2059,6 +2126,7 @@ class $$TasksTableTableManager
                 description: description,
                 priority: priority,
                 dueDate: dueDate,
+                isAllDay: isAllDay,
                 isCompleted: isCompleted,
                 completedAt: completedAt,
                 siyuanBlockId: siyuanBlockId,

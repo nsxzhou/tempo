@@ -1,15 +1,16 @@
 // ============================================================
 // Tempo parse-task Edge Function
-// 统一解析端点：multipart 语音路径(ASR+LLM) + json 文本路径(LLM only)
+// 统一解析端点：JSON 文本路径(LLM) 为主；multipart 语音路径为降级 fallback
 //
-// 语音路径流程:
-//   App multipart POST → 上传音频到 Supabase Storage → 生成 signed URL
-//   → 提交火山引擎录音文件识别(submit) → 轮询结果(query) → 豆包 LLM 解析
-//   → 清理 Storage 临时文件 → 返回结构化任务
+// 主路径（语音 + 文本）:
+//   App POST JSON { text } → 豆包 LLM 结构化解析
+//
+// 降级路径（流式 ASR 不可用时）:
+//   App multipart POST → Storage → 火山录音文件 ASR → LLM
 //
 // 环境变量:
 //   DOUBAO_API_KEY             — 豆包 LLM API Key
-//   DOUBAO_MODEL               — 豆包模型 ID (ep-xxxx 接入点)
+//   DOUBAO_MODEL               — 豆包模型 ID（推荐 Seed-1.6-Flash 接入点 ep-xxxx）
 //   DOUBAO_ENDPOINT            — 豆包 API 端点 (可选, 默认 ark.cn-beijing.volces.com)
 //   VOLCENGINE_ASR_API_KEY     — 火山引擎语音 API Key (新版控制台 X-Api-Key)
 //   VOICE_TASK_MOCK            — 设为 "true" 时返回 mock 响应
@@ -23,6 +24,7 @@ type ParseTaskResponse = {
   title: string;
   description: string | null;
   due_date: string | null;
+  is_all_day: boolean;
   priority: number;
   confidence: number;
   raw_transcript: string;
@@ -53,7 +55,20 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
     const contentType = request.headers.get("content-type") ?? "";
 
-    // 语音路径：multipart/form-data → Storage 上传 → ASR(submit+poll) → LLM
+    // 主路径：application/json → LLM 结构化解析（语音转写后、文本输入均走此路径）
+    if (contentType.includes("application/json")) {
+      const body = await request.json() as { text?: string };
+      const text = body.text?.trim();
+      if (!text) {
+        return json({ error: "Missing 'text' field in JSON body" }, 400);
+      }
+      const t0 = performance.now();
+      const parsed = await parseTaskWithDoubao(text);
+      console.log(`[parse-task] llm_ms=${Math.round(performance.now() - t0)} text_len=${text.length}`);
+      return json(parsed);
+    }
+
+    // 降级路径：multipart/form-data → Storage → 文件 ASR → LLM
     if (contentType.includes("multipart/form-data")) {
       const { audio, filename } = await readAudioFromMultipart(request);
       const storagePath = `voice-tasks/${crypto.randomUUID()}/${filename}`;
@@ -76,18 +91,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
       }
     }
 
-    // 文本路径：application/json → LLM 直接解析
-    if (contentType.includes("application/json")) {
-      const body = await request.json() as { text?: string };
-      const text = body.text?.trim();
-      if (!text) {
-        return json({ error: "Missing 'text' field in JSON body" }, 400);
-      }
-      const parsed = await parseTaskWithDoubao(text);
-      return json(parsed);
-    }
-
-    return json({ error: "Unsupported content type. Use multipart/form-data or application/json." }, 400);
+    return json({ error: "Unsupported content type. Use application/json or multipart/form-data." }, 400);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return json({ error: message }, 500);
@@ -338,8 +342,11 @@ async function parseTaskWithDoubao(inputText: string): Promise<ParseTaskResponse
   const apiKey = requiredEnv("DOUBAO_API_KEY");
   const model = requiredEnv("DOUBAO_MODEL");
 
-  const currentDatetime = new Date().toISOString();
-  const systemPrompt = buildSystemPrompt(currentDatetime);
+  const now = new Date();
+  const currentDatetime = now.toISOString();
+  const weekdayLabels = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  const currentWeekday = weekdayLabels[now.getDay()];
+  const systemPrompt = buildSystemPrompt(currentDatetime, currentWeekday);
 
   const response = await fetch(endpoint, {
     method: "POST",
@@ -368,27 +375,22 @@ async function parseTaskWithDoubao(inputText: string): Promise<ParseTaskResponse
   return normalizeTaskResponse(parsed, inputText);
 }
 
-// ── LLM Prompt 模板（设计文档 7.4 节）──
+// ── LLM Prompt 模板 ──
 
-function buildSystemPrompt(currentDatetime: string): string {
-  return `You are a task parser. Extract structured task information from Chinese text input.
-Return JSON ONLY with these fields:
-- title: string (task title, extract the core action without time/priority words)
-- description: string | null (additional context, null if none)
-- due_date: string | null (ISO 8601 with timezone, null if no date mentioned)
-- priority: number (0=none, 1=P0 urgent, 2=P1 high, 3=P2 medium, 4=P3 low)
-- confidence: number (0-1, how confident you are in the extraction)
-- raw_transcript: string (the original input text)
-- tag: string | null ("work" for work/professional tasks, "life" for personal/daily life tasks like groceries, milk, chores; null if uncertain)
+function buildSystemPrompt(currentDatetime: string, currentWeekday: string): string {
+  return `Parse Chinese task text into JSON only:
+{"title":"string","description":string|null,"due_date":"ISO8601+08:00"|null,"is_all_day":true|false,"priority":0-4,"confidence":0-1,"raw_transcript":"input","tag":"work"|"life"|null}
 
+Context: now=${currentDatetime}, weekday=${currentWeekday}（今天${currentWeekday}）
 Rules:
-- Parse relative dates relative to the current time: ${currentDatetime}
-- "明天" = tomorrow, "下周五" = next Friday, "月底" = end of month
-- If no time is specified but date is, default to 09:00
-- If no date is mentioned, due_date = null
-- Extract priority from keywords: 紧急→P0, 高/重要→P1, 中→P2, 低→P3
-- Title should be concise (remove date/priority words from title)
-- Category examples: 牛奶/买菜/家务/健身 → tag=life; 会议/文档/审阅/OKR → tag=work; if unsure → tag=null`;
+- Relative dates from now; weekday = next occurrence if passed this week
+- No explicit time on date → due_date at 00:00+08:00, is_all_day: true
+- Explicit time (e.g. "下午3点") → due_date with that time, is_all_day: false
+- No date → due_date: null, is_all_day: false
+- 紧急→1, 高/重要→2, 中→3, 低→4, else 0
+- Title: core action without time/priority words
+- tag: 会议/文档/出差→work; 买菜/家务/餐饮/娱乐/外出→life; unsure→null
+Example (today Monday): "周四去吃KFC" → due next Thu 00:00+08:00, is_all_day: true, tag: life, title "去吃KFC"`;
 }
 
 // ── 工具函数 ──
@@ -405,11 +407,26 @@ function normalizeTaskResponse(
     title,
     description: nullableStringValue(payload.description),
     due_date: nullableStringValue(payload.due_date),
+    is_all_day: normalizeIsAllDay(payload.is_all_day, payload.due_date),
     priority: normalizePriority(payload.priority),
     confidence: Math.max(0, Math.min(1, confidence)),
     raw_transcript: rawTranscript,
     tag: normalizeTag(payload.tag),
   };
+}
+
+function normalizeIsAllDay(value: unknown, dueDate: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1") return true;
+    if (normalized === "false" || normalized === "0") return false;
+  }
+  // Legacy fallback: midnight due_date implies all-day
+  if (typeof dueDate === "string") {
+    return /T00:00(?::00)?(?:\.\d+)?\+08:00$/.test(dueDate.trim());
+  }
+  return false;
 }
 
 function normalizeTag(value: unknown): string | null {
@@ -500,6 +517,7 @@ function mockResponse(): ParseTaskResponse {
     title: "提交设计稿",
     description: "识别内容: 明天下午三点提交设计稿，优先级高",
     due_date: "2026-07-21T15:00:00.000+08:00",
+    is_all_day: false,
     priority: 2,
     confidence: 0.86,
     raw_transcript: "明天下午三点提交设计稿，优先级高",

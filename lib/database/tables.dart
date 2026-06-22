@@ -27,6 +27,7 @@ class Tasks extends Table {
   IntColumn get priority => integer().withDefault(const Constant(0))();
 
   DateTimeColumn get dueDate => dateTime().nullable()();
+  BoolColumn get isAllDay => boolean().withDefault(const Constant(false))();
   BoolColumn get isCompleted => boolean().withDefault(const Constant(false))();
   DateTimeColumn get completedAt => dateTime().nullable()();
   TextColumn get siyuanBlockId => text().nullable()();

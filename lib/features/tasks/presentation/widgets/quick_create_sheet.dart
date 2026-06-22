@@ -1,6 +1,8 @@
 // QuickCreateSheet — 快速创建底部抽屉
 // 折叠式:默认只标题+创建按钮;展开后显示日期pills(今天/明天/后天/下周一)+优先级pills(P0~P3)
-// 创建后关闭 sheet → 显示撤回 Snackbar（4.5s 自动消失）
+// 创建后立即关闭 sheet → 后台 Orchestrator 解析+创建 → Snackbar 反馈
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
@@ -11,6 +13,9 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/tempo/src/tempo_date_picker.dart';
 import '../../../../core/widgets/tempo/src/tempo_snackbar.dart';
+import '../../../../core/widgets/tempo/tempo.dart';
+import '../../data/task_creation_orchestrator.dart';
+import '../../data/voice_task_parse_result.dart';
 import '../../domain/task.dart';
 
 /// 日期快捷选项
@@ -42,8 +47,9 @@ enum _QuickDate {
   }
 }
 
-/// 快速创建回调：返回创建成功的 Task
-typedef QuickCreateCallback = Future<Task> Function({
+/// 快速编辑回调：返回更新后的 Task
+typedef QuickUpdateCallback = Future<Task> Function({
+  required Task task,
   required String title,
   DateTime? dueDate,
   TaskPriority priority,
@@ -51,16 +57,27 @@ typedef QuickCreateCallback = Future<Task> Function({
 });
 
 class QuickCreateSheet extends ConsumerStatefulWidget {
-  final QuickCreateCallback onCreate;
+  final QuickUpdateCallback? onUpdate;
+  final Task? initialTask;
+  final VoiceTaskParseResult? voiceDraft;
 
-  const QuickCreateSheet({super.key, required this.onCreate});
+  const QuickCreateSheet({
+    super.key,
+    this.onUpdate,
+    this.initialTask,
+    this.voiceDraft,
+  }) : assert(
+          onUpdate != null || initialTask == null,
+          'Provide onUpdate + initialTask for edit mode',
+        );
 
-  /// 从 TasksPage 弹出快速创建 bottom sheet；成功时返回创建的 Task
-  static Future<Task?> show(
-    BuildContext context, {
-    required QuickCreateCallback onCreate,
-  }) {
-    return showModalBottomSheet<Task?>(
+  bool get isEditMode => initialTask != null;
+
+  bool get isVoicePrefillMode => voiceDraft != null;
+
+  /// 从 TasksPage 弹出快速创建 bottom sheet
+  static Future<void> show(BuildContext context) {
+    return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -70,7 +87,49 @@ class QuickCreateSheet extends ConsumerStatefulWidget {
           top: Radius.circular(AppTheme.radiusLg),
         ),
       ),
-      builder: (_) => QuickCreateSheet(onCreate: onCreate),
+      builder: (_) => const QuickCreateSheet(),
+    );
+  }
+
+  /// 编辑已有任务；成功时返回更新后的 Task
+  static Future<Task?> showEdit(
+    BuildContext context, {
+    required Task task,
+    required QuickUpdateCallback onUpdate,
+  }) {
+    return showModalBottomSheet<Task?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: const Color(0x73000000),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusLg),
+        ),
+      ),
+      builder: (_) => QuickCreateSheet(
+        initialTask: task,
+        onUpdate: onUpdate,
+      ),
+    );
+  }
+
+  /// 语音低置信度草稿：预填解析结果供用户确认。
+  static Future<void> showPrefill(
+    BuildContext context, {
+    required VoiceTaskParseResult draft,
+  }) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: const Color(0x73000000),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusLg),
+        ),
+      ),
+      builder: (_) => QuickCreateSheet(voiceDraft: draft),
     );
   }
 
@@ -88,23 +147,73 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
   TaskPriority _selectedPriority = TaskPriority.none;
   String? _selectedTag;
   bool _tagTouched = false;
+  bool _dateTouched = false;
+  bool _priorityTouched = false;
 
   bool _isSubmitting = false;
 
-  bool get _canSubmit => _titleController.text.trim().isNotEmpty && !_isSubmitting;
+  bool get _isEditMode => widget.isEditMode;
+
+  bool get _canSubmit =>
+      _titleController.text.trim().isNotEmpty && !_isSubmitting;
+
+  bool get _skipParse =>
+      _dateTouched || _priorityTouched || _tagTouched || widget.isVoicePrefillMode;
 
   @override
   void initState() {
     super.initState();
-    _titleController.addListener(() => setState(() {}));
-    // 自动聚焦标题输入框
+    final initialTask = widget.initialTask;
+    final voiceDraft = widget.voiceDraft;
+    if (initialTask != null) {
+      _titleController.text = initialTask.title;
+      if (initialTask.dueDate != null) {
+        _customDate = initialTask.dueDate;
+        _dateTouched = true;
+      }
+      if (initialTask.priority != TaskPriority.none) {
+        _selectedPriority = initialTask.priority;
+        _priorityTouched = true;
+      }
+      if (initialTask.tag != null) {
+        _selectedTag = initialTask.tag;
+        _tagTouched = true;
+      }
+      _expanded = initialTask.dueDate != null ||
+          initialTask.priority != TaskPriority.none ||
+          initialTask.tag != null;
+    } else if (voiceDraft != null) {
+      _titleController.text = voiceDraft.title;
+      if (voiceDraft.dueDate != null) {
+        _customDate = voiceDraft.dueDate;
+        _dateTouched = true;
+      }
+      if (voiceDraft.priority != TaskPriority.none) {
+        _selectedPriority = voiceDraft.priority;
+        _priorityTouched = true;
+      }
+      if (voiceDraft.tag != null) {
+        _selectedTag = voiceDraft.tag;
+        _tagTouched = true;
+      }
+      _expanded = voiceDraft.dueDate != null ||
+          voiceDraft.priority != TaskPriority.none ||
+          voiceDraft.tag != null;
+    }
+    _titleController.addListener(_onTitleChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _titleFocus.requestFocus();
+      if (!mounted) return;
+      _titleFocus.requestFocus();
     });
+  }
+
+  void _onTitleChanged() {
+    setState(() {});
   }
 
   @override
   void dispose() {
+    _titleController.removeListener(_onTitleChanged);
     _titleController.dispose();
     _titleFocus.dispose();
     super.dispose();
@@ -118,31 +227,63 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
 
   Future<void> _submit() async {
     if (!_canSubmit) return;
-    setState(() => _isSubmitting = true);
-    try {
-      String? tag;
-      if (_tagTouched) {
-        tag = _selectedTag;
-      } else {
-        final parsed = await ref.read(textParseServiceProvider).parseText(
-              _titleController.text.trim(),
-            );
-        tag = parsed?.tag;
-      }
 
-      final task = await widget.onCreate(
-        title: _titleController.text.trim(),
-        dueDate: _effectiveDueDate,
-        priority: _selectedPriority,
-        tag: tag,
+    final title = _titleController.text.trim();
+
+    if (_isEditMode) {
+      setState(() => _isSubmitting = true);
+      try {
+        final task = await widget.onUpdate!(
+          task: widget.initialTask!,
+          title: title,
+          dueDate: _effectiveDueDate,
+          priority: _selectedPriority,
+          tag: _selectedTag,
+        );
+        if (!mounted) return;
+        Navigator.of(context).pop(task);
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _isSubmitting = false);
+        TempoSnackbar.show(
+          context,
+          message: '保存失败: $e',
+        );
+      }
+      return;
+    }
+
+    if (widget.isVoicePrefillMode) {
+      final draft = widget.voiceDraft!;
+      unawaited(
+        ref.read(taskCreationOrchestratorProvider).enqueueVoiceCreate(
+              draft.copyWith(
+                title: title,
+                dueDate: _effectiveDueDate ?? draft.dueDate,
+                priority: _selectedPriority,
+                tag: _selectedTag ?? draft.tag,
+              ),
+            ),
       );
       if (!mounted) return;
-      Navigator.of(context).pop(task);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isSubmitting = false);
-      TempoSnackbar.show(context, message: '创建失败: $e');
+      Navigator.of(context).pop();
+      return;
     }
+
+    unawaited(
+      ref.read(taskCreationOrchestratorProvider).enqueueQuickCreate(
+            QuickCreateInput(
+              title: title,
+              dueDate: _effectiveDueDate,
+              isAllDay: _effectiveDueDate != null,
+              priority: _selectedPriority,
+              tag: _selectedTag,
+              skipParse: _skipParse,
+            ),
+          ),
+    );
+    if (!mounted) return;
+    Navigator.of(context).pop();
   }
 
   @override
@@ -186,6 +327,29 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                if (widget.isVoicePrefillMode) ...[
+                  const Text(
+                    '确认语音任务',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.fg,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  if (widget.voiceDraft!.rawTranscript.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      widget.voiceDraft!.rawTranscript,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.fgSecondary,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                ],
                 // 标题输入框
                 _buildTitleField(),
                 const SizedBox(height: 10),
@@ -234,7 +398,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
         color: AppTheme.fg,
       ),
       decoration: InputDecoration(
-        hintText: '拟定待办…',
+        hintText: _isEditMode ? '编辑待办…' : '拟定待办…',
         hintStyle: TextStyle(color: AppTheme.fgSubtle, fontSize: 14),
         filled: true,
         fillColor: AppTheme.bgSubtle,
@@ -345,11 +509,11 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
       onTap: () {
         setState(() {
           if (isSelected) {
-            // toggle 取消 → 回到无日期
             _selectedDate = null;
           } else {
             _selectedDate = date;
-            _customDate = null; // 选 pill 时清除自定义日期
+            _customDate = null;
+            _dateTouched = true;
           }
         });
       },
@@ -427,7 +591,8 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
     if (picked != null) {
       setState(() {
         _customDate = DateTime(picked.year, picked.month, picked.day);
-        _selectedDate = null; // 自定义日期时清除 pill 选中
+        _selectedDate = null;
+        _dateTouched = true;
       });
     }
   }
@@ -541,8 +706,8 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
     return GestureDetector(
       onTap: () {
         setState(() {
+          _priorityTouched = true;
           if (isSelected) {
-            // toggle 取消 → 回到 none
             _selectedPriority = TaskPriority.none;
           } else {
             _selectedPriority = p;
@@ -626,7 +791,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
                 ),
               )
             : Text(
-                '创建',
+                _isEditMode ? '保存' : '创建',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,

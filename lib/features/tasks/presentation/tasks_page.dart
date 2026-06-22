@@ -18,7 +18,6 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/tempo/tempo.dart';
-import '../data/voice_task_parse_result.dart';
 import '../domain/task.dart';
 import 'widgets/quick_create_sheet.dart';
 import 'widgets/task_tile.dart';
@@ -110,7 +109,9 @@ class _TasksPageState extends ConsumerState<TasksPage> {
                 setState(() => _showVoiceOverlay = false);
                 ref.read(shellTabBarVisibleProvider.notifier).state = true;
               },
-              onAutoCreate: _handleVoiceCreate,
+              onNeedDraftConfirm: (draft) {
+                unawaited(QuickCreateSheet.showPrefill(context, draft: draft));
+              },
             ),
         ],
       ),
@@ -225,8 +226,11 @@ class _TasksPageState extends ConsumerState<TasksPage> {
     final pending = data.where((t) => !t.isCompleted).length;
     final overdue = data.where((t) {
       return t.dueDate != null &&
-          t.dueDate!.isBefore(DateTime.now()) &&
-          !t.isCompleted;
+          isTaskOverdue(
+            dueDate: t.dueDate!,
+            isAllDay: t.isAllDay,
+            isCompleted: t.isCompleted,
+          );
     }).length;
     final now = DateTime.now();
     final weekCount = data
@@ -285,6 +289,7 @@ class _TasksPageState extends ConsumerState<TasksPage> {
 
   Widget _buildCategoryFilter(AsyncValue<List<Task>> tasks) {
     final data = tasks.valueOrNull ?? [];
+    final all = data.length;
     final work = data.where((t) => t.tag == AppConstants.tagWork).length;
     final life = data.where((t) => t.tag == AppConstants.tagLife).length;
 
@@ -292,6 +297,10 @@ class _TasksPageState extends ConsumerState<TasksPage> {
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
       child: SegmentedButton<_CategoryFilter>(
         segments: [
+          ButtonSegment(
+            value: _CategoryFilter.all,
+            label: _segLabel('全部', all),
+          ),
           ButtonSegment(
             value: _CategoryFilter.work,
             label: _segLabel('工作', work),
@@ -372,8 +381,12 @@ class _TasksPageState extends ConsumerState<TasksPage> {
         tasks = tasks
             .where((t) =>
                 t.dueDate != null &&
-                t.dueDate!.isBefore(now) &&
-                !t.isCompleted)
+                isTaskOverdue(
+                  dueDate: t.dueDate!,
+                  isAllDay: t.isAllDay,
+                  isCompleted: t.isCompleted,
+                  now: now,
+                ))
             .toList();
         break;
       case _TimeFilter.all:
@@ -422,6 +435,8 @@ class _TasksPageState extends ConsumerState<TasksPage> {
                     task: active[i],
                     onTap: () => _navigateToDetail(active[i]),
                     onToggleComplete: () => _toggleTask(active[i]),
+                    showDelete: true,
+                    onDelete: () => _deleteTask(active[i]),
                   ),
                 ],
               ],
@@ -446,6 +461,8 @@ class _TasksPageState extends ConsumerState<TasksPage> {
                       task: completed[i],
                       onTap: () => _navigateToDetail(completed[i]),
                       onToggleComplete: () => _toggleTask(completed[i]),
+                      showDelete: true,
+                      onDelete: () => _deleteTask(completed[i]),
                     ),
                   ),
                 ],
@@ -510,66 +527,15 @@ class _TasksPageState extends ConsumerState<TasksPage> {
     }
   }
 
-  Future<void> _handleVoiceCreate(VoiceTaskParseResult result) async {
-    final task = await ref.read(taskRepositoryProvider).createVoiceTask(result);
-    if (!mounted) return;
-    await ref.read(notificationServiceProvider).scheduleTaskReminder(task);
-    if (!mounted) return;
-    TempoSnackbar.show(
-      context,
-      message: '已创建语音任务:${task.title}',
-      undoLabel: '撤回',
-      onUndo: () async {
-        await ref.read(taskRepositoryProvider).deleteTask(task.id);
-        await ref.read(notificationServiceProvider).cancelTaskReminders(task.id);
-      },
-    );
-  }
-
   Future<void> _openQuickCreate() async {
     ref.read(shellTabBarVisibleProvider.notifier).state = false;
     setState(() => _showQuickCreate = true);
 
-    final createdTask = await QuickCreateSheet.show(
-      context,
-      onCreate: _handleQuickCreate,
-    );
+    await QuickCreateSheet.show(context);
 
     if (!mounted) return;
     setState(() => _showQuickCreate = false);
     ref.read(shellTabBarVisibleProvider.notifier).state = true;
-
-    if (createdTask != null) {
-      TempoSnackbar.show(
-        context,
-        message: '已创建:${createdTask.title}',
-        undoLabel: '撤回',
-        onUndo: () async {
-          await ref.read(taskRepositoryProvider).deleteTask(createdTask.id);
-          await ref
-              .read(notificationServiceProvider)
-              .cancelTaskReminders(createdTask.id);
-        },
-      );
-    }
-  }
-
-  Future<Task> _handleQuickCreate({
-    required String title,
-    DateTime? dueDate,
-    TaskPriority priority = TaskPriority.none,
-    String? tag,
-  }) async {
-    final task = await ref.read(taskRepositoryProvider).createTask(
-          title: title,
-          dueDate: dueDate,
-          priority: priority,
-          creationSource: AppConstants.sourceText,
-          tag: tag,
-        );
-    if (!mounted) return task;
-    await ref.read(notificationServiceProvider).scheduleTaskReminder(task);
-    return task;
   }
 }
 

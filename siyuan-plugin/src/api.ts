@@ -1,23 +1,16 @@
 // ============================================================
 // api.ts — Supabase 客户端封装
-// 使用用户 session token 直连 Supabase
 // ============================================================
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { loadAuth, StoredAuth } from './storage';
+import { loadAuth, saveAuth, StoredAuth } from './storage';
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from './config';
 
-/** Supabase 配置 — 部署时替换为实际值 */
-export const SUPABASE_URL = 'http://127.0.0.1:54321';
-export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
-
-/** 配对码交换端点 */
-export const PAIRING_ENDPOINT = `${SUPABASE_URL}/functions/v1/siyuan-pairing`;
-
-/** 当前 Supabase 客户端（使用用户 token） */
+/** 当前 Supabase 客户端 */
 let client: SupabaseClient | null = null;
 let currentAuth: StoredAuth | null = null;
 
-/** 初始化 Supabase 客户端（使用存储的 token） */
+/** 初始化 Supabase 客户端 */
 export function initClient(auth: StoredAuth): SupabaseClient {
   currentAuth = auth;
   client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -54,16 +47,19 @@ export async function refreshSession(): Promise<boolean> {
   }
 
   try {
-    const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-      method: 'POST',
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        refresh_token: currentAuth.refresh_token,
-      }),
-    });
+    const response = await fetch(
+      `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,
+      {
+        method: 'POST',
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          refresh_token: currentAuth.refresh_token,
+        }),
+      }
+    );
 
     if (!response.ok) return false;
 
@@ -76,13 +72,26 @@ export async function refreshSession(): Promise<boolean> {
       stored_at: Date.now(),
     };
 
-    // 更新存储和客户端
-    const { saveAuth } = await import('./storage');
     saveAuth(newAuth);
     initClient(newAuth);
     return true;
   } catch {
     return false;
+  }
+}
+
+async function withAuthRetry<T>(action: () => Promise<T>): Promise<T> {
+  try {
+    return await action();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('JWT') || message.includes('401')) {
+      const refreshed = await refreshSession();
+      if (refreshed) {
+        return await action();
+      }
+    }
+    throw error;
   }
 }
 
@@ -94,17 +103,22 @@ export async function createTaskFromSiyuan(
   dueDate?: string | null,
   priority?: number
 ): Promise<string> {
-  const supabase = getClient();
-  if (!supabase) throw new Error('未绑定 Tempo 账号');
+  return withAuthRetry(async () => {
+    const supabase = getClient();
+    if (!supabase) throw new Error('未绑定 Tempo 账号');
 
-  const { data, error } = await supabase.rpc('create_task_from_siyuan', {
-    p_title: title,
-    p_siyuan_block_id: siyuanBlockId,
-    p_description: description ?? null,
-    p_due_date: dueDate ?? null,
-    p_priority: priority ?? 0,
+    const { data, error } = await supabase.rpc('create_task_from_siyuan', {
+      p_title: title,
+      p_siyuan_block_id: siyuanBlockId,
+      p_description: description ?? null,
+      p_due_date: dueDate ?? null,
+      p_priority: priority ?? 0,
+    });
+
+    if (error) throw error;
+    return data as string;
   });
-
-  if (error) throw error;
-  return data as string;
 }
+
+export { SUPABASE_URL, SUPABASE_ANON_KEY };
+export { PAIRING_ENDPOINT } from './config';

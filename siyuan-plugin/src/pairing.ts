@@ -2,8 +2,10 @@
 // pairing.ts — 配对码输入 + token 交换 + 存储
 // ============================================================
 
-import { PAIRING_ENDPOINT } from './api';
+import { PAIRING_ENDPOINT } from './config';
+import { initClient } from './api';
 import { saveAuth, type StoredAuth } from './storage';
+import { reportPaired } from './binding';
 
 /** 配对响应 */
 interface PairingResponse {
@@ -54,5 +56,7 @@ export async function pairWithCode(code: string): Promise<StoredAuth> {
   };
 
   saveAuth(auth);
+  initClient(auth);
+  await reportPaired();
   return auth;
 }

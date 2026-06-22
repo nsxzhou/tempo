@@ -2,9 +2,10 @@
 // ui.ts — 插件面板 UI（绑定状态/配对码输入/扫描按钮/统计）
 // ============================================================
 
-import { isPaired, loadAuth, clearAuth, type StoredAuth } from './storage';
+import { isPaired, loadAuth, clearAuth } from './storage';
 import { pairWithCode, PairingError } from './pairing';
 import { syncTasks } from './sync';
+import { reportUnpaired } from './binding';
 import {
   getCurrentDocId,
   getChildBlocks,
@@ -61,7 +62,8 @@ function renderUnpairedUI(container: HTMLElement): void {
   container.appendChild(title);
 
   const hint = document.createElement('p');
-  hint.textContent = '请在 Tempo App 中打开：设置 → 思源同步 → 生成配对码';
+  hint.textContent =
+    '在 Tempo App：我的 → 思源连接 → 生成配对码，然后在此输入 6 位码';
   hint.style.color = '#666';
   hint.style.fontSize = '14px';
   hint.style.marginBottom = '16px';
@@ -241,8 +243,9 @@ function renderPairedUI(container: HTMLElement): void {
   };
 
   // 解绑事件
-  unbindButton.onclick = () => {
+  unbindButton.onclick = async () => {
     if (confirm('确定要解绑 Tempo 账号吗？')) {
+      await reportUnpaired();
       clearAuth();
       renderState(container.parentElement!, 'unpaired');
     }

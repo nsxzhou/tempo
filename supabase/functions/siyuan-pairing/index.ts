@@ -119,39 +119,19 @@ Deno.serve(async (request: Request): Promise<Response> => {
       throw new Error(`generateLink 失败: ${linkResp.status} ${errText}`);
     }
 
-    const linkData = await linkResp.json() as {
-      properties?: { hashed_token?: string; action_link?: string };
-    };
+    const linkData = await linkResp.json() as Record<string, unknown>;
 
-    const hashedToken = linkData.properties?.hashed_token;
+    const hashedToken = extractHashedToken(linkData);
     if (!hashedToken) {
       throw new Error("generateLink 响应中缺少 hashed_token");
     }
 
     // 6. 调用 verify 端点交换 session
-    const verifyResp = await fetch(`${supabaseUrl}/auth/v1/verify`, {
-      method: "POST",
-      headers: {
-        "apikey": serviceRoleKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        token: hashedToken,
-        type: "magiclink",
-      }),
-    });
-
-    if (!verifyResp.ok) {
-      const errText = await verifyResp.text();
-      throw new Error(`verify 失败: ${verifyResp.status} ${errText}`);
-    }
-
-    const session = await verifyResp.json() as {
-      access_token: string;
-      refresh_token: string;
-      expires_in: number;
-      user?: { id?: string; email?: string };
-    };
+    const session = await exchangeTokenForSession(
+      supabaseUrl,
+      serviceRoleKey,
+      hashedToken,
+    );
 
     // 7. 返回 session tokens
     return json({
@@ -166,6 +146,72 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return json({ error: message }, 500);
   }
 });
+
+function extractHashedToken(linkData: Record<string, unknown>): string | null {
+  const props = linkData.properties as Record<string, unknown> | undefined;
+
+  const fromProps = props?.hashed_token;
+  if (typeof fromProps === "string" && fromProps.length > 0) {
+    return fromProps;
+  }
+
+  const flat = linkData.hashed_token;
+  if (typeof flat === "string" && flat.length > 0) {
+    return flat;
+  }
+
+  const actionLink =
+    (typeof props?.action_link === "string" ? props.action_link : null) ??
+    (typeof linkData.action_link === "string" ? linkData.action_link : null);
+
+  if (actionLink) {
+    try {
+      const url = new URL(actionLink);
+      return url.searchParams.get("token") ??
+        url.searchParams.get("token_hash");
+    } catch {
+      // ignore malformed action_link
+    }
+  }
+
+  return null;
+}
+
+async function exchangeTokenForSession(
+  supabaseUrl: string,
+  apiKey: string,
+  tokenHash: string,
+): Promise<{
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  user?: { id?: string; email?: string };
+}> {
+  const attempts: Array<Record<string, string>> = [
+    { type: "magiclink", token: tokenHash },
+    { type: "email", token_hash: tokenHash },
+  ];
+
+  let lastError = "";
+  for (const body of attempts) {
+    const verifyResp = await fetch(`${supabaseUrl}/auth/v1/verify`, {
+      method: "POST",
+      headers: {
+        "apikey": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (verifyResp.ok) {
+      return await verifyResp.json();
+    }
+
+    lastError = await verifyResp.text();
+  }
+
+  throw new Error(`verify 失败: ${lastError}`);
+}
 
 function requiredEnv(name: string): string {
   const value = Deno.env.get(name);

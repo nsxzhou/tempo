@@ -21,7 +21,7 @@ import 'shell_scaffold.dart';
 
 /// 全局 Navigator Key。
 ///
-/// 供非上下文回调（通知点击、摇一摇）使用 showDialog / 导航。
+/// 供非上下文回调（通知点击）使用 showDialog / 导航。
 /// 传入 GoRouter 后，其 currentContext 即为路由管理 Navigator 的上下文。
 final appNavigatorKeyProvider = Provider<GlobalKey<NavigatorState>>((ref) {
   return GlobalKey<NavigatorState>(debugLabel: 'tempo_app');

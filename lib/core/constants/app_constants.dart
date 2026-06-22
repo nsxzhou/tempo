@@ -80,6 +80,14 @@ class AppConstants {
       : (dotenv.env['TEMPO_PARSE_TASK_ENDPOINT'] ??
           'http://127.0.0.1:54321/functions/v1/parse-task');
 
+  /// asr-session 流式语音识别会话配置端点。
+  static String get asrSessionEndpoint => const String.fromEnvironment(
+        'TEMPO_ASR_SESSION_ENDPOINT',
+      ).isNotEmpty
+      ? const String.fromEnvironment('TEMPO_ASR_SESSION_ENDPOINT')
+      : (dotenv.env['TEMPO_ASR_SESSION_ENDPOINT'] ??
+          'http://127.0.0.1:54321/functions/v1/asr-session');
+
   /// siyuan-pairing 配对码交换端点。
   static String get siyuanPairingEndpoint => const String.fromEnvironment(
         'TEMPO_SIYUAN_PAIRING_ENDPOINT',
@@ -101,6 +109,7 @@ class AppConstants {
   static const String tableTasks = 'tasks';
   static const String tableTaskLists = 'task_lists';
   static const String tableSiyuanPairingCodes = 'siyuan_pairing_codes';
+  static const String tableSiyuanBindings = 'siyuan_bindings';
   static const String tableFeedback = 'feedback';
 
   // ── 默认列表 ──

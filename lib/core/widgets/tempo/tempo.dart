@@ -19,3 +19,4 @@ export 'src/tempo_stat_tile.dart';
 export 'src/tempo_priority_dot.dart';
 export 'src/tempo_snackbar.dart';
 export 'src/tempo_date_picker.dart';
+export 'src/tempo_confirm_dialog.dart';

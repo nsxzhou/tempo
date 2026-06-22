@@ -6,7 +6,9 @@
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -91,46 +93,82 @@ class NotificationService {
     return iosResult ?? androidResult ?? true;
   }
 
+  /// 读取用户是否开启任务到期提醒。
+  Future<bool> isRemindersEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(AppConstants.prefNotificationEnabled) ?? true;
+  }
+
+  /// 更新提醒开关；关闭时取消全部已调度通知。
+  Future<void> setRemindersEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(AppConstants.prefNotificationEnabled, enabled);
+    if (!enabled) {
+      try {
+        await cancelAll();
+      } catch (e, stack) {
+        debugPrint('[Tempo] cancelAll failed when disabling reminders: $e');
+        debugPrintStack(stackTrace: stack);
+      }
+    }
+  }
+
+  /// 为所有符合条件的任务重新调度提醒（开启开关后调用）。
+  Future<void> rescheduleAllTasks(Iterable<Task> tasks) async {
+    if (!await isRemindersEnabled()) return;
+    for (final task in tasks) {
+      await scheduleTaskReminder(task);
+    }
+  }
+
   /// 为任务调度提醒通知（到期前 15 分钟 + 到期时）。
   ///
   /// 仅当 task.dueDate != null && !isCompleted && dueDate > now 时调度。
+  /// 通知调度为 best-effort：失败时不抛出，避免任务已创建却报失败。
   Future<void> scheduleTaskReminder(Task task) async {
-    if (!_initialized) await init();
+    try {
+      if (!_initialized) await init();
 
-    // 取消已有通知（重新调度时先清理）
-    await cancelTaskReminders(task.id);
+      if (!await isRemindersEnabled()) return;
 
-    if (task.dueDate == null || task.isCompleted) return;
+      // 取消已有通知（重新调度时先清理）
+      await cancelTaskReminders(task.id);
 
-    final now = DateTime.now();
-    final dueDate = task.dueDate!;
+      if (task.dueDate == null || task.isCompleted || task.isAllDay) return;
 
-    // 到期时间已过，不调度
-    if (dueDate.isBefore(now)) return;
+      final now = DateTime.now();
+      final dueDate = task.dueDate!;
 
-    final reminderTime = dueDate.subtract(
-      Duration(minutes: AppConstants.reminderBeforeMinutes),
-    );
+      // 到期时间已过，不调度
+      if (dueDate.isBefore(now)) return;
 
-    // 调度 reminder 通知（到期前 15 分钟）
-    if (reminderTime.isAfter(now)) {
+      final reminderTime = dueDate.subtract(
+        Duration(minutes: AppConstants.reminderBeforeMinutes),
+      );
+
+      // 调度 reminder 通知（到期前 15 分钟）
+      if (reminderTime.isAfter(now)) {
+        await _zonedSchedule(
+          id: _reminderNotificationId(task.id),
+          title: '任务即将到期',
+          body: task.title,
+          scheduledTime: reminderTime,
+          payload: task.id,
+        );
+      }
+
+      // 调度 due 通知（到期时）
       await _zonedSchedule(
-        id: _reminderNotificationId(task.id),
-        title: '任务即将到期',
+        id: _dueNotificationId(task.id),
+        title: '任务已到期',
         body: task.title,
-        scheduledTime: reminderTime,
+        scheduledTime: dueDate,
         payload: task.id,
       );
+    } catch (e, stack) {
+      debugPrint('[Tempo] scheduleTaskReminder failed for ${task.id}: $e');
+      debugPrintStack(stackTrace: stack);
     }
-
-    // 调度 due 通知（到期时）
-    await _zonedSchedule(
-      id: _dueNotificationId(task.id),
-      title: '任务已到期',
-      body: task.title,
-      scheduledTime: dueDate,
-      payload: task.id,
-    );
   }
 
   /// 取消任务的所有通知。

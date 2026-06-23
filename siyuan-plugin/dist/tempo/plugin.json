@@ -1,0 +1,53 @@
+{
+  "name": "tempo",
+  "author": "Tempo",
+  "url": "https://github.com/tempo-app/tempo",
+  "version": "0.3.3",
+  "minAppVersion": "3.0.0",
+  "kernels": [
+    "windows",
+    "linux",
+    "darwin",
+    "ios",
+    "android",
+    "harmony",
+    "docker",
+    "all"
+  ],
+  "backends": [
+    "windows",
+    "linux",
+    "darwin",
+    "ios",
+    "android",
+    "harmony",
+    "docker",
+    "all"
+  ],
+  "frontends": [
+    "desktop",
+    "mobile",
+    "browser-desktop",
+    "browser-mobile",
+    "desktop-window",
+    "all"
+  ],
+  "disabledInPublish": false,
+  "displayName": {
+    "default": "Tempo 待办",
+    "zh-CN": "Tempo 待办",
+    "en-US": "Tempo Tasks"
+  },
+  "description": {
+    "default": "Manage Tempo tasks and calendar in SiYuan with cloud sync to the mobile app",
+    "zh-CN": "在思源笔记中使用 Tempo 待办与日历，与手机 App 数据同步",
+    "en-US": "Manage Tempo tasks and calendar in SiYuan with cloud sync to the mobile app"
+  },
+  "readme": {
+    "default": "README.zh-CN.md",
+    "zh-CN": "README.zh-CN.md",
+    "en-US": "README.zh-CN.md"
+  },
+  "keywords": ["tempo", "task", "todo", "calendar"],
+  "icon": "icon.png"
+}

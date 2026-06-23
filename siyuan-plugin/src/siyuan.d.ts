@@ -10,8 +10,23 @@ declare module 'siyuan' {
   }
 
   export interface ITab {
-    element: HTMLElement;
-    data?: IObject;
+    id: string;
+    headElement: HTMLElement;
+    panelElement: HTMLElement;
+    model: IModel;
+    title: string;
+    icon: string;
+    docIcon: string;
+    updateTitle: (title: string) => void;
+    pin: () => void;
+    unpin: () => void;
+    setDocIcon: (icon: string) => void;
+    close: () => void;
+  }
+
+  export interface IModel {
+    type?: string;
+    element?: HTMLElement;
   }
 
   export interface IPluginDockConfig {
@@ -64,6 +79,8 @@ declare module 'siyuan' {
     destroy(): void;
     bindInput?(element: HTMLElement, callback: () => void): void;
   }
+
+  export function getAllTabs(): ITab[];
 
   export function openTab(options: {
     app: unknown;

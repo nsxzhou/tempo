@@ -1,4 +1,7 @@
+export const PLUGIN_NAME = 'tempo';
 export const TAB_TYPE = 'tempo-main';
+/** 思源 Custom 模型 type，等于 plugin.name + addTab.type */
+export const TAB_MODEL_TYPE = `${PLUGIN_NAME}${TAB_TYPE}`;
 
 export const DEFAULT_LIST_NAME = 'Inbox';
 export const TABLE_TASKS = 'tasks';

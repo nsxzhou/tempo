@@ -4,6 +4,7 @@ import { resetClient } from '../../api';
 import { reportUnpaired } from '../../binding';
 import { resetListCache } from '../../data/list_repository';
 import { clearAuth, loadAuth } from '../../storage';
+import { closeTempoTabs } from '../../tab_control';
 
 export function openSettingsDialog(options: { onUnbind: () => void }): void {
   const auth = loadAuth();
@@ -17,10 +18,13 @@ export function openSettingsDialog(options: { onUnbind: () => void }): void {
       </div>
       <div style="height:12px"></div>
       <div style="font-size:12px;color:var(--tempo-fg-subtle);font-family:var(--tempo-font-mono);">插件版本 v${PLUGIN_VERSION}</div>
+      <div style="height:12px"></div>
+      <div style="font-size:12px;color:var(--tempo-fg-muted);line-height:1.6;">若 Tab 栏 × 无法关闭 Tempo，请先在左侧打开一篇文档，再点「关闭 Tempo 页签」或 Tab 上的 ×。</div>
     </div>
     <div class="b3-dialog__action">
       <button class="b3-button b3-button--cancel">关闭</button>
       <div class="fn__space"></div>
+      <button class="b3-button b3-button--text" id="tempo-close-tab">关闭 Tempo 页签</button>
       <button class="b3-button b3-button--text" id="tempo-unbind" style="color:var(--tempo-p0);">解绑</button>
     </div>`,
     width: '420px',
@@ -28,6 +32,14 @@ export function openSettingsDialog(options: { onUnbind: () => void }): void {
 
   const buttons = dialog.element.querySelectorAll('.b3-button');
   (buttons[0] as HTMLButtonElement).addEventListener('click', () => dialog.destroy());
+
+  const closeTabButton = dialog.element.querySelector(
+    '#tempo-close-tab'
+  ) as HTMLButtonElement;
+  closeTabButton.addEventListener('click', () => {
+    closeTempoTabs();
+    dialog.destroy();
+  });
 
   const unbindButton = dialog.element.querySelector('#tempo-unbind') as HTMLButtonElement;
   unbindButton.addEventListener('click', () => {

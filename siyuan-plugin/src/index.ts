@@ -6,8 +6,12 @@ import { openTab, Plugin as SiyuanPlugin } from 'siyuan';
 import fontsCss from './theme/fonts.css';
 import layoutCss from './theme/layout.css';
 import tokensCss from './theme/tokens.css';
-import { TAB_TYPE } from './constants';
+import { PLUGIN_NAME, TAB_TYPE } from './constants';
 import { mountTabRoot, refreshTabRoot, unmountTabRoot } from './ui/tab_root';
+
+interface TabModel {
+  element: HTMLElement;
+}
 
 const STYLE_ID = 'tempo-plugin-styles';
 
@@ -26,17 +30,21 @@ class TempoPlugin extends SiyuanPlugin {
 
       this.addTab({
         type: TAB_TYPE,
-        init(custom) {
-          mountTabRoot(custom.element as HTMLElement);
+        init(this: TabModel) {
+          mountTabRoot(this.element);
         },
-        update(custom) {
-          refreshTabRoot(custom.element as HTMLElement);
+        update(this: TabModel) {
+          refreshTabRoot(this.element);
         },
-        destroy(custom) {
-          unmountTabRoot(custom.element as HTMLElement);
+        destroy(this: TabModel) {
+          try {
+            unmountTabRoot(this.element);
+          } catch (error) {
+            console.warn('[Tempo] tab destroy cleanup failed:', error);
+          }
         },
-        resize(custom) {
-          refreshTabRoot(custom.element as HTMLElement);
+        resize(this: TabModel) {
+          refreshTabRoot(this.element);
         },
       });
 
@@ -56,7 +64,7 @@ class TempoPlugin extends SiyuanPlugin {
       custom: {
         title: 'Tempo',
         icon: 'iconList',
-        id: `${this.name}${TAB_TYPE}`,
+        id: `${PLUGIN_NAME}${TAB_TYPE}`,
       },
     });
   }

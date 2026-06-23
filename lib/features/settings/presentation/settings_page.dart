@@ -12,7 +12,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app_providers.dart';
@@ -22,6 +21,8 @@ import '../../../core/widgets/tempo/tempo.dart';
 import '../data/siyuan_pairing_service.dart';
 import 'feedback_dialog.dart';
 import 'pairing_code_dialog.dart';
+import 'siyuan_manage_sheet.dart';
+import 'siyuan_status_display.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -57,33 +58,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   SiyuanBindingStatus _displaySiyuanStatus(AsyncValue<SiyuanBindingStatus> async) {
     return async.valueOrNull ?? const SiyuanBindingStatus(isPaired: false);
-  }
-
-  String _siyuanSubtitle(SiyuanBindingStatus status) {
-    if (status.isPaired && status.hasSynced && status.lastSyncAt != null) {
-      final when = DateFormat('M月d日 HH:mm').format(status.lastSyncAt!);
-      return '最近同步：$when · 导入 ${status.lastImportedCount} 项';
-    }
-    if (status.isPaired) {
-      return '已绑定 · 尚未导入任务';
-    }
-    if (status.hasPendingCode) {
-      return '配对码已生成，请在思源插件中输入';
-    }
-    return '在思源插件中输入配对码完成绑定';
-  }
-
-  ({TempoBadgeKind kind, String label}) _siyuanBadge(SiyuanBindingStatus status) {
-    if (status.isPaired && status.hasSynced) {
-      return (kind: TempoBadgeKind.success, label: '已连通');
-    }
-    if (status.isPaired) {
-      return (kind: TempoBadgeKind.tag, label: '已绑定');
-    }
-    if (status.hasPendingCode) {
-      return (kind: TempoBadgeKind.neutral, label: '待配对');
-    }
-    return (kind: TempoBadgeKind.neutral, label: '未启用');
   }
 
   @override
@@ -172,9 +146,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     iconBg: AppTheme.priorityP1Bg,
                     iconBorder: AppTheme.priorityP1Border,
                     title: '思源外部笔记 Petal 连接',
-                    subtitle: _siyuanSubtitle(siyuanStatus),
-                    badgeKind: _siyuanBadge(siyuanStatus).kind,
-                    badgeLabel: _siyuanBadge(siyuanStatus).label,
+                    subtitle: siyuanIntegrationSubtitle(siyuanStatus),
+                    badgeKind: siyuanIntegrationBadge(siyuanStatus).kind,
+                    badgeLabel: siyuanIntegrationBadge(siyuanStatus).label,
                     onTap: () => _handleSiyuanTap(siyuanStatus),
                   ),
                   TempoIntegrationRow(
@@ -299,114 +273,52 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _handleSiyuanTap(SiyuanBindingStatus status) async {
-    if (status.isPaired) {
-      await _showSiyuanMenu();
+    if (!status.isPaired) {
+      await PairingCodeDialog.show(
+        context,
+        existingCode: status.pendingCode?.isValid == true
+            ? status.pendingCode
+            : null,
+      );
+      _refreshSiyuanStatus();
       return;
     }
 
-    await PairingCodeDialog.show(
+    final userEmail = ref.read(currentUserEmailProvider);
+    final action = await SiyuanManageSheet.show(
       context,
-      existingCode: status.pendingCode?.isValid == true
-          ? status.pendingCode
-          : null,
+      status: status,
+      userEmail: userEmail,
     );
-    _refreshSiyuanStatus();
-  }
+    if (!mounted || action == null) return;
 
-  Future<void> _showSiyuanMenu() async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      useRootNavigator: false,
-      backgroundColor: Colors.transparent,
-      barrierColor: const Color(0x73000000),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppTheme.radiusLg),
-        ),
-      ),
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: AppTheme.bg,
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(AppTheme.radiusLg),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Color(0x1F000000),
-              blurRadius: 30,
-              offset: Offset(0, -8),
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppTheme.borderStrong,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusFull),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              _buildSiyuanMenuItem(ctx, LucideIcons.unlink, '解绑思源', 'unpair'),
-              const SizedBox(height: 4),
-              _buildSiyuanMenuItem(ctx, LucideIcons.refresh_cw, '重新生成配对码', 'pair'),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (action == 'pair' && mounted) {
-      await PairingCodeDialog.show(context);
-      _refreshSiyuanStatus();
-    } else if (action == 'unpair' && mounted) {
-      await ref.read(siyuanPairingServiceProvider).clearBinding();
-      if (!mounted) return;
-      _refreshSiyuanStatus();
-      TempoSnackbar.show(
-        context,
-        message: '已解除 App 侧绑定，请在思源插件中点击解绑',
-      );
+    switch (action) {
+      case SiyuanManageAction.rePair:
+        await PairingCodeDialog.show(context);
+        _refreshSiyuanStatus();
+      case SiyuanManageAction.unpair:
+        await _confirmAndUnpairSiyuan();
     }
   }
 
-  Widget _buildSiyuanMenuItem(
-    BuildContext ctx,
-    IconData icon,
-    String label,
-    String action,
-  ) {
-    return GestureDetector(
-      onTap: () => Navigator.pop(ctx, action),
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 4,
-          vertical: 12,
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: AppTheme.fgMuted),
-            const SizedBox(width: 12),
-            Text(
-              label,
-              style: const TextStyle(
-                fontFamily: AppTheme.fontSans,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: AppTheme.fg,
-              ),
-            ),
-          ],
-        ),
-      ),
+  Future<void> _confirmAndUnpairSiyuan() async {
+    final confirmed = await TempoConfirmDialog.show(
+      context,
+      title: '解绑思源',
+      message:
+          '确定解除与思源的连接吗？解绑后需在思源插件中重新输入配对码。'
+          '若只是插件重装，可直接选择「重新配对」，无需解绑。',
+      confirmLabel: '解绑',
+      isDestructive: true,
+    );
+    if (confirmed != true || !mounted) return;
+
+    await ref.read(siyuanPairingServiceProvider).clearBinding();
+    if (!mounted) return;
+    _refreshSiyuanStatus();
+    TempoSnackbar.show(
+      context,
+      message: '已解除 App 侧绑定，请在思源插件中点击解绑',
     );
   }
 

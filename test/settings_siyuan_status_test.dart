@@ -17,6 +17,6 @@ void main() {
     }
 
     expect(status, isNotNull);
-    expect(status!.isPaired, isFalse);
+    expect(status.isPaired, isFalse);
   });
 }

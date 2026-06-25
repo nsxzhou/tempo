@@ -28,11 +28,9 @@ class FeedbackService {
   final SupabaseClient _supabase;
   final String? _userId;
 
-  FeedbackService({
-    required SupabaseClient supabase,
-    required String? userId,
-  })  : _supabase = supabase,
-        _userId = userId;
+  FeedbackService({required SupabaseClient supabase, required String? userId})
+    : _supabase = supabase,
+      _userId = userId;
 
   /// 提交反馈。
   ///

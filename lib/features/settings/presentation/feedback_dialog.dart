@@ -7,22 +7,19 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app_providers.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/tempo_theme_extension.dart';
 import '../../../core/widgets/tempo/tempo.dart';
 
 class FeedbackDialog extends ConsumerStatefulWidget {
   const FeedbackDialog({super.key});
 
   static Future<void> show(BuildContext context) {
-    return showDialog(
-      context: context,
-      builder: (_) => const FeedbackDialog(),
-    );
+    return showDialog(context: context, builder: (_) => const FeedbackDialog());
   }
 
   @override
@@ -41,15 +38,16 @@ class _FeedbackDialogState extends ConsumerState<FeedbackDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return Dialog(
       backgroundColor: Colors.transparent,
       child: Container(
         width: 320,
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: AppTheme.bg,
+          color: t.bg,
           borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-          border: Border.all(color: AppTheme.borderStrong, width: 0.8),
+          border: Border.all(color: t.borderStrong, width: 0.8),
           boxShadow: AppTheme.shadowSm,
         ),
         child: Column(
@@ -60,20 +58,18 @@ class _FeedbackDialogState extends ConsumerState<FeedbackDialog> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   '提交反馈',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: AppTheme.fg,
+                    color: t.fg,
                     letterSpacing: -0.2,
                   ),
                 ),
                 GestureDetector(
-                  onTap: _isSubmitting
-                      ? null
-                      : () => Navigator.pop(context),
-                  child: Icon(LucideIcons.x, size: 16, color: AppTheme.fgMuted),
+                  onTap: _isSubmitting ? null : () => Navigator.pop(context),
+                  child: Icon(LucideIcons.x, size: 16, color: t.fgMuted),
                 ),
               ],
             ),
@@ -83,27 +79,23 @@ class _FeedbackDialogState extends ConsumerState<FeedbackDialog> {
               controller: _controller,
               maxLines: 5,
               autofocus: true,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppTheme.fg,
-                height: 1.5,
-              ),
+              style: TextStyle(fontSize: 13, color: t.fg, height: 1.5),
               decoration: InputDecoration(
                 hintText: '请描述你遇到的问题或建议...',
-                hintStyle: TextStyle(fontSize: 12, color: AppTheme.fgSubtle),
+                hintStyle: TextStyle(fontSize: 12, color: t.fgSubtle),
                 filled: true,
-                fillColor: AppTheme.bgSubtle,
+                fillColor: t.bgSubtle,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                  borderSide: const BorderSide(color: AppTheme.borderStrong),
+                  borderSide: BorderSide(color: t.borderStrong),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                  borderSide: const BorderSide(color: AppTheme.borderStrong),
+                  borderSide: BorderSide(color: t.borderStrong),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                  borderSide: const BorderSide(color: AppTheme.fg, width: 2),
+                  borderSide: BorderSide(color: t.fg, width: 2),
                 ),
                 contentPadding: const EdgeInsets.all(12),
               ),
@@ -113,17 +105,17 @@ class _FeedbackDialogState extends ConsumerState<FeedbackDialog> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
-                color: AppTheme.bgMuted,
+                color: t.bgMuted,
                 borderRadius: BorderRadius.circular(AppTheme.radiusSm),
               ),
               child: Row(
                 children: [
-                  Icon(LucideIcons.info, size: 13, color: AppTheme.fgMuted),
+                  Icon(LucideIcons.info, size: 13, color: t.fgMuted),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       '将自动附带设备信息(平台/版本)',
-                      style: TextStyle(fontSize: 10, color: AppTheme.fgMuted),
+                      style: TextStyle(fontSize: 10, color: t.fgMuted),
                     ),
                   ),
                 ],
@@ -139,8 +131,8 @@ class _FeedbackDialogState extends ConsumerState<FeedbackDialog> {
                         ? null
                         : () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.fgMuted,
-                      side: const BorderSide(color: AppTheme.borderStrong),
+                      foregroundColor: t.fgMuted,
+                      side: BorderSide(color: t.borderStrong),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                       ),
@@ -160,20 +152,20 @@ class _FeedbackDialogState extends ConsumerState<FeedbackDialog> {
                   child: FilledButton(
                     onPressed: _isSubmitting ? null : _submit,
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.fg,
-                      foregroundColor: AppTheme.bg,
+                      backgroundColor: t.fg,
+                      foregroundColor: t.bg,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                     child: _isSubmitting
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 16,
                             height: 16,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: AppTheme.bg,
+                              color: t.bg,
                             ),
                           )
                         : const Text(

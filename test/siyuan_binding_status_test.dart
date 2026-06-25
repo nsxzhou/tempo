@@ -6,15 +6,10 @@ import 'package:tempo/features/settings/presentation/siyuan_status_display.dart'
 void main() {
   group('SiyuanBindingStatus', () {
     test('hasSynced when lastSyncAt is set', () {
-      const status = SiyuanBindingStatus(
-        isPaired: true,
-        lastSyncAt: null,
-      );
+      const status = SiyuanBindingStatus(isPaired: true, lastSyncAt: null);
       expect(status.hasSynced, isFalse);
 
-      final synced = status.copyWith(
-        lastSyncAt: DateTime(2026, 6, 22, 15, 30),
-      );
+      final synced = status.copyWith(lastSyncAt: DateTime(2026, 6, 22, 15, 30));
       expect(synced.hasSynced, isTrue);
     });
   });
@@ -66,10 +61,7 @@ void main() {
   group('siyuanIntegrationSubtitle', () {
     test('paired without sync explains plugin pairing', () {
       const status = SiyuanBindingStatus(isPaired: true);
-      expect(
-        siyuanIntegrationSubtitle(status),
-        '云端已记录绑定 · 请在思源插件输入配对码',
-      );
+      expect(siyuanIntegrationSubtitle(status), '云端已记录绑定 · 请在思源插件输入配对码');
     });
 
     test('paired with sync shows last sync summary', () {
@@ -78,24 +70,15 @@ void main() {
         lastSyncAt: DateTime(2026, 6, 22, 15, 30),
         lastImportedCount: 3,
       );
-      expect(
-        siyuanIntegrationSubtitle(status),
-        contains('最近同步'),
-      );
-      expect(
-        siyuanIntegrationSubtitle(status),
-        contains('导入 3 项'),
-      );
+      expect(siyuanIntegrationSubtitle(status), contains('最近同步'));
+      expect(siyuanIntegrationSubtitle(status), contains('导入 3 项'));
     });
   });
 
   group('siyuanManageSheetSubtitle', () {
     test('paired without sync guides plugin input', () {
       const status = SiyuanBindingStatus(isPaired: true);
-      expect(
-        siyuanManageSheetSubtitle(status),
-        contains('请在思源插件输入配对码'),
-      );
+      expect(siyuanManageSheetSubtitle(status), contains('请在思源插件输入配对码'));
     });
   });
 }

@@ -9,21 +9,15 @@ import 'package:intl/intl.dart';
 
 import '../../../core/motion/tempo_sheet.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/tempo_theme_extension.dart';
 import '../data/siyuan_pairing_service.dart';
 import 'siyuan_status_display.dart';
 
 /// 管理 Sheet 返回的操作类型。
-enum SiyuanManageAction {
-  rePair,
-  unpair,
-}
+enum SiyuanManageAction { rePair, unpair }
 
 class SiyuanManageSheet extends StatelessWidget {
-  const SiyuanManageSheet({
-    super.key,
-    required this.status,
-    this.userEmail,
-  });
+  const SiyuanManageSheet({super.key, required this.status, this.userEmail});
 
   final SiyuanBindingStatus status;
   final String? userEmail;
@@ -35,22 +29,20 @@ class SiyuanManageSheet extends StatelessWidget {
   }) {
     return TempoSheet.show<SiyuanManageAction>(
       context: context,
-      builder: (_) => SiyuanManageSheet(
-        status: status,
-        userEmail: userEmail,
-      ),
+      builder: (_) => SiyuanManageSheet(status: status, userEmail: userEmail),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return Container(
-      decoration: const BoxDecoration(
-        color: AppTheme.bg,
-        borderRadius: BorderRadius.vertical(
+      decoration: BoxDecoration(
+        color: t.bg,
+        borderRadius: const BorderRadius.vertical(
           top: Radius.circular(AppTheme.radiusLg),
         ),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
             color: Color(0x1F000000),
             blurRadius: 30,
@@ -70,7 +62,7 @@ class SiyuanManageSheet extends StatelessWidget {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppTheme.borderStrong,
+                  color: t.borderStrong,
                   borderRadius: BorderRadius.circular(AppTheme.radiusFull),
                 ),
               ),
@@ -97,23 +89,23 @@ class SiyuanManageSheet extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         '思源连接',
                         style: TextStyle(
                           fontFamily: AppTheme.fontSans,
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
-                          color: AppTheme.fg,
+                          color: t.fg,
                           letterSpacing: -0.2,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         siyuanManageSheetSubtitle(status),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: AppTheme.fontSans,
                           fontSize: 12,
-                          color: AppTheme.fgMuted,
+                          color: t.fgMuted,
                           height: 1.4,
                         ),
                       ),
@@ -135,9 +127,9 @@ class SiyuanManageSheet extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
               child: Text(
                 '若插件已重装，重新配对即可，无需解绑',
-                style: AppTheme.mono(
+                style: t.mono(
                   size: 10,
-                  color: AppTheme.fgSubtle,
+                  color: t.fgSubtle,
                   weight: FontWeight.w500,
                 ),
               ),
@@ -153,8 +145,8 @@ class SiyuanManageSheet extends StatelessWidget {
             OutlinedButton(
               onPressed: () => Navigator.pop(context),
               style: OutlinedButton.styleFrom(
-                foregroundColor: AppTheme.fgMuted,
-                side: const BorderSide(color: AppTheme.borderStrong),
+                foregroundColor: t.fgMuted,
+                side: BorderSide(color: t.borderStrong),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                 ),
@@ -177,16 +169,14 @@ class SiyuanManageSheet extends StatelessWidget {
 }
 
 class _InfoCard extends StatelessWidget {
-  const _InfoCard({
-    required this.status,
-    this.userEmail,
-  });
+  const _InfoCard({required this.status, this.userEmail});
 
   final SiyuanBindingStatus status;
   final String? userEmail;
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     final lines = <String>[];
 
     if (userEmail != null && userEmail!.isNotEmpty) {
@@ -211,9 +201,9 @@ class _InfoCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppTheme.bgSubtle,
+        color: t.bgSubtle,
         borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-        border: Border.all(color: AppTheme.borderStrong, width: 0.8),
+        border: Border.all(color: t.borderStrong, width: 0.8),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -222,9 +212,9 @@ class _InfoCard extends StatelessWidget {
             if (i > 0) const SizedBox(height: 6),
             Text(
               lines[i],
-              style: AppTheme.mono(
+              style: t.mono(
                 size: 11,
-                color: AppTheme.fgMuted,
+                color: t.fgMuted,
                 weight: FontWeight.w500,
               ),
             ),
@@ -232,11 +222,7 @@ class _InfoCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             '插件重装后，选择「重新配对」即可，无需解绑',
-            style: AppTheme.mono(
-              size: 10,
-              color: AppTheme.fgSubtle,
-              weight: FontWeight.w500,
-            ),
+            style: t.mono(size: 10, color: t.fgSubtle, weight: FontWeight.w500),
           ),
         ],
       ),
@@ -259,7 +245,8 @@ class _MenuItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isDestructive ? AppTheme.errorColor : AppTheme.fg;
+    final t = context.tokens;
+    final color = isDestructive ? AppTheme.errorColor : t.fg;
 
     return Material(
       color: Colors.transparent,
@@ -275,7 +262,7 @@ class _MenuItem extends StatelessWidget {
                 Icon(
                   icon,
                   size: 18,
-                  color: isDestructive ? AppTheme.errorColor : AppTheme.fgMuted,
+                  color: isDestructive ? AppTheme.errorColor : t.fgMuted,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -292,7 +279,7 @@ class _MenuItem extends StatelessWidget {
                 Icon(
                   LucideIcons.chevron_right,
                   size: 16,
-                  color: isDestructive ? AppTheme.errorColor : AppTheme.fgSubtle,
+                  color: isDestructive ? AppTheme.errorColor : t.fgSubtle,
                 ),
               ],
             ),

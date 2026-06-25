@@ -1,22 +1,23 @@
 // ============================================================
 // SettingsPage — 设置页(Stripe 派 1:1 还原 prototype SettingsView.tsx)
-// 顶部 TempoUserCard(邮箱 + 3 列实时统计 + 注销)
+// 顶部 TempoUserCard(邮箱 + 注销)
 // 外部集成与同步:思源 / 系统日历
-// 个性化偏好:通知 / AI 排程 / 关于
-// 业务:通知开关、注销、登出保留;统计从 taskListProvider 实时计算
+// 个性化偏好:通知 / 主题
+// 业务:通知开关、注销、登出保留
 // ============================================================
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app_providers.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/theme_manager.dart';
+import '../../../core/theme/tempo_theme_extension.dart';
+import 'widgets/theme_settings_section.dart';
 import '../../../core/widgets/tempo/tempo.dart';
 import '../data/siyuan_pairing_service.dart';
 import 'feedback_dialog.dart';
@@ -31,8 +32,12 @@ class SettingsPage extends ConsumerStatefulWidget {
   ConsumerState<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends ConsumerState<SettingsPage> {
+class _SettingsPageState extends ConsumerState<SettingsPage>
+    with AutomaticKeepAliveClientMixin {
   bool _notificationEnabled = true;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -56,44 +61,25 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     ref.invalidate(siyuanBindingStatusProvider);
   }
 
-  SiyuanBindingStatus _displaySiyuanStatus(AsyncValue<SiyuanBindingStatus> async) {
+  SiyuanBindingStatus _displaySiyuanStatus(
+    AsyncValue<SiyuanBindingStatus> async,
+  ) {
     return async.valueOrNull ?? const SiyuanBindingStatus(isPaired: false);
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final userEmail = ref.watch(currentUserEmailProvider);
     final emailText = userEmail ?? '未登录';
-    final tasksAsync = ref.watch(taskListProvider);
     final siyuanStatusAsync = ref.watch(siyuanBindingStatusProvider);
     final siyuanStatus = _displaySiyuanStatus(siyuanStatusAsync);
 
-    final stats = tasksAsync.maybeWhen(
-      data: (tasks) {
-        final completed = tasks.where((t) => t.isCompleted).length;
-        final pending = tasks.where((t) => !t.isCompleted).length;
-        final voice = tasks
-            .where((t) => t.creationSource == AppConstants.sourceVoice)
-            .length;
-        return [
-          TempoUserStats(label: '累计完成', value: '$completed 项'),
-          TempoUserStats(label: '待办进行', value: '$pending 项'),
-          TempoUserStats(
-            label: '语音创建',
-            value: '$voice 项',
-            highlight: true,
-          ),
-        ];
-      },
-      orElse: () => const [
-        TempoUserStats(label: '累计完成', value: '0 项'),
-        TempoUserStats(label: '待办进行', value: '0 项'),
-        TempoUserStats(label: '语音创建', value: '0 项', highlight: true),
-      ],
-    );
+    final tokens = context.tokens;
+    final scaffoldBg = ref.watch(scaffoldBackgroundProvider);
 
     return Scaffold(
-      backgroundColor: AppTheme.bg,
+      backgroundColor: scaffoldBg,
       body: SafeArea(
         top: true,
         bottom: false,
@@ -111,7 +97,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   children: [
                     Text(
                       '我的',
-                      style: AppTheme.sansSemibold(
+                      style: tokens.sansSemibold(
                         size: 32,
                         letterSpacing: -0.8,
                         height: 1.0,
@@ -126,25 +112,27 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: TempoUserCard(
                   email: emailText,
-                  stats: stats,
                   onSignOut: () => _signOut(),
                 ),
               ),
               const SizedBox(height: 12),
 
               // 外部集成与同步
-              const TempoSectionHeader(
+              TempoSectionHeader(
                 label: '外部集成与同步',
-                padding: EdgeInsets.fromLTRB(20, 8, 20, 6),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
+                color: tokens.fgMuted,
               ),
               TempoSettingsGroup(
                 margin: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+                borderColor: tokens.borderStrong,
+                dividerColor: tokens.borderSubtle,
                 children: [
                   TempoIntegrationRow(
                     icon: LucideIcons.link_2,
-                    iconColor: AppTheme.priorityP1,
-                    iconBg: AppTheme.priorityP1Bg,
-                    iconBorder: AppTheme.priorityP1Border,
+                    iconColor: tokens.priorityColor(2),
+                    iconBg: tokens.priorityBg(2),
+                    iconBorder: tokens.priorityBorder(2),
                     title: '思源外部笔记 Petal 连接',
                     subtitle: siyuanIntegrationSubtitle(siyuanStatus),
                     badgeKind: siyuanIntegrationBadge(siyuanStatus).kind,
@@ -153,85 +141,41 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ),
                   TempoIntegrationRow(
                     icon: LucideIcons.calendar_days,
-                    iconColor: AppTheme.priorityP2,
-                    iconBg: AppTheme.priorityP2Bg,
-                    iconBorder: AppTheme.priorityP2Border,
+                    iconColor: tokens.priorityColor(3),
+                    iconBg: tokens.priorityBg(3),
+                    iconBorder: tokens.priorityBorder(3),
                     title: '本地系统日历订阅',
                     subtitle: '即将推出 · 同步系统日历事件',
                     badgeKind: TempoBadgeKind.neutral,
                     badgeLabel: 'COMING SOON',
                     onTap: () {
-                      TempoSnackbar.show(
-                        context,
-                        message: '系统日历同步即将推出，敬请期待',
-                      );
+                      TempoSnackbar.show(context, message: '系统日历同步即将推出，敬请期待');
                     },
                   ),
                 ],
               ),
 
               // 个性化偏好
-              const TempoSectionHeader(
+              TempoSectionHeader(
                 label: '个性化偏好',
-                padding: EdgeInsets.fromLTRB(20, 8, 20, 6),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
+                color: tokens.fgMuted,
               ),
+              const ThemeSettingsSection(),
               TempoSettingsGroup(
                 margin: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+                borderColor: tokens.borderStrong,
+                dividerColor: tokens.borderSubtle,
                 children: [
                   TempoPreferenceRow(
                     icon: LucideIcons.bell,
-                    title: '任务到期提醒',
-                    subtitle: '有具体时间的任务，到期前 15 分钟与到期时推送',
+                    title: '待办提醒',
+                    subtitle: '有日期的待办，在对应日当天早上 8:00 推送',
                     trailing: Switch(
                       value: _notificationEnabled,
                       onChanged: _toggleNotification,
-                      activeThumbColor: AppTheme.bg,
-                      activeTrackColor: AppTheme.fg,
-                      inactiveThumbColor: AppTheme.fgSubtle,
-                      inactiveTrackColor: AppTheme.bgMuted,
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                  ),
-                  TempoPreferenceRow(
-                    icon: LucideIcons.sliders_horizontal,
-                    title: 'AI 排程解析偏好',
-                    subtitle: '即将推出 · AI 智能排期',
-                    trailing: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppTheme.bgMuted,
-                        borderRadius:
-                            BorderRadius.circular(AppTheme.radiusXxs),
-                      ),
-                      child: Text(
-                        '即将推出',
-                        style: AppTheme.mono(
-                          size: 9,
-                          color: AppTheme.fgMuted,
-                          weight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                  TempoPreferenceRow(
-                    icon: LucideIcons.info,
-                    title: '关于 Tempo MVP',
-                    subtitle: 'Stripe 精致排版工艺学 V2.0.0',
-                    trailing: Text(
-                      'v2.0.0',
-                      style: AppTheme.mono(
-                        size: 9,
-                        color: AppTheme.fgMuted,
-                        weight: FontWeight.w700,
-                      ),
-                    ),
-                    onTap: () {
-                      TempoSnackbar.show(
-                        context,
-                        message: 'Tempo — 智能同步时间规划大师',
-                      );
-                    },
                   ),
                 ],
               ),
@@ -240,15 +184,17 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               const SizedBox(height: 8),
               TempoSettingsGroup(
                 margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                borderColor: tokens.borderStrong,
+                dividerColor: tokens.borderSubtle,
                 children: [
                   TempoPreferenceRow(
                     icon: LucideIcons.message_square,
                     title: '提交反馈',
                     subtitle: '报告 Bug 或提出建议',
-                    trailing: const Icon(
+                    trailing: Icon(
                       LucideIcons.chevron_right,
                       size: 14,
-                      color: AppTheme.fgMuted,
+                      color: tokens.fgMuted,
                     ),
                     onTap: () => FeedbackDialog.show(context),
                   ),
@@ -316,10 +262,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     await ref.read(siyuanPairingServiceProvider).clearBinding();
     if (!mounted) return;
     _refreshSiyuanStatus();
-    TempoSnackbar.show(
-      context,
-      message: '已解除 App 侧绑定，请在思源插件中点击解绑',
-    );
+    TempoSnackbar.show(context, message: '已解除 App 侧绑定，请在思源插件中点击解绑');
   }
 
   Future<void> _signOut() async {

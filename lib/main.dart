@@ -22,19 +22,11 @@ Future<void> main() async {
   // 2) 初始化 Supabase
   await Supabase.initialize(
     url: AppConstants.supabaseUrl,
-    anonKey: AppConstants.supabaseAnonKey,
-    debug: true, // DEBUG: 开启 HTTP 请求/响应日志
+    publishableKey: AppConstants.supabaseAnonKey,
+    debug: false,
     // supabase_flutter 自动处理 custom scheme deep link
     // redirect URL 在 Auth 配置中设置为 tempo://login-callback
   );
-
-  // DEBUG: 打印当前生效的 supabase 配置(确认是云端不是 127.0.0.1)
-  // ignore: avoid_print
-  print('[TEMPO-DEBUG] supabaseUrl = ${AppConstants.supabaseUrl}');
-  // ignore: avoid_print
-  print('[TEMPO-DEBUG] anonKey prefix = ${AppConstants.supabaseAnonKey.substring(0, 12)}...');
-  // ignore: avoid_print
-  print('[TEMPO-DEBUG] parseTaskEndpoint = ${AppConstants.parseTaskEndpoint}');
 
   // 3) 初始化 timezone 数据（本地通知 zonedSchedule 需要）
   tz.initializeTimeZones();

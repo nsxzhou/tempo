@@ -10,6 +10,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/theme_manager.dart';
+import '../../../core/theme/tempo_theme_extension.dart';
 import '../data/auth_service.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -34,8 +36,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
+    final scaffoldBg = ref.watch(scaffoldBackgroundProvider);
     return Scaffold(
-      backgroundColor: AppTheme.bg,
+      backgroundColor: scaffoldBg,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -51,9 +55,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     Text(
                       AppConstants.appName,
                       textAlign: TextAlign.center,
-                      style: AppTheme.italicSerif(
+                      style: t.italicSerif(
                         size: 40,
-                        color: AppTheme.fg,
                         height: 1.0,
                         letterSpacing: -0.8,
                       ),
@@ -62,9 +65,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     Text(
                       '智能待办 · 让时间更有节奏',
                       textAlign: TextAlign.center,
-                      style: AppTheme.mono(
+                      style: t.mono(
                         size: 11,
-                        color: AppTheme.fgMuted,
+                        color: t.fgMuted,
                         letterSpacing: 0.4,
                       ),
                     ),
@@ -79,26 +82,17 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
                         autofillHints: const ['email'],
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: AppTheme.fg,
-                        ),
+                        style: TextStyle(fontSize: 14, color: t.fg),
                         decoration: InputDecoration(
                           labelText: '邮箱地址',
-                          labelStyle: TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.fgMuted,
-                          ),
+                          labelStyle: TextStyle(fontSize: 12, color: t.fgMuted),
                           prefixIcon: Icon(
                             LucideIcons.mail,
                             size: 16,
-                            color: AppTheme.fgMuted,
+                            color: t.fgMuted,
                           ),
                           hintText: 'you@example.com',
-                          hintStyle: TextStyle(
-                            fontSize: 13,
-                            color: AppTheme.fgSubtle,
-                          ),
+                          hintStyle: TextStyle(fontSize: 13, color: t.fgSubtle),
                         ),
                         validator: _validateEmail,
                         onFieldSubmitted: (_) => _sendMagicLink(),
@@ -122,7 +116,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           ),
                           child: Row(
                             children: [
-                              Icon(
+                              const Icon(
                                 LucideIcons.circle_alert,
                                 size: 14,
                                 color: AppTheme.priorityP0,
@@ -131,7 +125,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               Expanded(
                                 child: Text(
                                   _errorMessage!,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     fontSize: 11,
                                     color: AppTheme.priorityP0,
                                     height: 1.4,
@@ -148,8 +142,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         child: FilledButton(
                           onPressed: _isSending ? null : () => _sendMagicLink(),
                           style: FilledButton.styleFrom(
-                            backgroundColor: AppTheme.fg,
-                            foregroundColor: AppTheme.bg,
+                            backgroundColor: t.fg,
+                            foregroundColor: t.bg,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(
@@ -158,12 +152,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             ),
                           ),
                           child: _isSending
-                              ? const SizedBox(
+                              ? SizedBox(
                                   height: 18,
                                   width: 18,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: AppTheme.bg,
+                                    color: t.bg,
                                   ),
                                 )
                               : const Text(
@@ -230,18 +224,16 @@ class _WaitingForEmailCard extends StatelessWidget {
   final String email;
   final VoidCallback onResend;
 
-  const _WaitingForEmailCard({
-    required this.email,
-    required this.onResend,
-  });
+  const _WaitingForEmailCard({required this.email, required this.onResend});
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppTheme.bg,
-        border: Border.all(color: AppTheme.borderStrong, width: 0.8),
+        color: t.bg,
+        border: Border.all(color: t.borderStrong, width: 0.8),
         borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         boxShadow: AppTheme.shadowSm,
       ),
@@ -251,23 +243,19 @@ class _WaitingForEmailCard extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: AppTheme.bgSubtle,
+              color: t.bgSubtle,
               borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-              border: Border.all(color: AppTheme.borderStrong, width: 0.8),
+              border: Border.all(color: t.borderStrong, width: 0.8),
             ),
-            child: Icon(
-              LucideIcons.mail_check,
-              size: 22,
-              color: AppTheme.fg,
-            ),
+            child: Icon(LucideIcons.mail_check, size: 22, color: t.fg),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             '请检查邮箱',
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w700,
-              color: AppTheme.fg,
+              color: t.fg,
               letterSpacing: -0.2,
             ),
           ),
@@ -275,26 +263,22 @@ class _WaitingForEmailCard extends StatelessWidget {
           Text(
             '我们已向 $email 发送了一封登录邮件,请点击邮件中的链接完成登录。',
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppTheme.fgMuted,
-              height: 1.5,
-            ),
+            style: TextStyle(fontSize: 12, color: t.fgMuted, height: 1.5),
           ),
           const SizedBox(height: 20),
           OutlinedButton.icon(
             onPressed: onResend,
-            icon: Icon(LucideIcons.refresh_cw, size: 14, color: AppTheme.fg),
-            label: const Text(
+            icon: Icon(LucideIcons.refresh_cw, size: 14, color: t.fg),
+            label: Text(
               '重新发送',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: AppTheme.fg,
+                color: t.fg,
               ),
             ),
             style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: AppTheme.borderStrong),
+              side: BorderSide(color: t.borderStrong),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppTheme.radiusMd),
               ),

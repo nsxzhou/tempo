@@ -152,7 +152,8 @@ VolcengineAsrPacket parseServerPacket(Uint8List data) {
       data: decoded is Map
           ? Map<String, Object?>.from(decoded)
           : <String, Object?>{},
-      isFinal: messageTypeFlags & messageTypeSpecificFlagsLastAudio != 0 ||
+      isFinal:
+          messageTypeFlags & messageTypeSpecificFlagsLastAudio != 0 ||
           messageTypeFlags == 0x03,
     );
   }
@@ -164,13 +165,19 @@ VolcengineAsrPacket parseServerPacket(Uint8List data) {
     final code = _readUint32Be(data, offset);
     offset += 4;
     if (data.length < offset + 4) {
-      return VolcengineAsrError(code: code, message: 'Unknown ASR server error');
+      return VolcengineAsrError(
+        code: code,
+        message: 'Unknown ASR server error',
+      );
     }
     final size = _readUint32Be(data, offset);
     offset += 4;
     final messageEnd = offset + size;
     if (messageEnd > data.length) {
-      return VolcengineAsrError(code: code, message: 'Unknown ASR server error');
+      return VolcengineAsrError(
+        code: code,
+        message: 'Unknown ASR server error',
+      );
     }
     final message = utf8.decode(data.sublist(offset, messageEnd));
     return VolcengineAsrError(code: code, message: message);

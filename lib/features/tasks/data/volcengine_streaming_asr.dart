@@ -85,9 +85,9 @@ class DioAsrSessionClient implements AsrSessionClient {
     required Dio dio,
     required String endpoint,
     Map<String, String>? headers,
-  })  : _dio = dio,
-        _endpoint = endpoint,
-        _headers = headers;
+  }) : _dio = dio,
+       _endpoint = endpoint,
+       _headers = headers;
 
   @override
   Future<AsrSessionConfig> fetchSession() async {
@@ -102,8 +102,7 @@ class DioAsrSessionClient implements AsrSessionClient {
       }
       return AsrSessionConfig.fromJson(Map<String, Object?>.from(data));
     } on DioException catch (e) {
-      final message = _readServerError(e.response?.data) ??
-          '无法获取 ASR 会话配置';
+      final message = _readServerError(e.response?.data) ?? '无法获取 ASR 会话配置';
       throw AsrSessionException(message);
     }
   }
@@ -143,8 +142,8 @@ class VolcengineStreamingAsrService implements VolcengineStreamingAsr {
   VolcengineStreamingAsrService({
     required AsrSessionClient sessionClient,
     Map<String, String>? relayHeaders,
-  })  : _sessionClient = sessionClient,
-        _relayHeaders = relayHeaders;
+  }) : _sessionClient = sessionClient,
+       _relayHeaders = relayHeaders;
 
   @override
   Stream<String> get transcriptStream => _transcriptController.stream;
@@ -222,7 +221,9 @@ class VolcengineStreamingAsrService implements VolcengineStreamingAsr {
     }
 
     _finishCompleter = Completer<void>();
-    _channel?.sink.add(buildAudioRequestFrame(Uint8List(0), sequence: 0, isFinal: true));
+    _channel?.sink.add(
+      buildAudioRequestFrame(Uint8List(0), sequence: 0, isFinal: true),
+    );
 
     try {
       await _finishCompleter!.future.timeout(_asrFinishTimeout);
@@ -237,9 +238,7 @@ class VolcengineStreamingAsrService implements VolcengineStreamingAsr {
         throw VolcengineStreamingAsrException(_relayErrorMessage!);
       }
       if (!_receivedAnyPacket) {
-        throw const VolcengineStreamingAsrException(
-          'ASR 未返回识别结果，请检查网络后重试。',
-        );
+        throw const VolcengineStreamingAsrException('ASR 未返回识别结果，请检查网络后重试。');
       }
       throw const VolcengineStreamingAsrException('语音识别结果为空，请重试。');
     }
@@ -265,9 +264,7 @@ class VolcengineStreamingAsrService implements VolcengineStreamingAsr {
         try {
           final decoded = jsonDecode(message);
           if (decoded is Map && decoded['__relay'] is Map) {
-            final relay = Map<String, Object?>.from(
-              decoded['__relay'] as Map,
-            );
+            final relay = Map<String, Object?>.from(decoded['__relay'] as Map);
             final phase = relay['phase'];
             final relayMessage = relay['message'];
             if (phase == 'upstream_error' &&
@@ -401,10 +398,7 @@ Future<WebSocket> _connectVolcengineWebSocket(
     }
 
     final socket = await response.detachSocket();
-    return WebSocket.fromUpgradedSocket(
-      socket,
-      serverSide: false,
-    );
+    return WebSocket.fromUpgradedSocket(socket, serverSide: false);
   } finally {
     client.close(force: true);
   }

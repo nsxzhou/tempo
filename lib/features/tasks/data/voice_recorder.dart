@@ -26,7 +26,7 @@ class RecordVoiceRecorder implements VoiceRecorder {
   StreamController<Uint8List>? _audioController;
 
   RecordVoiceRecorder({AudioRecorder? recorder})
-      : _recorder = recorder ?? AudioRecorder();
+    : _recorder = recorder ?? AudioRecorder();
 
   @override
   Stream<Uint8List>? get audioStream => _audioController?.stream;

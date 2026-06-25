@@ -54,8 +54,8 @@ class LiveStreamingVoiceSession implements StreamingVoiceSession {
   LiveStreamingVoiceSession({
     required VoiceRecorder recorder,
     required VolcengineStreamingAsr asr,
-  })  : _recorder = recorder,
-        _asr = asr;
+  }) : _recorder = recorder,
+       _asr = asr;
 
   @override
   Stream<String> get transcriptStream => _asr.transcriptStream;

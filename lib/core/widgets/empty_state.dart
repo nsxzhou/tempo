@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/tempo_theme_extension.dart';
 
 /// 通用空状态组件。
 class EmptyState extends StatelessWidget {
@@ -26,20 +27,21 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 56, color: AppTheme.fgFaint),
+            Icon(icon, size: 56, color: t.fgFaint),
             const SizedBox(height: 16),
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: AppTheme.fgSecondary,
+                color: t.fgSecondary,
                 letterSpacing: -0.2,
               ),
             ),
@@ -48,11 +50,7 @@ class EmptyState extends StatelessWidget {
               Text(
                 subtitle!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.fgMuted,
-                  height: 1.5,
-                ),
+                style: TextStyle(fontSize: 12, color: t.fgMuted, height: 1.5),
               ),
             ],
             if (actionLabel != null && onAction != null) ...[
@@ -60,8 +58,8 @@ class EmptyState extends StatelessWidget {
               OutlinedButton(
                 onPressed: onAction,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AppTheme.fg,
-                  side: const BorderSide(color: AppTheme.borderStrong),
+                  foregroundColor: t.fg,
+                  side: BorderSide(color: t.borderStrong),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                   ),

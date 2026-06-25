@@ -26,8 +26,8 @@ class TextParseService {
   int _requestGeneration = 0;
 
   TextParseService({required Dio dio, required String endpoint})
-      : _dio = dio,
-        _endpoint = endpoint;
+    : _dio = dio,
+      _endpoint = endpoint;
 
   /// 当前缓存的解析结果（文本完全匹配时有效）。
   VoiceTaskParseResult? cachedResultFor(String text) {

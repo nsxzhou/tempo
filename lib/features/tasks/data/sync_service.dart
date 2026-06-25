@@ -17,15 +17,19 @@ class SyncService {
   final ConnectivityService _connectivity;
   StreamSubscription<ConnectivityResult>? _subscription;
   bool _isSyncing = false;
+  bool _listeningStarted = false;
 
   SyncService({
     required TaskRepository repository,
     required ConnectivityService connectivity,
-  })  : _repository = repository,
-        _connectivity = connectivity;
+  }) : _repository = repository,
+       _connectivity = connectivity;
 
   /// 开始监听网络状态，网络恢复时自动推送 pending。
   void startListening() {
+    if (_listeningStarted) return;
+    _listeningStarted = true;
+
     _subscription?.cancel();
     _subscription = _connectivity.onConnectivityChanged.listen((result) {
       if (result != ConnectivityResult.none) {

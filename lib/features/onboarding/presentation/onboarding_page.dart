@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../app_providers.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/tempo_theme_extension.dart';
 import '../data/onboarding_manager.dart';
 
 // Onboarding 暗色专用色阶(原型 zinc 系列,light theme token 不适用)
@@ -51,8 +52,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               Expanded(
                 child: PageView(
                   controller: _pageController,
-                  onPageChanged: (page) =>
-                      setState(() => _currentPage = page),
+                  onPageChanged: (page) => setState(() => _currentPage = page),
                   children: const [
                     _OnboardingStep(
                       step: 0,
@@ -141,6 +141,7 @@ class _OnboardingStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Column(
@@ -151,8 +152,10 @@ class _OnboardingStep extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: _kZinc800.withValues(alpha: 0.8),
                   borderRadius: BorderRadius.circular(AppTheme.radiusFull),
@@ -179,26 +182,15 @@ class _OnboardingStep extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           // serif italic 标题
-          Text(
-            title,
-            style: AppTheme.italicSerif(
-              size: 20,
-              color: AppTheme.bg,
-              height: 1.2,
-            ),
-          ),
+          Text(title, style: t.italicSerif(size: 20, color: t.bg, height: 1.2)),
           const SizedBox(height: 8),
           // 白色短下划线
-          Container(width: 48, height: 1.5, color: AppTheme.bg),
+          Container(width: 48, height: 1.5, color: t.bg),
           const SizedBox(height: 18),
           // 正文
           Text(
             description,
-            style: const TextStyle(
-              fontSize: 12,
-              color: _kZinc300,
-              height: 1.7,
-            ),
+            style: const TextStyle(fontSize: 12, color: _kZinc300, height: 1.7),
           ),
         ],
       ),
@@ -224,6 +216,7 @@ class _OnboardingFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     final isLast = currentPage == 2;
     return Column(
       children: [
@@ -236,7 +229,7 @@ class _OnboardingFooter extends StatelessWidget {
                 margin: EdgeInsets.only(right: index < 2 ? 6 : 0),
                 height: 1.5,
                 decoration: BoxDecoration(
-                  color: active ? AppTheme.bg : _kZinc800,
+                  color: active ? t.bg : _kZinc800,
                   borderRadius: BorderRadius.circular(AppTheme.radiusFull),
                 ),
               ),
@@ -262,16 +255,16 @@ class _OnboardingFooter extends StatelessWidget {
                   ? _OnboardingButton(
                       label: '开始同步体验',
                       onTap: onFinish,
-                      foreground: AppTheme.bg,
+                      foreground: t.bg,
                       background: _kEmerald500,
                       border: _kEmerald500,
                     )
                   : _OnboardingButton(
                       label: '下一步',
                       onTap: onNext,
-                      foreground: AppTheme.fg,
-                      background: AppTheme.bg,
-                      border: AppTheme.bg,
+                      foreground: t.fg,
+                      background: t.bg,
+                      border: t.bg,
                     ),
             ),
           ],

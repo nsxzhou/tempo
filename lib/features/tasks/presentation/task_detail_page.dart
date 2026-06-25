@@ -13,7 +13,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -23,6 +22,8 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/database_provider.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/theme_manager.dart';
+import '../../../core/theme/tempo_theme_extension.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/tempo/tempo.dart';
 import '../domain/task.dart';
@@ -59,6 +60,15 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   }
 
   Future<void> _loadTask() async {
+    final cached = ref.read(taskByIdProvider(widget.taskId));
+    if (cached != null && mounted) {
+      setState(() {
+        _task = cached;
+        _descController.text = cached.description ?? '';
+        _isLoading = false;
+      });
+    }
+
     final repository = ref.read(taskRepositoryProvider);
     final db = ref.read(databaseProvider);
     final task = await repository.getTaskById(widget.taskId);
@@ -87,9 +97,10 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final scaffoldBg = ref.watch(scaffoldBackgroundProvider);
     if (_isLoading) {
       return Scaffold(
-        backgroundColor: AppTheme.bg,
+        backgroundColor: scaffoldBg,
         appBar: AppBar(),
         body: const Center(child: CircularProgressIndicator()),
       );
@@ -97,7 +108,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
 
     final task = _task!;
     return Scaffold(
-      backgroundColor: AppTheme.bg,
+      backgroundColor: scaffoldBg,
       body: Column(
         children: [
           _TopBar(
@@ -137,6 +148,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   // ══════════════ UI 部分 ══════════════
 
   Widget _buildTitleBlock(Task task) {
+    final t = context.tokens;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
       child: Column(
@@ -159,14 +171,14 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                   fontSize: 10,
                 ),
               if (task.tag == AppConstants.tagWork)
-                TempoPillBadge(
+                const TempoPillBadge(
                   label: '@工作',
                   kind: TempoBadgeKind.tag,
                   uppercase: false,
                   fontSize: 10,
                 )
               else if (task.tag == AppConstants.tagLife)
-                TempoPillBadge(
+                const TempoPillBadge(
                   label: '@生活',
                   kind: TempoBadgeKind.tag,
                   uppercase: false,
@@ -182,12 +194,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
           const SizedBox(height: 12),
           Text(
             task.title,
-            style: AppTheme.italicSerif(
-              size: 32,
-              color: AppTheme.fg,
-              height: 1.1,
-              letterSpacing: -0.8,
-            ),
+            style: t.italicSerif(size: 32, height: 1.1, letterSpacing: -0.8),
           ),
         ],
       ),
@@ -195,100 +202,96 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   }
 
   Widget _buildProperties(Task task) {
+    final t = context.tokens;
+    final cardColor = ref.watch(taskCardBackgroundProvider);
     final now = DateTime.now();
-    final isOverdue = task.dueDate != null &&
+    final isOverdue =
+        task.dueDate != null &&
         isTaskOverdue(
           dueDate: task.dueDate!,
           isAllDay: task.isAllDay,
           isCompleted: task.isCompleted,
           now: now,
         );
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppTheme.bg,
-        border: Border(
-          top: BorderSide(color: AppTheme.borderStrong, width: 0.8),
-          bottom: BorderSide(color: AppTheme.borderStrong, width: 0.8),
-        ),
-      ),
-      child: Column(
-        children: [
-          TempoPropertyRow(
-            icon: LucideIcons.calendar,
-            label: '截止',
-            value: task.dueDate != null
-                ? Row(
-                    children: [
-                      Text(
-                        formatTaskDueDetail(
-                          dueDate: task.dueDate!,
-                          isAllDay: task.isAllDay,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: TempoGlassSurface(
+        blur: false,
+        fillColor: cardColor,
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: [
+            TempoPropertyRow(
+              icon: LucideIcons.calendar,
+              label: '截止',
+              value: task.dueDate != null
+                  ? Row(
+                      children: [
+                        Text(
+                          formatTaskDueDetail(
+                            dueDate: task.dueDate!,
+                            isAllDay: task.isAllDay,
+                          ),
+                          style: t.mono(size: 13, weight: FontWeight.w500),
                         ),
-                        style: AppTheme.mono(
-                          size: 13,
-                          weight: FontWeight.w500,
-                        ),
-                      ),
-                      if (!task.isCompleted) ...[
-                        const SizedBox(width: 8),
-                        TempoPillBadge(
-                          label: isOverdue ? '已延误' : '即将截止',
-                          kind: isOverdue
-                              ? TempoBadgeKind.error
-                              : TempoBadgeKind.p1,
-                        ),
+                        if (!task.isCompleted) ...[
+                          const SizedBox(width: 8),
+                          TempoPillBadge(
+                            label: isOverdue ? '已延误' : '即将截止',
+                            kind: isOverdue
+                                ? TempoBadgeKind.error
+                                : TempoBadgeKind.p1,
+                          ),
+                        ],
                       ],
-                    ],
-                  )
-                : Text(
-                    '未设置',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppTheme.fgSubtle,
+                    )
+                  : Text(
+                      '未设置',
+                      style: TextStyle(fontSize: 13, color: t.fgSubtle),
                     ),
-                  ),
-          ),
-          TempoPropertyRow(
-            icon: LucideIcons.folder,
-            label: '归属',
-            value: Text(
-              _listName ?? _resolveListName(task.listId, null),
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
+            ),
+            TempoPropertyRow(
+              icon: LucideIcons.folder,
+              label: '归属',
+              value: Text(
+                _listName ?? _resolveListName(task.listId, null),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildDescription(Task task) {
+    final t = context.tokens;
+    final cardColor = ref.watch(taskCardBackgroundProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: _isEditingDesc
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                TextField(
-                  controller: _descController,
-                  maxLines: 4,
-                  decoration: InputDecoration(
-                    hintText: '键入备考信息或交互重点说明…',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                      borderSide: const BorderSide(color: AppTheme.fg, width: 1.5),
+                TempoGlassSurface(
+                  blur: false,
+                  fillColor: cardColor,
+                  padding: const EdgeInsets.all(12),
+                  child: TextField(
+                    controller: _descController,
+                    maxLines: 4,
+                    decoration: InputDecoration(
+                      hintText: '键入备考信息或交互重点说明…',
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      filled: false,
+                      contentPadding: EdgeInsets.zero,
+                      hintStyle: t.mono(size: 12, color: t.fgSubtle),
                     ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                      borderSide: const BorderSide(color: AppTheme.fg, width: 1.5),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                      borderSide: const BorderSide(color: AppTheme.fg, width: 1.5),
-                    ),
-                    contentPadding: const EdgeInsets.all(12),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -318,14 +321,10 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
             )
           : GestureDetector(
               onTap: () => setState(() => _isEditingDesc = true),
-              child: Container(
-                width: double.infinity,
+              child: TempoGlassSurface(
+                blur: false,
+                fillColor: cardColor,
                 padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppTheme.bgSubtle,
-                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                  border: Border.all(color: AppTheme.borderSubtle, width: 0.8),
-                ),
                 child: Text(
                   task.description?.isNotEmpty == true
                       ? task.description!
@@ -333,8 +332,8 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                   style: TextStyle(
                     fontSize: 12,
                     color: task.description?.isNotEmpty == true
-                        ? AppTheme.fgSecondary
-                        : AppTheme.fgSubtle,
+                        ? t.fgSecondary
+                        : t.fgSubtle,
                     height: 1.5,
                     fontStyle: task.description?.isNotEmpty == true
                         ? FontStyle.normal
@@ -347,6 +346,8 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   }
 
   Widget _buildSiyuanCard(Task task) {
+    final t = context.tokens;
+    final cardColor = ref.watch(taskCardBackgroundProvider);
     final blockId = task.siyuanBlockId!;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -355,22 +356,18 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
         children: [
           Text(
             '思源关联卡片',
-            style: AppTheme.mono(
+            style: t.mono(
               size: 10,
               weight: FontWeight.w700,
-              color: AppTheme.fgMuted,
+              color: t.fgMuted,
               letterSpacing: 1.0,
             ),
           ),
           const SizedBox(height: 10),
-          Container(
+          TempoGlassSurface(
+            blur: false,
+            fillColor: cardColor,
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.bgSubtle,
-              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-              border: Border.all(color: AppTheme.borderStrong, width: 0.8),
-              boxShadow: AppTheme.shadowSm,
-            ),
             child: Row(
               children: [
                 Container(
@@ -384,7 +381,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                       width: 0.5,
                     ),
                   ),
-                  child: Icon(
+                  child: const Icon(
                     LucideIcons.link_2,
                     size: 14,
                     color: AppTheme.priorityP1,
@@ -408,19 +405,12 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                       const SizedBox(height: 4),
                       Text(
                         '思源笔记块 ID',
-                        style: AppTheme.mono(
-                          size: 9,
-                          color: AppTheme.fgSubtle,
-                        ),
+                        style: t.mono(size: 9, color: t.fgSubtle),
                       ),
                     ],
                   ),
                 ),
-                const Icon(
-                  LucideIcons.chevron_right,
-                  size: 14,
-                  color: AppTheme.fgSubtle,
-                ),
+                Icon(LucideIcons.chevron_right, size: 14, color: t.fgSubtle),
               ],
             ),
           ),
@@ -430,31 +420,34 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   }
 
   Widget _buildReadOnlyInfo(Task task) {
+    final t = context.tokens;
+    final cardColor = ref.watch(taskCardBackgroundProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TempoPropertyRow(
-            icon: LucideIcons.info,
-            label: '来源',
-            value: Text(
-              _sourceLabel(task.creationSource),
-              style: const TextStyle(fontSize: 12),
-            ),
-          ),
-          TempoPropertyRow(
-            icon: LucideIcons.circle_dot,
-            label: '创建',
-            value: Text(
-              DateFormat('yyyy-MM-dd HH:mm').format(task.createdAt),
-              style: AppTheme.mono(
-                size: 12,
-                color: AppTheme.fgMuted,
+      child: TempoGlassSurface(
+        blur: false,
+        fillColor: cardColor,
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: [
+            TempoPropertyRow(
+              icon: LucideIcons.info,
+              label: '来源',
+              value: Text(
+                _sourceLabel(task.creationSource),
+                style: const TextStyle(fontSize: 12),
               ),
             ),
-          ),
-        ],
+            TempoPropertyRow(
+              icon: LucideIcons.circle_dot,
+              label: '创建',
+              value: Text(
+                DateFormat('yyyy-MM-dd HH:mm').format(task.createdAt),
+                style: t.mono(size: 12, color: t.fgMuted),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -467,17 +460,12 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
         child: FilledButton.icon(
           onPressed: _isSaving ? null : () => _toggleComplete(task),
           icon: Icon(
-            task.isCompleted
-                ? LucideIcons.rotate_ccw
-                : LucideIcons.check,
+            task.isCompleted ? LucideIcons.rotate_ccw : LucideIcons.check,
             size: 14,
           ),
           label: Text(
             task.isCompleted ? '取消完成' : '标记完成',
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
           style: FilledButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -546,30 +534,33 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     final updatedTask = await QuickCreateSheet.showEdit(
       context,
       task: task,
-      onUpdate: ({
-        required Task task,
-        required String title,
-        DateTime? dueDate,
-        TaskPriority priority = TaskPriority.none,
-        String? tag,
-      }) async {
-        final repository = ref.read(taskRepositoryProvider);
-        final updated = task.copyWith(
-          title: title,
-          dueDate: dueDate,
-          priority: priority,
-          tag: tag,
-          updatedAt: DateTime.now(),
-        );
-        final saved = await repository.updateTask(updated);
-        final notificationService = ref.read(notificationServiceProvider);
-        if (saved.isCompleted) {
-          await notificationService.cancelTaskReminders(saved.id);
-        } else {
-          await notificationService.scheduleTaskReminder(saved);
-        }
-        return saved;
-      },
+      onUpdate:
+          ({
+            required Task task,
+            required String title,
+            DateTime? dueDate,
+            required bool isAllDay,
+            TaskPriority priority = TaskPriority.none,
+            String? tag,
+          }) async {
+            final repository = ref.read(taskRepositoryProvider);
+            final updated = task.copyWith(
+              title: title,
+              dueDate: dueDate,
+              isAllDay: isAllDay,
+              priority: priority,
+              tag: tag,
+              updatedAt: DateTime.now(),
+            );
+            final saved = await repository.updateTask(updated);
+            final notificationService = ref.read(notificationServiceProvider);
+            if (saved.isCompleted) {
+              await notificationService.cancelTaskReminders(saved.id);
+            } else {
+              await notificationService.scheduleTaskReminder(saved);
+            }
+            return saved;
+          },
     );
 
     if (!mounted || updatedTask == null) return;
@@ -583,7 +574,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
 
     final action = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: AppTheme.bg,
+      backgroundColor: context.tokens.bg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(AppTheme.radiusLg),
@@ -594,7 +585,10 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(LucideIcons.trash_2, color: AppTheme.errorColor),
+              leading: const Icon(
+                LucideIcons.trash_2,
+                color: AppTheme.errorColor,
+              ),
               title: const Text(
                 '删除待办',
                 style: TextStyle(color: AppTheme.errorColor),
@@ -641,7 +635,9 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
         undoLabel: '撤回',
         onUndo: () async {
           if (_lastDeletedTask == null) return;
-          final restored = await ref.read(taskRepositoryProvider).createTask(
+          final restored = await ref
+              .read(taskRepositoryProvider)
+              .createTask(
                 title: _lastDeletedTask!.title,
                 description: _lastDeletedTask!.description,
                 dueDate: _lastDeletedTask!.dueDate,
@@ -700,6 +696,7 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return SafeArea(
       bottom: false,
       child: Padding(
@@ -710,9 +707,7 @@ class _TopBar extends StatelessWidget {
               onPressed: onBack,
               icon: const Icon(LucideIcons.chevron_left, size: 16),
               label: const Text('返回'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppTheme.fgSecondary,
-              ),
+              style: TextButton.styleFrom(foregroundColor: t.fgSecondary),
             ),
             const Spacer(),
             _IconBtn(icon: LucideIcons.pencil, onTap: onEdit),
@@ -725,26 +720,30 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-class _IconBtn extends StatelessWidget {
+class _IconBtn extends ConsumerWidget {
   final IconData icon;
   final VoidCallback onTap;
   const _IconBtn({required this.icon, required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppTheme.bg,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppTheme.radiusXs),
-        side: const BorderSide(color: AppTheme.borderStrong, width: 0.8),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppTheme.radiusXs),
-        child: SizedBox(
-          width: 32,
-          height: 32,
-          child: Icon(icon, size: 14, color: AppTheme.fgSecondary),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = context.tokens;
+    final cardColor = ref.watch(taskCardBackgroundProvider);
+    return TempoGlassSurface(
+      blur: false,
+      borderRadius: BorderRadius.circular(AppTheme.radiusXs),
+      fillColor: cardColor,
+      showShadow: false,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppTheme.radiusXs),
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: Icon(icon, size: 14, color: t.fgSecondary),
+          ),
         ),
       ),
     );

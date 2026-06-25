@@ -1,10 +1,11 @@
 // ============================================================
-// NotificationService — 本地通知调度
-// 创建/更新任务时调度提醒通知；完成/删除时取消通知
-// 通知 ID 映射: taskId.hashCode = reminder, taskId.hashCode + 1 = due
+// NotificationService — 本地待办提醒调度
+// 创建/更新任务时调度提醒；完成/删除时取消通知
+// 通知 ID 映射: taskId.hashCode
 // ============================================================
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -15,46 +16,49 @@ import 'package:timezone/timezone.dart' as tz;
 import '../../../core/constants/app_constants.dart';
 import '../domain/task.dart';
 
+/// 计算待办提醒的本地时刻（dueDate 日历日 08:00）。
+DateTime todoReminderDateTime(DateTime dueDate) {
+  return DateTime(dueDate.year, dueDate.month, dueDate.day, 8);
+}
+
 /// 本地通知服务。
 ///
-/// 使用 flutter_local_notifications 调度任务提醒通知。
-/// 每个任务最多 2 条通知：
-/// - reminder: 到期前 15 分钟
-/// - due: 到期时
+/// 使用 flutter_local_notifications 为有日期的待办调度提醒。
+/// 每个任务 1 条通知：对应日历日当天 08:00。
 ///
-/// 通知 ID 映射：
-/// - reminder ID = taskId.hashCode
-/// - due ID = taskId.hashCode + 1
+/// 通知 ID 映射：taskId.hashCode
 class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin;
   bool _initialized = false;
+  static SharedPreferences? _prefsCache;
+
+  static Future<SharedPreferences> _prefs() async {
+    return _prefsCache ??= await SharedPreferences.getInstance();
+  }
 
   /// 通知点击回调（由 App 设置，用于导航到详情页）。
   void Function(String taskId)? onNotificationTap;
 
   NotificationService({FlutterLocalNotificationsPlugin? plugin})
-      : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   /// 初始化通知插件和 timezone。
   Future<void> init() async {
     if (_initialized) return;
 
-    // 初始化 timezone 数据
     tz.initializeTimeZones();
 
-    // Android 设置
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/ic_launcher',
     );
 
-    // iOS 设置
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: false,
       requestBadgePermission: false,
       requestSoundPermission: false,
     );
 
-    final settings = InitializationSettings(
+    const settings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
     );
@@ -64,7 +68,6 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onNotificationResponse,
     );
 
-    // 创建 Android 通知 channel
     await _createAndroidChannel();
 
     _initialized = true;
@@ -74,41 +77,48 @@ class NotificationService {
   Future<bool> requestPermissions() async {
     if (!_initialized) await init();
 
-    // iOS
+    if (Platform.isAndroid) {
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      final notificationsGranted = await android
+          ?.requestNotificationsPermission();
+      final canExact = await android?.canScheduleExactNotifications();
+      if (canExact != true) {
+        await android?.requestExactAlarmsPermission();
+      }
+      return notificationsGranted ?? false;
+    }
+
     final iosResult = await _plugin
         .resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin>()
-        ?.requestPermissions(
-          alert: true,
-          badge: true,
-          sound: true,
-        );
+          IOSFlutterLocalNotificationsPlugin
+        >()
+        ?.requestPermissions(alert: true, badge: true, sound: true);
 
-    // Android 13+
-    final androidResult = await _plugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
-
-    return iosResult ?? androidResult ?? true;
+    return iosResult ?? true;
   }
 
-  /// 读取用户是否开启任务到期提醒。
+  /// 读取用户是否开启待办提醒。
   Future<bool> isRemindersEnabled() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _prefs();
     return prefs.getBool(AppConstants.prefNotificationEnabled) ?? true;
   }
 
   /// 更新提醒开关；关闭时取消全部已调度通知。
   Future<void> setRemindersEnabled(bool enabled) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _prefs();
     await prefs.setBool(AppConstants.prefNotificationEnabled, enabled);
     if (!enabled) {
       try {
         await cancelAll();
       } catch (e, stack) {
-        debugPrint('[Tempo] cancelAll failed when disabling reminders: $e');
-        debugPrintStack(stackTrace: stack);
+        _debugPrintNotificationFailure(
+          'cancelAll failed when disabling reminders',
+          e,
+          stack,
+        );
       }
     }
   }
@@ -116,14 +126,22 @@ class NotificationService {
   /// 为所有符合条件的任务重新调度提醒（开启开关后调用）。
   Future<void> rescheduleAllTasks(Iterable<Task> tasks) async {
     if (!await isRemindersEnabled()) return;
-    for (final task in tasks) {
-      await scheduleTaskReminder(task);
+    const batchSize = 10;
+    final list = tasks.toList();
+    for (var i = 0; i < list.length; i += batchSize) {
+      final end = (i + batchSize < list.length) ? i + batchSize : list.length;
+      for (var j = i; j < end; j++) {
+        unawaited(scheduleTaskReminder(list[j]));
+      }
+      if (end < list.length) {
+        await Future<void>.delayed(Duration.zero);
+      }
     }
   }
 
-  /// 为任务调度提醒通知（到期前 15 分钟 + 到期时）。
+  /// 为任务调度待办提醒（对应日历日 08:00）。
   ///
-  /// 仅当 task.dueDate != null && !isCompleted && dueDate > now 时调度。
+  /// 仅当 task.dueDate != null && !isCompleted && 提醒时刻 > now 时调度。
   /// 通知调度为 best-effort：失败时不抛出，避免任务已创建却报失败。
   Future<void> scheduleTaskReminder(Task task) async {
     try {
@@ -131,55 +149,53 @@ class NotificationService {
 
       if (!await isRemindersEnabled()) return;
 
-      // 取消已有通知（重新调度时先清理）
       await cancelTaskReminders(task.id);
 
-      if (task.dueDate == null || task.isCompleted || task.isAllDay) return;
+      if (task.dueDate == null || task.isCompleted) return;
 
       final now = DateTime.now();
-      final dueDate = task.dueDate!;
+      final reminderAt = todoReminderDateTime(task.dueDate!);
 
-      // 到期时间已过，不调度
-      if (dueDate.isBefore(now)) return;
+      if (!reminderAt.isAfter(now)) return;
 
-      final reminderTime = dueDate.subtract(
-        Duration(minutes: AppConstants.reminderBeforeMinutes),
-      );
-
-      // 调度 reminder 通知（到期前 15 分钟）
-      if (reminderTime.isAfter(now)) {
-        await _zonedSchedule(
-          id: _reminderNotificationId(task.id),
-          title: '任务即将到期',
-          body: task.title,
-          scheduledTime: reminderTime,
-          payload: task.id,
-        );
-      }
-
-      // 调度 due 通知（到期时）
       await _zonedSchedule(
-        id: _dueNotificationId(task.id),
-        title: '任务已到期',
+        id: _notificationId(task.id),
+        title: '待办提醒',
         body: task.title,
-        scheduledTime: dueDate,
+        scheduledTime: reminderAt,
         payload: task.id,
       );
     } catch (e, stack) {
-      debugPrint('[Tempo] scheduleTaskReminder failed for ${task.id}: $e');
-      debugPrintStack(stackTrace: stack);
+      _debugPrintNotificationFailure(
+        'scheduleTaskReminder failed for ${task.id}',
+        e,
+        stack,
+      );
     }
   }
 
-  /// 取消任务的所有通知。
+  /// 取消任务的待办提醒。
   Future<void> cancelTaskReminders(String taskId) async {
-    await _plugin.cancel(_reminderNotificationId(taskId));
-    await _plugin.cancel(_dueNotificationId(taskId));
+    await _plugin.cancel(_notificationId(taskId));
+    // 兼容旧版双通知 ID，避免升级后残留到期提醒。
+    await _plugin.cancel(_notificationId(taskId) + 1);
   }
 
   /// 取消所有通知。
   Future<void> cancelAll() async {
     await _plugin.cancelAll();
+  }
+
+  void _debugPrintNotificationFailure(
+    String operation,
+    Object error,
+    StackTrace stack,
+  ) {
+    if (!kDebugMode || error.toString().contains('LateInitializationError')) {
+      return;
+    }
+    debugPrint('[Tempo] $operation: $error');
+    debugPrintStack(stackTrace: stack);
   }
 
   // ── 内部方法 ──
@@ -194,8 +210,24 @@ class NotificationService {
 
     await _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(channel);
+  }
+
+  Future<AndroidScheduleMode> _androidScheduleMode() async {
+    if (!Platform.isAndroid) {
+      return AndroidScheduleMode.exactAllowWhileIdle;
+    }
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    final canExact = await android?.canScheduleExactNotifications();
+    if (canExact == true) {
+      return AndroidScheduleMode.exactAllowWhileIdle;
+    }
+    return AndroidScheduleMode.inexactAllowWhileIdle;
   }
 
   Future<void> _zonedSchedule({
@@ -205,14 +237,15 @@ class NotificationService {
     required DateTime scheduledTime,
     String? payload,
   }) async {
-    final tzTime = tz.TZDateTime.from(scheduledTime, tz.local);
+    final tzTime = tz.TZDateTime.from(scheduledTime.toUtc(), tz.UTC);
+    final androidScheduleMode = await _androidScheduleMode();
 
     await _plugin.zonedSchedule(
       id,
       title,
       body,
       tzTime,
-      NotificationDetails(
+      const NotificationDetails(
         android: AndroidNotificationDetails(
           AppConstants.notificationChannelId,
           AppConstants.notificationChannelName,
@@ -221,9 +254,9 @@ class NotificationService {
           priority: Priority.high,
           icon: '@mipmap/ic_launcher',
         ),
-        iOS: const DarwinNotificationDetails(),
+        iOS: DarwinNotificationDetails(),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: androidScheduleMode,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
       payload: payload,
@@ -237,9 +270,5 @@ class NotificationService {
     }
   }
 
-  /// 通知 ID 映射：reminder = taskId.hashCode
-  int _reminderNotificationId(String taskId) => taskId.hashCode;
-
-  /// 通知 ID 映射：due = taskId.hashCode + 1
-  int _dueNotificationId(String taskId) => taskId.hashCode + 1;
+  int _notificationId(String taskId) => taskId.hashCode;
 }

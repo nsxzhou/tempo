@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 
-import '../../../theme/app_theme.dart';
+import '../../../theme/tempo_theme_extension.dart';
 
 class TempoStatTile extends StatelessWidget {
   final String value;
@@ -20,6 +20,7 @@ class TempoStatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return Padding(
       padding: padding,
       child: Column(
@@ -28,20 +29,20 @@ class TempoStatTile extends StatelessWidget {
         children: [
           Text(
             value,
-            style: AppTheme.mono(
+            style: t.mono(
               size: 18,
               weight: FontWeight.w500,
-              color: highlight ? AppTheme.success : AppTheme.fg,
+              color: highlight ? t.success : t.fg,
               letterSpacing: -0.4,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             label.toUpperCase(),
-            style: AppTheme.mono(
+            style: t.mono(
               size: 9,
               weight: FontWeight.w500,
-              color: AppTheme.fgMuted,
+              color: t.fgMuted,
               letterSpacing: 1.0,
             ),
           ),

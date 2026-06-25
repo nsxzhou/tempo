@@ -1,8 +1,10 @@
 // TempoIntegrationRow — 思源 / 系统日历集成行(对应 prototype SettingsView)
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../theme/app_theme.dart';
+import '../../../theme/tempo_theme_extension.dart';
+import 'tempo_glass_surface.dart';
 import 'tempo_pill_badge.dart';
 
 class TempoIntegrationRow extends StatelessWidget {
@@ -31,6 +33,7 @@ class TempoIntegrationRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -65,20 +68,16 @@ class TempoIntegrationRow extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: AppTheme.mono(
+                      style: t.mono(
                         size: 10,
-                        color: AppTheme.fgSubtle,
+                        color: t.fgSubtle,
                         letterSpacing: -0.2,
                       ),
                     ),
                   ],
                 ),
               ),
-              TempoPillBadge(
-                label: badgeLabel,
-                kind: badgeKind,
-                fontSize: 10,
-              ),
+              TempoPillBadge(label: badgeLabel, kind: badgeKind, fontSize: 10),
             ],
           ),
         ),
@@ -106,6 +105,7 @@ class TempoPreferenceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -118,11 +118,11 @@ class TempoPreferenceRow extends StatelessWidget {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: AppTheme.bgMuted,
+                  color: t.bgMuted,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppTheme.borderStrong, width: 0.8),
+                  border: Border.all(color: t.borderStrong, width: 0.8),
                 ),
-                child: Icon(icon, size: 14, color: AppTheme.fgSecondary),
+                child: Icon(icon, size: 14, color: t.fgSecondary),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -140,16 +140,16 @@ class TempoPreferenceRow extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: AppTheme.mono(
+                      style: t.mono(
                         size: 10,
-                        color: AppTheme.fgSubtle,
+                        color: t.fgSubtle,
                         letterSpacing: -0.2,
                       ),
                     ),
                   ],
                 ),
               ),
-              if (trailing != null) trailing!,
+              ?trailing,
             ],
           ),
         ),
@@ -159,26 +159,29 @@ class TempoPreferenceRow extends StatelessWidget {
 }
 
 /// 分组卡片容器(对应 prototype rounded-2xl 容器)
-class TempoSettingsGroup extends StatelessWidget {
+class TempoSettingsGroup extends ConsumerWidget {
   final List<Widget> children;
   final EdgeInsetsGeometry margin;
+  final Color? backgroundColor;
+  final Color? borderColor;
+  final Color? dividerColor;
+
   const TempoSettingsGroup({
     super.key,
     required this.children,
     this.margin = const EdgeInsets.fromLTRB(20, 0, 20, 16),
+    this.backgroundColor,
+    this.borderColor,
+    this.dividerColor,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = context.tokens;
+    return TempoGlassSurface(
       margin: margin,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: AppTheme.bg,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: AppTheme.borderStrong, width: 0.8),
-        boxShadow: AppTheme.shadowSm,
-      ),
+      fillColor: backgroundColor,
+      borderColor: borderColor,
       child: Column(
         children: [
           for (int i = 0; i < children.length; i++) ...[
@@ -187,7 +190,7 @@ class TempoSettingsGroup extends StatelessWidget {
               Container(
                 margin: const EdgeInsets.only(left: 60),
                 height: 0.5,
-                color: AppTheme.borderSubtle,
+                color: dividerColor ?? t.borderSubtle,
               ),
           ],
         ],

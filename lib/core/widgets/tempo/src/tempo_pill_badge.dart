@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../../theme/tempo_theme_extension.dart';
 
 /// 徽章语义类型
 enum TempoBadgeKind {
@@ -39,10 +40,11 @@ class TempoPillBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = _resolveColors();
+    final t = context.tokens;
+    final colors = _resolveColors(t);
     final style = serif
-        ? AppTheme.italicSerif(size: fontSize, color: colors.fg)
-        : AppTheme.mono(
+        ? t.italicSerif(size: fontSize, color: colors.fg)
+        : t.mono(
             size: fontSize,
             weight: FontWeight.w600,
             color: colors.fg,
@@ -63,71 +65,60 @@ class TempoPillBadge extends StatelessWidget {
             Icon(icon, size: fontSize, color: colors.fg),
             const SizedBox(width: 3),
           ],
-          Text(
-            uppercase ? label.toUpperCase() : label,
-            style: style,
-          ),
+          Text(uppercase ? label.toUpperCase() : label, style: style),
         ],
       ),
     );
   }
 
-  _BadgeColors _resolveColors() {
+  _BadgeColors _resolveColors(TempoTokens t) {
     switch (kind) {
       case TempoBadgeKind.p0:
         return _BadgeColors(
-          fg: AppTheme.priorityP0,
-          bg: AppTheme.priorityP0Bg,
-          border: AppTheme.priorityP0Border,
+          fg: t.priorityColor(0),
+          bg: t.priorityBg(0),
+          border: t.priorityBorder(0),
         );
       case TempoBadgeKind.p1:
         return _BadgeColors(
-          fg: AppTheme.priorityP1,
-          bg: AppTheme.priorityP1Bg,
-          border: AppTheme.priorityP1Border,
+          fg: t.priorityColor(1),
+          bg: t.priorityBg(1),
+          border: t.priorityBorder(1),
         );
       case TempoBadgeKind.p2:
         return _BadgeColors(
-          fg: AppTheme.priorityP2,
-          bg: AppTheme.priorityP2Bg,
-          border: AppTheme.priorityP2Border,
+          fg: t.priorityColor(2),
+          bg: t.priorityBg(2),
+          border: t.priorityBorder(2),
         );
       case TempoBadgeKind.p3:
         return _BadgeColors(
-          fg: AppTheme.priorityP3,
-          bg: AppTheme.priorityP3Bg,
-          border: AppTheme.priorityP3Border,
+          fg: t.priorityColor(3),
+          bg: t.priorityBg(3),
+          border: t.priorityBorder(3),
         );
       case TempoBadgeKind.success:
         return _BadgeColors(
-          fg: AppTheme.success,
-          bg: AppTheme.successBg,
+          fg: t.success,
+          bg: t.successBg,
           border: AppTheme.successBorder,
         );
       case TempoBadgeKind.active:
-        return _BadgeColors(
-          fg: AppTheme.bg,
-          bg: AppTheme.fg,
-          border: AppTheme.fg,
-        );
+        return _BadgeColors(fg: t.bg, bg: t.fg, border: t.fg);
       case TempoBadgeKind.tag:
         return _BadgeColors(
-          fg: AppTheme.fgMuted,
-          bg: AppTheme.bgMuted,
-          border: AppTheme.borderStrong,
+          fg: t.fgMuted,
+          bg: t.bgMuted,
+          border: t.borderStrong,
         );
       case TempoBadgeKind.error:
-        return const _BadgeColors(
-          fg: AppTheme.priorityP0,
-          bg: AppTheme.priorityP0Bg,
-          border: AppTheme.priorityP0Border,
+        return _BadgeColors(
+          fg: t.priorityColor(0),
+          bg: t.priorityBg(0),
+          border: t.priorityBorder(0),
         );
       case TempoBadgeKind.neutral:
-        return _BadgeColors(
-          fg: AppTheme.fgMuted,
-          bg: AppTheme.bg,
-          border: AppTheme.borderStrong,
-        );
+        return _BadgeColors(fg: t.fgMuted, bg: t.bg, border: t.borderStrong);
     }
   }
 }
@@ -136,5 +127,9 @@ class _BadgeColors {
   final Color fg;
   final Color bg;
   final Color border;
-  const _BadgeColors({required this.fg, required this.bg, required this.border});
+  const _BadgeColors({
+    required this.fg,
+    required this.bg,
+    required this.border,
+  });
 }

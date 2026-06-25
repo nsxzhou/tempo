@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../../theme/tempo_theme_extension.dart';
 
 class TempoSnackbar {
   TempoSnackbar._();
@@ -159,14 +160,14 @@ class _TempoToastHostState extends State<_TempoToastHost>
       duration: const Duration(milliseconds: 220),
       reverseDuration: const Duration(milliseconds: 180),
     );
-    _slide = Tween<Offset>(
-      begin: const Offset(0, -1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
-    ));
+    _slide = Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          ),
+        );
     _fade = CurvedAnimation(
       parent: _controller,
       curve: Curves.easeOut,
@@ -199,6 +200,7 @@ class _TempoToastHostState extends State<_TempoToastHost>
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return Positioned(
       top: widget.top,
       left: 16,
@@ -212,7 +214,7 @@ class _TempoToastHostState extends State<_TempoToastHost>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: AppTheme.fg,
+                color: t.fg,
                 borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                 boxShadow: const [
                   BoxShadow(
@@ -227,12 +229,12 @@ class _TempoToastHostState extends State<_TempoToastHost>
                   Expanded(
                     child: Text(
                       widget.message,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         letterSpacing: -0.2,
                         height: 1.35,
-                        color: AppTheme.bg,
+                        color: t.bg,
                       ),
                     ),
                   ),
@@ -242,10 +244,10 @@ class _TempoToastHostState extends State<_TempoToastHost>
                       onTap: widget.onUndo,
                       child: Text(
                         widget.undoLabel!,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: AppTheme.bg,
+                          color: t.bg,
                         ),
                       ),
                     ),

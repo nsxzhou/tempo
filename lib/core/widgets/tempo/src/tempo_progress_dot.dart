@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../../theme/tempo_theme_extension.dart';
 
 class TempoProgressDot extends StatelessWidget {
   final bool active;
@@ -19,6 +20,7 @@ class TempoProgressDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
@@ -31,9 +33,9 @@ class TempoProgressDot extends StatelessWidget {
             width: size,
             height: size,
             decoration: BoxDecoration(
-              color: active ? AppTheme.fg : AppTheme.bg,
+              color: active ? t.fg : t.bg,
               border: Border.all(
-                color: active ? AppTheme.fg : AppTheme.borderEmphasis,
+                color: active ? t.fg : t.borderEmphasis,
                 width: 2,
               ),
               shape: BoxShape.circle,

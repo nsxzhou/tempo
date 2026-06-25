@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../../theme/tempo_theme_extension.dart';
 import '../../../motion/tempo_sheet.dart';
 import '../../../utils/date_utils.dart';
 
@@ -24,6 +25,7 @@ class TempoDatePicker {
   }) {
     return TempoSheet.show<DateTime>(
       context: context,
+      enableDrag: false,
       builder: (_) => _DatePickerSheet(
         initialDate: initialDate,
         firstDate: firstDate,
@@ -78,12 +80,10 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
     });
   }
 
-  bool get _canGoPrev {
-    final prevMonth = DateTime(_displayMonth.year, _displayMonth.month - 1);
-    return prevMonth.isAfter(
-      DateTime(widget.firstDate.year, widget.firstDate.month),
-    );
-  }
+  bool get _canGoPrev => canNavigateToPreviousMonth(
+    displayMonth: _displayMonth,
+    firstDate: widget.firstDate,
+  );
 
   bool get _canGoNext {
     final nextMonth = DateTime(_displayMonth.year, _displayMonth.month + 1);
@@ -97,9 +97,15 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
   bool _isInRange(DateTime date) {
     final d = DateTime(date.year, date.month, date.day);
     final first = DateTime(
-        widget.firstDate.year, widget.firstDate.month, widget.firstDate.day);
+      widget.firstDate.year,
+      widget.firstDate.month,
+      widget.firstDate.day,
+    );
     final last = DateTime(
-        widget.lastDate.year, widget.lastDate.month, widget.lastDate.day);
+      widget.lastDate.year,
+      widget.lastDate.month,
+      widget.lastDate.day,
+    );
     return !d.isBefore(first) && !d.isAfter(last);
   }
 
@@ -132,13 +138,14 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return Container(
-      decoration: const BoxDecoration(
-        color: AppTheme.bg,
-        borderRadius: BorderRadius.vertical(
+      decoration: BoxDecoration(
+        color: t.bg,
+        borderRadius: const BorderRadius.vertical(
           top: Radius.circular(AppTheme.radiusLg),
         ),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
             color: Color(0x1F000000),
             blurRadius: 30,
@@ -159,7 +166,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppTheme.borderStrong,
+                  color: t.borderStrong,
                   borderRadius: BorderRadius.circular(AppTheme.radiusFull),
                 ),
               ),
@@ -191,31 +198,35 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
   }
 
   Widget _buildDatePreview() {
+    final t = context.tokens;
     final date = _selectedDate ?? _displayMonth;
     return Text(
       _formatPreview(date),
-      style: const TextStyle(
+      style: TextStyle(
         fontFamily: AppTheme.fontSans,
         fontSize: 18,
         fontWeight: FontWeight.w600,
-        color: AppTheme.fg,
+        color: t.fg,
       ),
     );
   }
 
   Widget _buildMonthNav() {
+    final t = context.tokens;
     return Row(
       children: [
         GestureDetector(
           onTap: _canGoPrev ? _prevMonth : null,
-          child: Container(
-            width: 32,
-            height: 32,
-            alignment: Alignment.center,
-            child: Icon(
-              LucideIcons.chevron_left,
-              size: 16,
-              color: _canGoPrev ? AppTheme.fg : AppTheme.fgFaint,
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Center(
+              child: Icon(
+                LucideIcons.chevron_left,
+                size: 16,
+                color: _canGoPrev ? t.fg : t.fgFaint,
+              ),
             ),
           ),
         ),
@@ -223,23 +234,21 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
           child: Text(
             _formatMonthTitle(_displayMonth),
             textAlign: TextAlign.center,
-            style: AppTheme.mono(
-              size: 13,
-              weight: FontWeight.w600,
-              color: AppTheme.fg,
-            ),
+            style: t.mono(size: 13, weight: FontWeight.w600, color: t.fg),
           ),
         ),
         GestureDetector(
           onTap: _canGoNext ? _nextMonth : null,
-          child: Container(
-            width: 32,
-            height: 32,
-            alignment: Alignment.center,
-            child: Icon(
-              LucideIcons.chevron_right,
-              size: 16,
-              color: _canGoNext ? AppTheme.fg : AppTheme.fgFaint,
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Center(
+              child: Icon(
+                LucideIcons.chevron_right,
+                size: 16,
+                color: _canGoNext ? t.fg : t.fgFaint,
+              ),
             ),
           ),
         ),
@@ -248,6 +257,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
   }
 
   Widget _buildWeekdayHeaders() {
+    final t = context.tokens;
     return Row(
       children: [
         for (final day in _weekdays)
@@ -255,10 +265,10 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
             child: Text(
               day,
               textAlign: TextAlign.center,
-              style: AppTheme.mono(
+              style: t.mono(
                 size: 11,
                 weight: FontWeight.w500,
-                color: AppTheme.fgMuted,
+                color: t.fgMuted,
               ),
             ),
           ),
@@ -303,6 +313,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
   }
 
   Widget _buildDayCell(DateTime date) {
+    final t = context.tokens;
     final isSelected = _selectedDate != null && isSameDay(date, _selectedDate!);
     final isToday = _isToday(date);
     final inRange = _isInRange(date);
@@ -311,21 +322,22 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
     if (isSelected) {
       return GestureDetector(
         onTap: () => _selectDate(date),
+        behavior: HitTestBehavior.opaque,
         child: Container(
           height: 40,
           margin: const EdgeInsets.symmetric(horizontal: 2),
           decoration: BoxDecoration(
-            color: AppTheme.fg,
+            color: t.fg,
             borderRadius: BorderRadius.circular(AppTheme.radiusSm),
           ),
           alignment: Alignment.center,
           child: Text(
             '${date.day}',
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: AppTheme.fontSans,
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: AppTheme.bg,
+              color: t.bg,
             ),
           ),
         ),
@@ -340,11 +352,11 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
         alignment: Alignment.center,
         child: Text(
           '${date.day}',
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: AppTheme.fontSans,
             fontSize: 14,
             fontWeight: FontWeight.w400,
-            color: AppTheme.fgFaint,
+            color: t.fgFaint,
           ),
         ),
       );
@@ -357,16 +369,14 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
             child: Container(
               width: 4,
               height: 4,
-              decoration: BoxDecoration(
-                color: AppTheme.fg,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: t.fg, shape: BoxShape.circle),
             ),
           )
         : const SizedBox(height: 5);
 
     return GestureDetector(
       onTap: () => _selectDate(date),
+      behavior: HitTestBehavior.opaque,
       child: Container(
         height: 40,
         margin: const EdgeInsets.symmetric(horizontal: 2),
@@ -379,9 +389,8 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
               style: TextStyle(
                 fontFamily: AppTheme.fontSans,
                 fontSize: 14,
-                fontWeight:
-                    isToday ? FontWeight.w600 : FontWeight.w400,
-                color: AppTheme.fg,
+                fontWeight: isToday ? FontWeight.w600 : FontWeight.w400,
+                color: t.fg,
               ),
             ),
             todayDot,
@@ -392,16 +401,18 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
   }
 
   Widget _buildActions() {
+    final t = context.tokens;
     return Row(
       children: [
         Expanded(
           child: GestureDetector(
             onTap: () => Navigator.of(context).pop(),
+            behavior: HitTestBehavior.opaque,
             child: Container(
               height: 44,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                border: Border.all(color: AppTheme.borderStrong, width: 0.8),
+                border: Border.all(color: t.borderStrong, width: 0.8),
               ),
               alignment: Alignment.center,
               child: Text(
@@ -410,7 +421,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
                   fontFamily: AppTheme.fontSans,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: AppTheme.fgMuted,
+                  color: t.fgMuted,
                 ),
               ),
             ),
@@ -420,11 +431,11 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
         Expanded(
           child: GestureDetector(
             onTap: _selectedDate != null ? _confirm : null,
+            behavior: HitTestBehavior.opaque,
             child: Container(
               height: 44,
               decoration: BoxDecoration(
-                color:
-                    _selectedDate != null ? AppTheme.fg : AppTheme.bgMuted,
+                color: _selectedDate != null ? t.fg : t.bgMuted,
                 borderRadius: BorderRadius.circular(AppTheme.radiusMd),
               ),
               alignment: Alignment.center,
@@ -434,8 +445,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
                   fontFamily: AppTheme.fontSans,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color:
-                      _selectedDate != null ? AppTheme.bg : AppTheme.fgSubtle,
+                  color: _selectedDate != null ? t.bg : t.fgSubtle,
                 ),
               ),
             ),
@@ -444,4 +454,14 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
       ],
     );
   }
+}
+
+/// 判断能否导航到上一月。
+bool canNavigateToPreviousMonth({
+  required DateTime displayMonth,
+  required DateTime firstDate,
+}) {
+  final prevMonth = DateTime(displayMonth.year, displayMonth.month - 1);
+  final firstMonth = DateTime(firstDate.year, firstDate.month);
+  return !prevMonth.isBefore(firstMonth);
 }

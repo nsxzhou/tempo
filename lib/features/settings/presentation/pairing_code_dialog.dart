@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app_providers.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/tempo_theme_extension.dart';
 import '../data/siyuan_pairing_service.dart';
 
 class PairingCodeDialog extends ConsumerStatefulWidget {
@@ -20,10 +21,7 @@ class PairingCodeDialog extends ConsumerStatefulWidget {
 
   final PairingCode? existingCode;
 
-  static Future<void> show(
-    BuildContext context, {
-    PairingCode? existingCode,
-  }) {
+  static Future<void> show(BuildContext context, {PairingCode? existingCode}) {
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -102,10 +100,7 @@ class _PairingCodeDialogState extends ConsumerState<PairingCodeDialog> {
 
       if (!mounted) return;
 
-      _applyCode(
-        code,
-        DateTime.now().add(AppConstants.pairingCodeExpiry),
-      );
+      _applyCode(code, DateTime.now().add(AppConstants.pairingCodeExpiry));
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -117,23 +112,24 @@ class _PairingCodeDialogState extends ConsumerState<PairingCodeDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return Dialog(
       backgroundColor: Colors.transparent,
       child: Container(
         width: 320,
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: AppTheme.bg,
+          color: t.bg,
           borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-          border: Border.all(color: AppTheme.borderStrong, width: 0.8),
+          border: Border.all(color: t.borderStrong, width: 0.8),
           boxShadow: AppTheme.shadowSm,
         ),
-        child: _buildContent(),
+        child: _buildContent(t),
       ),
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildContent(TempoTokens t) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -144,45 +140,39 @@ class _PairingCodeDialogState extends ConsumerState<PairingCodeDialog> {
           children: [
             Text(
               '思源配对码',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
-                color: AppTheme.fg,
+                color: t.fg,
                 letterSpacing: -0.2,
               ),
             ),
             GestureDetector(
               onTap: () => Navigator.of(context).pop(),
-              child: Icon(LucideIcons.x, size: 16, color: AppTheme.fgMuted),
+              child: Icon(LucideIcons.x, size: 16, color: t.fgMuted),
             ),
           ],
         ),
         const SizedBox(height: 20),
-        _buildBody(),
+        _buildBody(t),
         const SizedBox(height: 20),
-        _buildActions(),
+        _buildActions(t),
       ],
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(TempoTokens t) {
     if (_isGenerating) {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const SizedBox(
+          SizedBox(
             width: 24,
             height: 24,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: AppTheme.fg,
-            ),
+            child: CircularProgressIndicator(strokeWidth: 2, color: t.fg),
           ),
           const SizedBox(height: 16),
-          Text(
-            '正在生成配对码...',
-            style: AppTheme.mono(size: 11, color: AppTheme.fgMuted),
-          ),
+          Text('正在生成配对码...', style: t.mono(size: 11, color: t.fgMuted)),
         ],
       );
     }
@@ -191,7 +181,7 @@ class _PairingCodeDialogState extends ConsumerState<PairingCodeDialog> {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
+          const Icon(
             LucideIcons.circle_alert,
             color: AppTheme.priorityP0,
             size: 32,
@@ -200,7 +190,11 @@ class _PairingCodeDialogState extends ConsumerState<PairingCodeDialog> {
           Text(
             _errorMessage!,
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: AppTheme.priorityP0, height: 1.4),
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppTheme.priorityP0,
+              height: 1.4,
+            ),
           ),
         ],
       );
@@ -210,21 +204,18 @@ class _PairingCodeDialogState extends ConsumerState<PairingCodeDialog> {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(LucideIcons.timer_off, size: 32, color: AppTheme.fgMuted),
+          Icon(LucideIcons.timer_off, size: 32, color: t.fgMuted),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             '配对码已过期',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: AppTheme.fgSecondary,
+              color: t.fgSecondary,
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            '请重新生成',
-            style: AppTheme.mono(size: 10, color: AppTheme.fgMuted),
-          ),
+          Text('请重新生成', style: t.mono(size: 10, color: t.fgMuted)),
         ],
       );
     }
@@ -238,24 +229,24 @@ class _PairingCodeDialogState extends ConsumerState<PairingCodeDialog> {
         Text(
           '在思源插件中输入以下配对码完成绑定',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 11, color: AppTheme.fgMuted, height: 1.5),
+          style: TextStyle(fontSize: 11, color: t.fgMuted, height: 1.5),
         ),
         const SizedBox(height: 16),
         // 配对码 Geist Mono 大号
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           decoration: BoxDecoration(
-            color: AppTheme.bgSubtle,
+            color: t.bgSubtle,
             borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-            border: Border.all(color: AppTheme.borderStrong, width: 0.8),
+            border: Border.all(color: t.borderStrong, width: 0.8),
           ),
           child: Text(
             _formatCode(_code!),
             textAlign: TextAlign.center,
-            style: AppTheme.mono(
+            style: t.mono(
               size: 32,
               weight: FontWeight.w700,
-              color: AppTheme.fg,
+              color: t.fg,
               letterSpacing: 4,
             ),
           ),
@@ -265,7 +256,7 @@ class _PairingCodeDialogState extends ConsumerState<PairingCodeDialog> {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(LucideIcons.timer, size: 13, color: AppTheme.priorityP1),
+            const Icon(LucideIcons.timer, size: 13, color: AppTheme.priorityP1),
             const SizedBox(width: 6),
             Text(
               '有效期剩余 ${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
@@ -281,7 +272,7 @@ class _PairingCodeDialogState extends ConsumerState<PairingCodeDialog> {
     );
   }
 
-  Widget _buildActions() {
+  Widget _buildActions(TempoTokens t) {
     return Row(
       children: [
         if (_code == null && !_isGenerating)
@@ -289,8 +280,8 @@ class _PairingCodeDialogState extends ConsumerState<PairingCodeDialog> {
             child: OutlinedButton(
               onPressed: _generateCode,
               style: OutlinedButton.styleFrom(
-                foregroundColor: AppTheme.fg,
-                side: const BorderSide(color: AppTheme.borderStrong),
+                foregroundColor: t.fg,
+                side: BorderSide(color: t.borderStrong),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                 ),
@@ -309,8 +300,8 @@ class _PairingCodeDialogState extends ConsumerState<PairingCodeDialog> {
           child: FilledButton(
             onPressed: () => Navigator.of(context).pop(),
             style: FilledButton.styleFrom(
-              backgroundColor: AppTheme.fg,
-              foregroundColor: AppTheme.bg,
+              backgroundColor: t.fg,
+              foregroundColor: t.bg,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppTheme.radiusMd),
               ),

@@ -64,9 +64,9 @@ class SiyuanPairingService {
     required SupabaseClient supabase,
     required String? userId,
     required String? userEmail,
-  })  : _supabase = supabase,
-        _userId = userId,
-        _userEmail = userEmail;
+  }) : _supabase = supabase,
+       _userId = userId,
+       _userEmail = userEmail;
 
   /// 生成新的 6 位配对码并写入 Supabase。
   Future<String> generateCode() async {
@@ -129,10 +129,7 @@ class SiyuanPairingService {
           .timeout(const Duration(seconds: 8));
 
       if (row == null) {
-        return SiyuanBindingStatus(
-          isPaired: false,
-          pendingCode: pendingCode,
-        );
+        return SiyuanBindingStatus(isPaired: false, pendingCode: pendingCode);
       }
 
       final map = row;
@@ -149,10 +146,7 @@ class SiyuanPairingService {
         pendingCode: pendingCode,
       );
     } catch (_) {
-      return SiyuanBindingStatus(
-        isPaired: false,
-        pendingCode: pendingCode,
-      );
+      return SiyuanBindingStatus(isPaired: false, pendingCode: pendingCode);
     }
   }
 

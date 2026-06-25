@@ -3,7 +3,7 @@
 
 import 'package:flutter/material.dart';
 
-import '../../../theme/app_theme.dart';
+import '../../../theme/tempo_theme_extension.dart';
 
 class TempoPropertyRow extends StatelessWidget {
   final IconData icon;
@@ -23,37 +23,33 @@ class TempoPropertyRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return InkWell(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        decoration: const BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: AppTheme.borderSubtle, width: 0.5),
-          ),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: t.borderSubtle, width: 0.5)),
         ),
         child: Row(
           children: [
-            Icon(icon, size: 14, color: AppTheme.fgMuted),
+            Icon(icon, size: 14, color: t.fgMuted),
             const SizedBox(width: 12),
             SizedBox(
               width: 48,
               child: Text(
                 label.toUpperCase(),
-                style: AppTheme.mono(
+                style: t.mono(
                   size: 11,
                   weight: FontWeight.w600,
-                  color: AppTheme.fgMuted,
+                  color: t.fgMuted,
                   letterSpacing: 1.0,
                 ),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(child: value),
-            if (trailing != null) ...[
-              const SizedBox(width: 8),
-              trailing!,
-            ],
+            if (trailing != null) ...[const SizedBox(width: 8), trailing!],
           ],
         ),
       ),

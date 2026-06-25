@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../../theme/tempo_theme_extension.dart';
 
 class TempoCheckbox extends StatelessWidget {
   final bool value;
@@ -23,6 +24,7 @@ class TempoCheckbox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return Semantics(
       label: value ? '已完成' : '未完成',
       button: onChanged != null,
@@ -35,9 +37,9 @@ class TempoCheckbox extends StatelessWidget {
           width: size,
           height: size,
           decoration: BoxDecoration(
-            color: value ? AppTheme.fg : AppTheme.bg,
+            color: value ? t.fg : t.bg,
             border: Border.all(
-              color: value ? AppTheme.fg : AppTheme.borderEmphasis,
+              color: value ? t.fg : t.borderEmphasis,
               width: 1.2,
             ),
             shape: BoxShape.circle,
@@ -47,11 +49,7 @@ class TempoCheckbox extends StatelessWidget {
             duration: AppTheme.durationFast,
             curve: AppTheme.curveSpring,
             child: value
-            ? Icon(
-                LucideIcons.check,
-                size: size * 0.55,
-                color: AppTheme.bg,
-              )
+                ? Icon(LucideIcons.check, size: size * 0.55, color: t.bg)
                 : const SizedBox.shrink(),
           ),
         ),

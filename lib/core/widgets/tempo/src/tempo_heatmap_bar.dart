@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../../theme/tempo_theme_extension.dart';
 
 class TempoHeatmapBar extends StatelessWidget {
   final List<int> levels; // 1-4
@@ -17,23 +18,24 @@ class TempoHeatmapBar extends StatelessWidget {
     this.height = 40,
   });
 
-  Color _colorForLevel(int level) {
+  Color _colorForLevel(TempoTokens t, int level) {
     switch (level) {
       case 1:
-        return AppTheme.fg.withValues(alpha: 0.04);
+        return t.fg.withValues(alpha: 0.04);
       case 2:
-        return AppTheme.fg.withValues(alpha: 0.14);
+        return t.fg.withValues(alpha: 0.14);
       case 3:
-        return AppTheme.fg.withValues(alpha: 0.32);
+        return t.fg.withValues(alpha: 0.32);
       case 4:
-        return AppTheme.fg;
+        return t.fg;
       default:
-        return AppTheme.bgMuted;
+        return t.bgMuted;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -45,7 +47,7 @@ class TempoHeatmapBar extends StatelessWidget {
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: _colorForLevel(lvl),
+                      color: _colorForLevel(t, lvl),
                       borderRadius: BorderRadius.circular(AppTheme.radiusXxxs),
                     ),
                   ),
@@ -59,14 +61,10 @@ class TempoHeatmapBar extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            for (final t in times)
+            for (final time in times)
               Text(
-                t,
-                style: AppTheme.mono(
-                  size: 9,
-                  color: AppTheme.fgSubtle,
-                  letterSpacing: -0.2,
-                ),
+                time,
+                style: t.mono(size: 9, color: t.fgSubtle, letterSpacing: -0.2),
               ),
           ],
         ),
@@ -79,18 +77,30 @@ class TempoHeatmapBar extends StatelessWidget {
 class TempoHeatmapLegend extends StatelessWidget {
   const TempoHeatmapLegend({super.key});
 
+  Color _colorForLevel(TempoTokens t, int level) {
+    switch (level) {
+      case 1:
+        return t.fg.withValues(alpha: 0.04);
+      case 2:
+        return t.fg.withValues(alpha: 0.14);
+      case 3:
+        return t.fg.withValues(alpha: 0.32);
+      case 4:
+        return t.fg;
+      default:
+        return t.bgMuted;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           '低',
-          style: AppTheme.mono(
-            size: 9,
-            color: AppTheme.fgMuted,
-            weight: FontWeight.w500,
-          ),
+          style: t.mono(size: 9, color: t.fgMuted, weight: FontWeight.w500),
         ),
         const SizedBox(width: 6),
         for (final lvl in const [1, 2, 3, 4]) ...[
@@ -98,7 +108,7 @@ class TempoHeatmapLegend extends StatelessWidget {
             width: 6,
             height: 6,
             decoration: BoxDecoration(
-              color: _colorForLevel(lvl),
+              color: _colorForLevel(t, lvl),
               shape: BoxShape.circle,
             ),
           ),
@@ -107,28 +117,9 @@ class TempoHeatmapLegend extends StatelessWidget {
         const SizedBox(width: 6),
         Text(
           '高',
-          style: AppTheme.mono(
-            size: 9,
-            color: AppTheme.fgMuted,
-            weight: FontWeight.w500,
-          ),
+          style: t.mono(size: 9, color: t.fgMuted, weight: FontWeight.w500),
         ),
       ],
     );
-  }
-
-  static Color _colorForLevel(int level) {
-    switch (level) {
-      case 1:
-        return AppTheme.fg.withValues(alpha: 0.04);
-      case 2:
-        return AppTheme.fg.withValues(alpha: 0.14);
-      case 3:
-        return AppTheme.fg.withValues(alpha: 0.32);
-      case 4:
-        return AppTheme.fg;
-      default:
-        return AppTheme.bgMuted;
-    }
   }
 }

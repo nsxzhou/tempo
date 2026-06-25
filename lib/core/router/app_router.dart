@@ -4,15 +4,13 @@
 // ============================================================
 
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app_providers.dart';
 import '../../core/constants/app_constants.dart';
-import '../../core/theme/app_theme.dart';
-import '../../core/widgets/feature_unavailable_page.dart';
 import '../../features/auth/data/auth_service.dart';
+import '../../features/stats/presentation/stats_page.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/tasks/presentation/tasks_page.dart';
 import '../../features/tasks/presentation/task_detail_page.dart';
@@ -22,18 +20,33 @@ import '../../features/onboarding/data/onboarding_manager.dart';
 import '../../features/onboarding/presentation/onboarding_page.dart';
 import 'shell_scaffold.dart';
 
-/// Shell Tab 淡入淡出切换(350ms easeInOutCubic)
+/// Shell Tab 淡入淡出切换(150ms)
 CustomTransitionPage<void> _shellTabPage(Widget child) {
   return CustomTransitionPage<void>(
     child: child,
-    transitionDuration: AppTheme.durationMedium,
-    reverseTransitionDuration: AppTheme.durationMedium,
+    transitionDuration: const Duration(milliseconds: 150),
+    reverseTransitionDuration: const Duration(milliseconds: 150),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       return FadeTransition(
         opacity: CurvedAnimation(
           parent: animation,
           curve: Curves.easeInOutCubic,
         ),
+        child: child,
+      );
+    },
+  );
+}
+
+/// 详情页轻量淡入(200ms)
+CustomTransitionPage<void> _taskDetailPage(Widget child) {
+  return CustomTransitionPage<void>(
+    child: child,
+    transitionDuration: const Duration(milliseconds: 200),
+    reverseTransitionDuration: const Duration(milliseconds: 200),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(
+        opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
         child: child,
       );
     },
@@ -106,8 +119,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: AppConstants.routeTasks,
-            pageBuilder: (context, state) =>
-                _shellTabPage(const TasksPage()),
+            pageBuilder: (context, state) => _shellTabPage(const TasksPage()),
           ),
           GoRoute(
             path: AppConstants.routeCalendar,
@@ -115,14 +127,8 @@ final routerProvider = Provider<GoRouter>((ref) {
                 _shellTabPage(const CalendarPage()),
           ),
           GoRoute(
-            path: AppConstants.routePlan,
-            pageBuilder: (context, state) => _shellTabPage(
-              const FeatureUnavailablePage(
-                icon: LucideIcons.sparkles,
-                title: 'AI 计划即将上线',
-                subtitle: '智能排期与精力曲线功能开发中',
-              ),
-            ),
+            path: AppConstants.routeStats,
+            pageBuilder: (context, state) => _shellTabPage(const StatsPage()),
           ),
           GoRoute(
             path: AppConstants.routeSettings,
@@ -135,16 +141,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       // ── 任务详情 ──
       GoRoute(
         path: AppConstants.routeTaskDetail,
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final id = state.pathParameters['id']!;
-          return TaskDetailPage(taskId: id);
+          return _taskDetailPage(TaskDetailPage(taskId: id));
         },
       ),
     ],
   );
 
   // 当 auth 状态变化时刷新路由守卫
-  ref.listen(authStateProvider, (_, __) {
+  ref.listen(authStateProvider, (_, _) {
     router.refresh();
   });
 

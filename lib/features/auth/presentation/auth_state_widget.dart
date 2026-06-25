@@ -3,6 +3,8 @@
 // 监听 Supabase auth 状态变化，驱动路由跳转 + 启动同步服务
 // ============================================================
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -23,44 +25,46 @@ class AuthStateWidget extends ConsumerStatefulWidget {
 }
 
 class _AuthStateWidgetState extends ConsumerState<AuthStateWidget> {
+  bool _syncStarted = false;
+
   @override
-  Widget build(BuildContext context) {
-    final session = ref.watch(authStateProvider).valueOrNull;
-
-    // 登录后立即预取思源绑定状态，进入「我的」前数据已就绪。
-    if (session != null) {
-      ref.watch(siyuanBindingStatusProvider);
-    }
-
-    // 当用户登录时，启动 SyncService
-    // 使用 listen 避免在 build 中直接执行副作用
-    ref.listen(authStateProvider, (previous, next) {
-      final newSession = next.valueOrNull;
-      if (newSession != null && (previous?.valueOrNull == null)) {
-        // 从未登录变为已登录，启动同步
-        _startSyncService();
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final session = ref.read(authStateProvider).valueOrNull;
+      if (session != null) {
+        _tryStartSync();
+        unawaited(ref.read(siyuanBindingStatusProvider.future));
       }
     });
+  }
 
-    // 如果当前已登录（App 启动时恢复 session），也启动同步
-    if (session != null) {
-      // 使用 microtask 避免在 build 中直接修改 provider 状态
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _startSyncService();
-      });
-    }
+  @override
+  Widget build(BuildContext context) {
+    ref.watch(authStateProvider);
+
+    ref.listen(authStateProvider, (previous, next) {
+      final wasLoggedOut = previous?.valueOrNull == null;
+      final isLoggedIn = next.valueOrNull != null;
+      if (wasLoggedOut && isLoggedIn) {
+        _tryStartSync();
+        unawaited(ref.read(siyuanBindingStatusProvider.future));
+      }
+      if (!isLoggedIn && previous?.valueOrNull != null) {
+        _syncStarted = false;
+      }
+    });
 
     return widget.child;
   }
 
-  void _startSyncService() {
+  void _tryStartSync() {
+    if (_syncStarted) return;
+    _syncStarted = true;
     try {
-      // 读取 SyncService 并启动监听
-      // 注意：syncServiceProvider 依赖 taskRepositoryProvider，后者依赖 currentUserIdProvider
-      // 只有当 userId 可用时，SyncService 才能正常工作
       ref.read(syncServiceProvider).startListening();
     } catch (_) {
-      // 静默忽略：如果 provider 尚未就绪，下次 auth 状态变化时会重试
+      _syncStarted = false;
     }
   }
 }

@@ -1,4 +1,5 @@
 /// 日期比较工具（日历 / 本周过滤共用）
+library;
 
 /// 判断 [a] 与 [b] 是否为同一天（本地时区年月日）。
 bool isSameDay(DateTime a, DateTime b) {
@@ -27,7 +28,14 @@ bool isTaskOverdue({
   if (isCompleted) return false;
   final current = now ?? DateTime.now();
   if (isAllDay) {
-    final endOfDay = DateTime(dueDate.year, dueDate.month, dueDate.day, 23, 59, 59);
+    final endOfDay = DateTime(
+      dueDate.year,
+      dueDate.month,
+      dueDate.day,
+      23,
+      59,
+      59,
+    );
     return current.isAfter(endOfDay);
   }
   return dueDate.isBefore(current);

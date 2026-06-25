@@ -1,6 +1,6 @@
 // ============================================================
 // TaskRepository — 任务数据仓库接口 + SyncTaskRepository 实现
-// 在线优先策略：写入先云端后本地，读取先本地后后台刷新
+// 本地优先交互：写入先落 Drift，后台同步云端；读取先本地后后台刷新
 // ============================================================
 
 import 'dart:async';
@@ -22,7 +22,7 @@ abstract class TaskRepository {
   /// 监听所有任务的响应式流（local-first + 后台刷新）。
   Stream<List<domain.Task>> watchTasks();
 
-  /// 创建任务（在线优先：先写 Supabase，离线写本地标记 syncPending）。
+  /// 创建任务（本地优先：先写 Drift，后台同步 Supabase）。
   Future<domain.Task> createTask({
     required String title,
     String? description,
@@ -61,7 +61,7 @@ class ConnectivityService {
   final Connectivity _connectivity;
 
   ConnectivityService({Connectivity? connectivity})
-      : _connectivity = connectivity ?? Connectivity();
+    : _connectivity = connectivity ?? Connectivity();
 
   /// 当前是否在线（非 none 即认为在线）。
   Future<bool> get isOnline async {
@@ -71,8 +71,9 @@ class ConnectivityService {
 
   /// 网络状态变化流（把 List 折叠成单个值,兼容老接口）。
   Stream<ConnectivityResult> get onConnectivityChanged =>
-      _connectivity.onConnectivityChanged
-          .map((results) => results.isEmpty ? ConnectivityResult.none : results.first);
+      _connectivity.onConnectivityChanged.map(
+        (results) => results.isEmpty ? ConnectivityResult.none : results.first,
+      );
 
   /// 释放资源。
   void dispose() {
@@ -80,11 +81,12 @@ class ConnectivityService {
   }
 }
 
-/// 在线优先同步任务仓库。
+/// 本地优先同步任务仓库。
 ///
-/// 写入路径（online-first）：
-/// - 在线：先写 Supabase，成功后更新本地 Drift 缓存
-/// - 离线：写 Drift，标记 syncPending=true，等待网络恢复后推送
+/// 写入路径（optimistic local-first）：
+/// - 先写 Drift，让 UI 立即响应
+/// - 有登录用户时标记 syncPending=true，并后台同步 Supabase
+/// - 同步成功后把确认行写回 Drift，syncPending=false
 ///
 /// 读取路径（local-first + background refresh）：
 /// - 立即返回 Drift 流（毫秒级）
@@ -96,6 +98,10 @@ class SyncTaskRepository implements TaskRepository {
   final String _listId;
   final ConnectivityService _connectivity;
   final Uuid _uuid;
+  final Future<domain.Task> Function(domain.Task task, String userId)?
+  _remoteTaskUpsert;
+  Timer? _refreshDebounce;
+  bool _refreshInFlight = false;
 
   SyncTaskRepository({
     required db.AppDatabase localDb,
@@ -104,12 +110,15 @@ class SyncTaskRepository implements TaskRepository {
     required String listId,
     required ConnectivityService connectivity,
     Uuid? uuid,
-  })  : _localDb = localDb,
-        _supabase = supabase,
-        _userId = userId,
-        _listId = listId,
-        _connectivity = connectivity,
-        _uuid = uuid ?? const Uuid();
+    Future<domain.Task> Function(domain.Task task, String userId)?
+    remoteTaskUpsert,
+  }) : _localDb = localDb,
+       _supabase = supabase,
+       _userId = userId,
+       _listId = listId,
+       _connectivity = connectivity,
+       _uuid = uuid ?? const Uuid(),
+       _remoteTaskUpsert = remoteTaskUpsert;
 
   // ── 写入路径 ──
 
@@ -131,6 +140,7 @@ class SyncTaskRepository implements TaskRepository {
     final now = DateTime.now();
     final id = _uuid.v4();
 
+    final shouldSync = _userId != null;
     final task = domain.Task(
       id: id,
       listId: _listId,
@@ -143,33 +153,14 @@ class SyncTaskRepository implements TaskRepository {
       updatedAt: now,
       creationSource: creationSource,
       tag: tag,
-      syncPending: false,
+      syncPending: shouldSync,
     );
 
-    final isOnline = await _connectivity.isOnline;
-    final userId = _userId;
-    if (isOnline && userId != null) {
-      try {
-        // 1. 写 Supabase
-        final row = await _supabase
-            .from(AppConstants.tableTasks)
-            .insert(task.toSupabaseJson(userId: userId))
-            .select()
-            .single();
-        final remote = domain.TaskSupabase.fromSupabaseJson(row);
-        // 2. 更新本地缓存
-        await _upsertLocal(remote);
-        return remote;
-      } catch (_) {
-        // Supabase 写入失败，降级为本地写入
-        await _upsertLocal(task.copyWith(syncPending: true));
-        return task;
-      }
-    } else {
-      // 离线：写本地，标记 syncPending
-      await _upsertLocal(task.copyWith(syncPending: true));
-      return task;
+    await _upsertLocal(task);
+    if (shouldSync) {
+      unawaited(_syncTaskToCloud(task));
     }
+    return task;
   }
 
   @override
@@ -191,30 +182,17 @@ class SyncTaskRepository implements TaskRepository {
 
   @override
   Future<domain.Task> updateTask(domain.Task task) async {
-    final updated = task.copyWith(updatedAt: DateTime.now());
-    final isOnline = await _connectivity.isOnline;
-    final userId = _userId;
+    final shouldSync = _userId != null;
+    final updated = task.copyWith(
+      updatedAt: DateTime.now(),
+      syncPending: shouldSync,
+    );
 
-    if (isOnline && userId != null) {
-      try {
-        final row = await _supabase
-            .from(AppConstants.tableTasks)
-            .update(updated.toSupabaseJson(userId: userId))
-            .eq('id', updated.id)
-            .select()
-            .single();
-        final remote = domain.TaskSupabase.fromSupabaseJson(row);
-        await _upsertLocal(remote);
-        return remote;
-      } catch (_) {
-        // 降级为本地写入
-        await _upsertLocal(updated.copyWith(syncPending: true));
-        return updated;
-      }
-    } else {
-      await _upsertLocal(updated.copyWith(syncPending: true));
-      return updated;
+    await _upsertLocal(updated);
+    if (shouldSync) {
+      unawaited(_syncTaskToCloud(updated));
     }
+    return updated;
   }
 
   @override
@@ -236,9 +214,7 @@ class SyncTaskRepository implements TaskRepository {
 
   @override
   Future<void> deleteTask(String id) async {
-    await (_localDb.delete(_localDb.tasks)
-          ..where((t) => t.id.equals(id)))
-        .go();
+    await (_localDb.delete(_localDb.tasks)..where((t) => t.id.equals(id))).go();
 
     unawaited(_syncDeleteToCloud(id));
   }
@@ -254,32 +230,51 @@ class SyncTaskRepository implements TaskRepository {
     }
   }
 
+  Future<void> _syncTaskToCloud(domain.Task task) async {
+    final isOnline = await _connectivity.isOnline;
+    final userId = _userId;
+    if (!isOnline || userId == null) return;
+
+    try {
+      final remote = await _upsertRemoteTask(task, userId);
+      await _upsertLocal(remote.copyWith(syncPending: false));
+    } catch (_) {
+      // Keep syncPending=true; SyncService.pushPending retries later.
+    }
+  }
+
   // ── 读取路径 ──
 
   @override
   Stream<List<domain.Task>> watchTasks() {
     // 立即返回本地流（毫秒级）
-    final localStream = (_localDb.select(_localDb.tasks)
-          ..orderBy([
-            (t) => OrderingTerm(expression: t.isCompleted),
-            (t) => OrderingTerm(expression: t.priority),
-            (t) => OrderingTerm.desc(t.dueDate),
-            (t) => OrderingTerm.desc(t.createdAt),
-          ]))
-        .watch()
-        .map((rows) => rows.map(_mapTask).toList());
+    final localStream =
+        (_localDb.select(_localDb.tasks)..orderBy([
+              (t) => OrderingTerm(expression: t.isCompleted),
+              (t) => OrderingTerm(expression: t.priority),
+              (t) => OrderingTerm.desc(t.dueDate),
+              (t) => OrderingTerm.desc(t.createdAt),
+            ]))
+            .watch()
+            .map((rows) => rows.map(_mapTask).toList());
 
-    // 后台静默刷新云端
-    _refreshFromRemote();
+    _scheduleRefreshFromRemote();
 
     return localStream;
   }
 
+  void _scheduleRefreshFromRemote() {
+    _refreshDebounce?.cancel();
+    _refreshDebounce = Timer(const Duration(milliseconds: 300), () {
+      unawaited(_refreshFromRemote());
+    });
+  }
+
   @override
   Future<domain.Task?> getTaskById(String id) async {
-    final row = await (_localDb.select(_localDb.tasks)
-          ..where((t) => t.id.equals(id)))
-        .getSingleOrNull();
+    final row = await (_localDb.select(
+      _localDb.tasks,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
     if (row == null) return null;
     return _mapTask(row);
   }
@@ -292,72 +287,94 @@ class SyncTaskRepository implements TaskRepository {
     final userId = _userId;
     if (!isOnline || userId == null) return;
 
-    final pending = await (_localDb.select(_localDb.tasks)
-          ..where((t) => t.syncPending.equals(true)))
-        .get();
+    final pending = await (_localDb.select(
+      _localDb.tasks,
+    )..where((t) => t.syncPending.equals(true))).get();
 
+    if (pending.isEmpty) return;
+
+    final clearedIds = <String>[];
     for (final row in pending) {
       try {
         final task = _mapTask(row);
-        // last-write-wins: 直接 upsert
-        await _supabase
-            .from(AppConstants.tableTasks)
-            .upsert(task.toSupabaseJson(userId: userId));
-        // 清除 syncPending
-        await (_localDb.update(_localDb.tasks)
-              ..where((t) => t.id.equals(row.id)))
-            .write(const db.TasksCompanion(syncPending: Value(false)));
+        final remote = await _upsertRemoteTask(task, userId);
+        await _upsertLocal(remote.copyWith(syncPending: false));
+        clearedIds.add(row.id);
       } catch (_) {
         // 保留 pending，下次重试
       }
     }
+
+    if (clearedIds.isEmpty) return;
+
+    await _localDb.batch((batch) {
+      for (final id in clearedIds) {
+        batch.update(
+          _localDb.tasks,
+          const db.TasksCompanion(syncPending: Value(false)),
+          where: (t) => t.id.equals(id),
+        );
+      }
+    });
   }
 
   // ── 内部方法 ──
 
+  Future<domain.Task> _upsertRemoteTask(domain.Task task, String userId) async {
+    final injected = _remoteTaskUpsert;
+    if (injected != null) {
+      return injected(task, userId);
+    }
+
+    final row = await _supabase
+        .from(AppConstants.tableTasks)
+        .upsert(task.toSupabaseJson(userId: userId))
+        .select()
+        .single();
+    return domain.TaskSupabase.fromSupabaseJson(row);
+  }
+
   /// 后台静默刷新云端数据到本地缓存。
   Future<void> _refreshFromRemote() async {
-    final isOnline = await _connectivity.isOnline;
-    final userId = _userId;
-    if (!isOnline || userId == null) return;
-
+    if (_refreshInFlight) return;
+    _refreshInFlight = true;
     try {
+      final isOnline = await _connectivity.isOnline;
+      final userId = _userId;
+      if (!isOnline || userId == null) return;
+
       final rows = await _supabase
           .from(AppConstants.tableTasks)
           .select()
           .eq('user_id', userId);
 
-      for (final row in rows as List) {
-        final remote = domain.TaskSupabase.fromSupabaseJson(
-            row as Map<String, dynamic>);
-        // upsert 到本地，覆盖 syncPending=false 的记录
-        await _upsertLocal(remote, overwriteIfNotPending: true);
-      }
+      final pendingIds = await (_localDb.select(
+        _localDb.tasks,
+      )..where((t) => t.syncPending.equals(true))).map((r) => r.id).get();
+      final pendingSet = pendingIds.toSet();
+
+      await _localDb.batch((batch) {
+        for (final row in rows as List) {
+          final remote = domain.TaskSupabase.fromSupabaseJson(
+            row as Map<String, dynamic>,
+          );
+          if (pendingSet.contains(remote.id)) continue;
+          batch.insert(
+            _localDb.tasks,
+            _companionFor(remote),
+            mode: InsertMode.insertOrReplace,
+          );
+        }
+      });
     } catch (_) {
       // 静默失败，下次重试
+    } finally {
+      _refreshInFlight = false;
     }
   }
 
-  /// 将 Task upsert 到本地 Drift 数据库。
-  ///
-  /// [overwriteIfNotPending] 为 true 时，仅覆盖本地 syncPending=false 的记录
-  /// （用于后台刷新：不覆盖用户离线修改的待同步数据）。
-  Future<void> _upsertLocal(
-    domain.Task task, {
-    bool overwriteIfNotPending = false,
-  }) async {
-    if (overwriteIfNotPending) {
-      // 检查本地是否已有该任务且 syncPending=true
-      final existing = await (_localDb.select(_localDb.tasks)
-            ..where((t) => t.id.equals(task.id)))
-          .getSingleOrNull();
-      if (existing != null && existing.syncPending) {
-        // 本地有待同步的修改，不覆盖
-        return;
-      }
-    }
-
-    final companion = db.TasksCompanion(
+  db.TasksCompanion _companionFor(domain.Task task) {
+    return db.TasksCompanion(
       id: Value(task.id),
       listId: Value(task.listId),
       title: Value(task.title),
@@ -375,7 +392,12 @@ class SyncTaskRepository implements TaskRepository {
       tag: Value(task.tag),
       syncPending: Value(task.syncPending),
     );
+  }
 
+  /// 将 Task upsert 到本地 Drift 数据库。
+  ///
+  Future<void> _upsertLocal(domain.Task task) async {
+    final companion = _companionFor(task);
     await _localDb.into(_localDb.tasks).insertOnConflictUpdate(companion);
   }
 

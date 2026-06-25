@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app_providers.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/theme/tempo_theme_extension.dart';
 import '../../data/streaming_voice_session.dart';
 import '../../data/task_creation_orchestrator.dart';
 import '../../data/volcengine_streaming_asr.dart';
@@ -31,6 +32,8 @@ class VoiceOverlay extends ConsumerStatefulWidget {
 
 class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
     with TickerProviderStateMixin {
+  TempoTokens get tokens => context.tokens;
+
   static const _transcriptThrottle = Duration(milliseconds: 100);
 
   _VoicePhase _phase = _VoicePhase.idle;
@@ -137,12 +140,10 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
   }
 
   void _applyTranscript(String text) {
-    setState(() {
-      _transcript = text;
-      _transcriptController
-        ..text = text
-        ..selection = TextSelection.collapsed(offset: text.length);
-    });
+    _transcript = text;
+    _transcriptController
+      ..text = text
+      ..selection = TextSelection.collapsed(offset: text.length);
   }
 
   Future<void> _animateClose(VoidCallback afterClose) async {
@@ -217,10 +218,7 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
                 _enterAnimation.value,
               ),
               alignment: Alignment.bottomCenter,
-              child: GestureDetector(
-                onTap: () {},
-                child: _buildSheet(),
-              ),
+              child: GestureDetector(onTap: () {}, child: _buildSheet()),
             ),
           ),
         ),
@@ -230,13 +228,13 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
 
   Widget _buildSheet() {
     return Container(
-      decoration: const BoxDecoration(
-        color: AppTheme.bg,
-        borderRadius: BorderRadius.vertical(
+      decoration: BoxDecoration(
+        color: tokens.bg,
+        borderRadius: const BorderRadius.vertical(
           top: Radius.circular(AppTheme.radiusLg),
         ),
-        border: Border(top: BorderSide(color: AppTheme.borderStrong, width: 1)),
-        boxShadow: [
+        border: Border(top: BorderSide(color: tokens.borderStrong, width: 1)),
+        boxShadow: const [
           BoxShadow(
             color: Color(0x1F000000),
             blurRadius: 30,
@@ -254,16 +252,13 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppTheme.borderStrong,
+                color: tokens.borderStrong,
                 borderRadius: BorderRadius.circular(AppTheme.radiusFull),
               ),
             ),
           ),
           const SizedBox(height: 16),
-          if (_error != null) ...[
-            _buildErrorBar(),
-            const SizedBox(height: 12),
-          ],
+          if (_error != null) ...[_buildErrorBar(), const SizedBox(height: 12)],
           _buildRecordMode(),
         ],
       ),
@@ -280,12 +275,16 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
       ),
       child: Row(
         children: [
-          Icon(LucideIcons.circle_alert, size: 14, color: AppTheme.priorityP0),
+          const Icon(
+            LucideIcons.circle_alert,
+            size: 14,
+            color: AppTheme.priorityP0,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               _error!,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 11,
                 color: AppTheme.priorityP0,
                 height: 1.4,
@@ -304,8 +303,8 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppTheme.bgSubtle,
-            border: Border.all(color: AppTheme.borderStrong, width: 0.8),
+            color: tokens.bgSubtle,
+            border: Border.all(color: tokens.borderStrong, width: 0.8),
             borderRadius: BorderRadius.circular(AppTheme.radiusMd),
           ),
           child: Row(
@@ -319,17 +318,17 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
                   children: [
                     Text(
                       _isRecording ? '语音采音中 · 点击停止' : '点击麦克风开始采音',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: AppTheme.fg,
+                        color: tokens.fg,
                         letterSpacing: -0.2,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       '豆包 Seed ASR 2.0 · 流式识别',
-                      style: AppTheme.mono(size: 10, color: AppTheme.fgSubtle),
+                      style: AppTheme.mono(size: 10, color: tokens.fgSubtle),
                     ),
                   ],
                 ),
@@ -337,10 +336,18 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
             ],
           ),
         ),
-        if (_isRecording || _transcript.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          _buildTranscriptBox(),
-        ],
+        ListenableBuilder(
+          listenable: _transcriptController,
+          builder: (context, _) {
+            if (!_isRecording && _transcriptController.text.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [const SizedBox(height: 12), _buildTranscriptBox()],
+            );
+          },
+        ),
         const SizedBox(height: 16),
         _buildCancelButton(),
       ],
@@ -351,25 +358,21 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.bgMuted,
+        color: tokens.bgMuted,
         borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-        border: Border.all(color: AppTheme.borderStrong, width: 0.8),
+        border: Border.all(color: tokens.borderStrong, width: 0.8),
       ),
       child: TextField(
         controller: _transcriptController,
         readOnly: !_isRecording,
         maxLines: 3,
         minLines: 1,
-        style: const TextStyle(
-          fontSize: 13,
-          color: AppTheme.fgSecondary,
-          height: 1.5,
-        ),
+        style: TextStyle(fontSize: 13, color: tokens.fgSecondary, height: 1.5),
         decoration: InputDecoration(
           isDense: true,
           border: InputBorder.none,
           hintText: _isRecording ? '实时转写将显示在这里…' : null,
-          hintStyle: TextStyle(color: AppTheme.fgSubtle, fontSize: 13),
+          hintStyle: TextStyle(color: tokens.fgSubtle, fontSize: 13),
         ),
       ),
     );
@@ -397,7 +400,7 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
                       height: 44,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: AppTheme.fg, width: 1),
+                        border: Border.all(color: tokens.fg, width: 1),
                       ),
                     ),
                   ),
@@ -411,17 +414,17 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: recording ? AppTheme.fg : AppTheme.bgMuted,
+                color: recording ? tokens.fg : tokens.bgMuted,
                 shape: BoxShape.circle,
                 border: recording
                     ? null
-                    : Border.all(color: AppTheme.borderStrong, width: 0.8),
+                    : Border.all(color: tokens.borderStrong, width: 0.8),
               ),
               alignment: Alignment.center,
               child: Icon(
                 recording ? LucideIcons.square : LucideIcons.mic,
                 size: 18,
-                color: recording ? AppTheme.bg : AppTheme.fg,
+                color: recording ? tokens.bg : tokens.fg,
               ),
             ),
           ),
@@ -436,17 +439,17 @@ class _VoiceOverlayState extends ConsumerState<VoiceOverlay>
       child: Container(
         height: 40,
         decoration: BoxDecoration(
-          color: AppTheme.bg,
-          border: Border.all(color: AppTheme.borderStrong, width: 0.8),
+          color: tokens.bg,
+          border: Border.all(color: tokens.borderStrong, width: 0.8),
           borderRadius: BorderRadius.circular(AppTheme.radiusMd),
         ),
         alignment: Alignment.center,
-        child: const Text(
+        child: Text(
           '取消',
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: AppTheme.fgMuted,
+            color: tokens.fgMuted,
           ),
         ),
       ),

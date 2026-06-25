@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app_providers.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/theme/tempo_theme_extension.dart';
 import '../../../../core/motion/tempo_sheet.dart';
 import '../../../../core/widgets/tempo/tempo.dart';
 import '../../data/task_creation_orchestrator.dart';
@@ -46,13 +47,15 @@ enum _QuickDate {
 }
 
 /// 快速编辑回调：返回更新后的 Task
-typedef QuickUpdateCallback = Future<Task> Function({
-  required Task task,
-  required String title,
-  DateTime? dueDate,
-  TaskPriority priority,
-  String? tag,
-});
+typedef QuickUpdateCallback =
+    Future<Task> Function({
+      required Task task,
+      required String title,
+      DateTime? dueDate,
+      required bool isAllDay,
+      TaskPriority priority,
+      String? tag,
+    });
 
 class QuickCreateSheet extends ConsumerStatefulWidget {
   final QuickUpdateCallback? onUpdate;
@@ -65,9 +68,9 @@ class QuickCreateSheet extends ConsumerStatefulWidget {
     this.initialTask,
     this.voiceDraft,
   }) : assert(
-          onUpdate != null || initialTask == null,
-          'Provide onUpdate + initialTask for edit mode',
-        );
+         onUpdate != null || initialTask == null,
+         'Provide onUpdate + initialTask for edit mode',
+       );
 
   bool get isEditMode => initialTask != null;
 
@@ -89,10 +92,7 @@ class QuickCreateSheet extends ConsumerStatefulWidget {
   }) {
     return TempoSheet.show<Task?>(
       context: context,
-      builder: (_) => QuickCreateSheet(
-        initialTask: task,
-        onUpdate: onUpdate,
-      ),
+      builder: (_) => QuickCreateSheet(initialTask: task, onUpdate: onUpdate),
     );
   }
 
@@ -112,12 +112,16 @@ class QuickCreateSheet extends ConsumerStatefulWidget {
 }
 
 class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
+  TempoTokens get t => context.tokens;
+
   final _titleController = TextEditingController();
   final _titleFocus = FocusNode();
 
   bool _expanded = false;
   _QuickDate? _selectedDate;
   DateTime? _customDate;
+  TimeOfDay? _selectedTime;
+  bool _isAllDay = true;
   TaskPriority _selectedPriority = TaskPriority.none;
   String? _selectedTag;
   bool _tagTouched = false;
@@ -132,7 +136,10 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
       _titleController.text.trim().isNotEmpty && !_isSubmitting;
 
   bool get _skipParse =>
-      _dateTouched || _priorityTouched || _tagTouched || widget.isVoicePrefillMode;
+      _dateTouched ||
+      _priorityTouched ||
+      _tagTouched ||
+      widget.isVoicePrefillMode;
 
   @override
   void initState() {
@@ -142,7 +149,12 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
     if (initialTask != null) {
       _titleController.text = initialTask.title;
       if (initialTask.dueDate != null) {
-        _customDate = initialTask.dueDate;
+        final due = initialTask.dueDate!;
+        _customDate = DateTime(due.year, due.month, due.day);
+        _isAllDay = initialTask.isAllDay;
+        if (!initialTask.isAllDay) {
+          _selectedTime = TimeOfDay(hour: due.hour, minute: due.minute);
+        }
         _dateTouched = true;
       }
       if (initialTask.priority != TaskPriority.none) {
@@ -153,13 +165,19 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
         _selectedTag = initialTask.tag;
         _tagTouched = true;
       }
-      _expanded = initialTask.dueDate != null ||
+      _expanded =
+          initialTask.dueDate != null ||
           initialTask.priority != TaskPriority.none ||
           initialTask.tag != null;
     } else if (voiceDraft != null) {
       _titleController.text = voiceDraft.title;
       if (voiceDraft.dueDate != null) {
-        _customDate = voiceDraft.dueDate;
+        final due = voiceDraft.dueDate!;
+        _customDate = DateTime(due.year, due.month, due.day);
+        _isAllDay = voiceDraft.isAllDay;
+        if (!voiceDraft.isAllDay) {
+          _selectedTime = TimeOfDay(hour: due.hour, minute: due.minute);
+        }
         _dateTouched = true;
       }
       if (voiceDraft.priority != TaskPriority.none) {
@@ -170,7 +188,8 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
         _selectedTag = voiceDraft.tag;
         _tagTouched = true;
       }
-      _expanded = voiceDraft.dueDate != null ||
+      _expanded =
+          voiceDraft.dueDate != null ||
           voiceDraft.priority != TaskPriority.none ||
           voiceDraft.tag != null;
     }
@@ -193,10 +212,40 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
     super.dispose();
   }
 
-  /// 获取最终 dueDate（pills 或自定义）
-  DateTime? get _effectiveDueDate {
-    if (_customDate != null) return _customDate;
+  /// 获取选中的日期部分（不含时间）
+  DateTime? get _selectedDatePart {
+    if (_customDate != null) {
+      return DateTime(_customDate!.year, _customDate!.month, _customDate!.day);
+    }
     return _selectedDate?.toDateTime();
+  }
+
+  /// 获取最终 dueDate（日期 + 可选时间）
+  DateTime? get _effectiveDueDate {
+    final date = _selectedDatePart;
+    if (date == null) return null;
+    if (_isAllDay || _selectedTime == null) {
+      return DateTime(date.year, date.month, date.day);
+    }
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      _selectedTime!.hour,
+      _selectedTime!.minute,
+    );
+  }
+
+  bool get _effectiveIsAllDay {
+    if (_effectiveDueDate == null) return false;
+    return _isAllDay || _selectedTime == null;
+  }
+
+  bool get _hasDate => _selectedDatePart != null;
+
+  void _clearDateTimeState() {
+    _selectedTime = null;
+    _isAllDay = true;
   }
 
   Future<void> _submit() async {
@@ -211,6 +260,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
           task: widget.initialTask!,
           title: title,
           dueDate: _effectiveDueDate,
+          isAllDay: _effectiveIsAllDay,
           priority: _selectedPriority,
           tag: _selectedTag,
         );
@@ -219,10 +269,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
       } catch (e) {
         if (!mounted) return;
         setState(() => _isSubmitting = false);
-        TempoSnackbar.show(
-          context,
-          message: '保存失败: $e',
-        );
+        TempoSnackbar.show(context, message: '保存失败: $e');
       }
       return;
     }
@@ -230,10 +277,15 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
     if (widget.isVoicePrefillMode) {
       final draft = widget.voiceDraft!;
       unawaited(
-        ref.read(taskCreationOrchestratorProvider).enqueueVoiceCreate(
+        ref
+            .read(taskCreationOrchestratorProvider)
+            .enqueueVoiceCreate(
               draft.copyWith(
                 title: title,
                 dueDate: _effectiveDueDate ?? draft.dueDate,
+                isAllDay: _effectiveDueDate != null
+                    ? _effectiveIsAllDay
+                    : draft.isAllDay,
                 priority: _selectedPriority,
                 tag: _selectedTag ?? draft.tag,
               ),
@@ -245,11 +297,13 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
     }
 
     unawaited(
-      ref.read(taskCreationOrchestratorProvider).enqueueQuickCreate(
+      ref
+          .read(taskCreationOrchestratorProvider)
+          .enqueueQuickCreate(
             QuickCreateInput(
               title: title,
               dueDate: _effectiveDueDate,
-              isAllDay: _effectiveDueDate != null,
+              isAllDay: _effectiveIsAllDay,
               priority: _selectedPriority,
               tag: _selectedTag,
               skipParse: _skipParse,
@@ -263,95 +317,97 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-        decoration: const BoxDecoration(
-          color: AppTheme.bg,
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(AppTheme.radiusLg),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Color(0x1F000000),
-              blurRadius: 30,
-              offset: Offset(0, -8),
-            ),
-          ],
+      decoration: BoxDecoration(
+        color: t.bg,
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusLg),
         ),
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-        child: SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // 拖拽指示条
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppTheme.borderStrong,
-                      borderRadius: BorderRadius.circular(AppTheme.radiusFull),
-                    ),
+        boxShadow: [
+          const BoxShadow(
+            color: Color(0x1F000000),
+            blurRadius: 30,
+            offset: Offset(0, -8),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 拖拽指示条
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: t.borderStrong,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusFull),
                   ),
                 ),
-                const SizedBox(height: 16),
-                if (widget.isVoicePrefillMode) ...[
-                  const Text(
-                    '确认语音任务',
+              ),
+              const SizedBox(height: 16),
+              if (widget.isVoicePrefillMode) ...[
+                Text(
+                  '确认语音任务',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: t.fg,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                if (widget.voiceDraft!.rawTranscript.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    widget.voiceDraft!.rawTranscript,
                     style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.fg,
-                      letterSpacing: -0.2,
+                      fontSize: 12,
+                      color: t.fgSecondary,
+                      height: 1.5,
                     ),
                   ),
-                  if (widget.voiceDraft!.rawTranscript.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      widget.voiceDraft!.rawTranscript,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.fgSecondary,
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
                 ],
-                // 标题输入框
-                _buildTitleField(),
-                const SizedBox(height: 10),
-                // 折叠展开区
-                _buildExpandToggle(),
-                ClipRect(
-                  child: AnimatedSize(
-                    duration: AppTheme.durationMedium,
-                    curve: AppTheme.curveOrganic,
-                    alignment: Alignment.topCenter,
-                    child: _expanded
-                        ? Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              const SizedBox(height: 14),
-                              _buildDateSection(),
-                              const SizedBox(height: 14),
-                              _buildTagSection(),
-                              const SizedBox(height: 14),
-                              _buildPrioritySection(),
-                            ],
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                // 创建按钮
-                _buildCreateButton(),
+                const SizedBox(height: 12),
               ],
-            ),
+              // 标题输入框
+              _buildTitleField(),
+              const SizedBox(height: 10),
+              // 折叠展开区
+              _buildExpandToggle(),
+              ClipRect(
+                child: AnimatedSize(
+                  duration: AppTheme.durationMedium,
+                  curve: AppTheme.curveOrganic,
+                  alignment: Alignment.topCenter,
+                  child: _expanded
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const SizedBox(height: 14),
+                            _buildDateSection(),
+                            const SizedBox(height: 10),
+                            _buildTimeSection(),
+                            const SizedBox(height: 14),
+                            _buildTagSection(),
+                            const SizedBox(height: 14),
+                            _buildPrioritySection(),
+                          ],
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ),
+              const SizedBox(height: 14),
+              // 创建按钮
+              _buildCreateButton(),
+            ],
           ),
         ),
+      ),
     );
   }
 
@@ -360,32 +416,31 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
       controller: _titleController,
       focusNode: _titleFocus,
       maxLines: 1,
-      style: const TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.w500,
-        color: AppTheme.fg,
-      ),
+      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: t.fg),
       decoration: InputDecoration(
         hintText: _isEditMode ? '编辑待办…' : '拟定待办…',
-        hintStyle: TextStyle(color: AppTheme.fgSubtle, fontSize: 14),
+        hintStyle: TextStyle(color: t.fgSubtle, fontSize: 14),
         filled: true,
-        fillColor: AppTheme.bgSubtle,
+        fillColor: t.bgSubtle,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-          borderSide: const BorderSide(color: AppTheme.borderStrong),
+          borderSide: BorderSide(color: t.borderStrong),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-          borderSide: const BorderSide(color: AppTheme.borderStrong),
+          borderSide: BorderSide(color: t.borderStrong),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-          borderSide: const BorderSide(color: AppTheme.fg, width: 2),
+          borderSide: BorderSide(color: t.fg, width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
         suffixIcon: _titleController.text.isNotEmpty
             ? IconButton(
-                icon: Icon(LucideIcons.x, size: 14, color: AppTheme.fgSubtle),
+                icon: Icon(LucideIcons.x, size: 14, color: t.fgSubtle),
                 onPressed: () {
                   _titleController.clear();
                   _titleFocus.requestFocus();
@@ -408,18 +463,14 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
             turns: _expanded ? 0.25 : 0,
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeInOut,
-            child: Icon(
-              LucideIcons.chevron_right,
-              size: 14,
-              color: AppTheme.fgMuted,
-            ),
+            child: Icon(LucideIcons.chevron_right, size: 14, color: t.fgMuted),
           ),
           const SizedBox(width: 6),
           Text(
             _expanded ? '更多选项' : '更多选项',
             style: AppTheme.mono(
               size: 11,
-              color: AppTheme.fgMuted,
+              color: t.fgMuted,
               letterSpacing: 0.4,
             ),
           ),
@@ -430,10 +481,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
             Container(
               width: 5,
               height: 5,
-              decoration: BoxDecoration(
-                color: AppTheme.fg,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: t.fg, shape: BoxShape.circle),
             ),
           ],
         ],
@@ -452,7 +500,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
           style: AppTheme.mono(
             size: 10,
             weight: FontWeight.w700,
-            color: AppTheme.fgMuted,
+            color: t.fgMuted,
             letterSpacing: 1.0,
           ),
         ),
@@ -478,6 +526,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
         setState(() {
           if (isSelected) {
             _selectedDate = null;
+            _clearDateTimeState();
           } else {
             _selectedDate = date;
             _customDate = null;
@@ -489,10 +538,10 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
         height: 32,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.fg : AppTheme.bgMuted,
+          color: isSelected ? t.fg : t.bgMuted,
           borderRadius: BorderRadius.circular(AppTheme.radiusSm),
           border: Border.all(
-            color: isSelected ? AppTheme.fg : AppTheme.borderStrong,
+            color: isSelected ? t.fg : t.borderStrong,
             width: isSelected ? 1 : 0.8,
           ),
         ),
@@ -502,7 +551,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: isSelected ? AppTheme.bg : AppTheme.fgSecondary,
+            color: isSelected ? t.bg : t.fgSecondary,
           ),
         ),
       ),
@@ -517,10 +566,10 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
         height: 32,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: hasCustom ? AppTheme.fg : AppTheme.bgMuted,
+          color: hasCustom ? t.fg : t.bgMuted,
           borderRadius: BorderRadius.circular(AppTheme.radiusSm),
           border: Border.all(
-            color: hasCustom ? AppTheme.fg : AppTheme.borderStrong,
+            color: hasCustom ? t.fg : t.borderStrong,
             width: hasCustom ? 1 : 0.8,
           ),
         ),
@@ -531,7 +580,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
             Icon(
               LucideIcons.calendar,
               size: 12,
-              color: hasCustom ? AppTheme.bg : AppTheme.fgSubtle,
+              color: hasCustom ? t.bg : t.fgSubtle,
             ),
             const SizedBox(width: 4),
             Text(
@@ -539,7 +588,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: hasCustom ? AppTheme.bg : AppTheme.fgSecondary,
+                color: hasCustom ? t.bg : t.fgSecondary,
               ),
             ),
           ],
@@ -569,6 +618,133 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
     return '${date.month}/${date.day}';
   }
 
+  String _formatTime(TimeOfDay time) {
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  // ══════════════ 时间 + 全天 ══════════════
+
+  Widget _buildTimeSection() {
+    final enabled = _hasDate;
+    return Row(
+      children: [
+        _buildTimePill(enabled: enabled),
+        const SizedBox(width: 8),
+        _buildAllDayToggle(enabled: enabled),
+      ],
+    );
+  }
+
+  Widget _buildTimePill({required bool enabled}) {
+    final hasSpecificTime = enabled && !_isAllDay;
+    final isSelected = hasSpecificTime && _selectedTime != null;
+    final label = isSelected ? _formatTime(_selectedTime!) : '选择时间';
+
+    return GestureDetector(
+      onTap: enabled ? _onTimePillTap : null,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? t.fg : t.bgMuted,
+          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+          border: Border.all(
+            color: hasSpecificTime ? t.fg : t.borderStrong,
+            width: isSelected ? 1 : 0.8,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              LucideIcons.clock,
+              size: 12,
+              color: isSelected ? t.bg : (enabled ? t.fgSubtle : t.fgFaint),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isSelected
+                    ? t.bg
+                    : (enabled ? t.fgSecondary : t.fgFaint),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAllDayToggle({required bool enabled}) {
+    return GestureDetector(
+      onTap: enabled ? _toggleAllDay : null,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: enabled && _isAllDay ? t.fg : t.bgMuted,
+          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+          border: Border.all(
+            color: enabled && _isAllDay ? t.fg : t.borderStrong,
+            width: enabled && _isAllDay ? 1 : 0.8,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          '全天',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: enabled && _isAllDay
+                ? t.bg
+                : (enabled ? t.fgSecondary : t.fgFaint),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _onTimePillTap() async {
+    if (_isAllDay) {
+      setState(() {
+        _isAllDay = false;
+        _selectedTime ??= const TimeOfDay(hour: 9, minute: 0);
+        _dateTouched = true;
+      });
+    }
+    await _pickTime();
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await TempoTimePicker.show(
+      context,
+      initialTime: _selectedTime ?? const TimeOfDay(hour: 9, minute: 0),
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedTime = picked;
+        _isAllDay = false;
+        _dateTouched = true;
+      });
+    }
+  }
+
+  void _toggleAllDay() {
+    setState(() {
+      _isAllDay = true;
+      _selectedTime = null;
+      _dateTouched = true;
+    });
+  }
+
   // ══════════════ 分类 pills ══════════════
 
   Widget _buildTagSection() {
@@ -580,7 +756,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
           style: AppTheme.mono(
             size: 10,
             weight: FontWeight.w700,
-            color: AppTheme.fgMuted,
+            color: t.fgMuted,
             letterSpacing: 1.0,
           ),
         ),
@@ -615,10 +791,10 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
         height: 32,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.fg : AppTheme.bgMuted,
+          color: isSelected ? t.fg : t.bgMuted,
           borderRadius: BorderRadius.circular(AppTheme.radiusSm),
           border: Border.all(
-            color: isSelected ? AppTheme.fg : AppTheme.borderStrong,
+            color: isSelected ? t.fg : t.borderStrong,
             width: isSelected ? 1 : 0.8,
           ),
         ),
@@ -628,7 +804,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: isSelected ? AppTheme.bg : AppTheme.fgSecondary,
+            color: isSelected ? t.bg : t.fgSecondary,
           ),
         ),
       ),
@@ -646,14 +822,19 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
           style: AppTheme.mono(
             size: 10,
             weight: FontWeight.w700,
-            color: AppTheme.fgMuted,
+            color: t.fgMuted,
             letterSpacing: 1.0,
           ),
         ),
         const SizedBox(height: 8),
         Row(
           children: [
-            for (final p in [TaskPriority.p0, TaskPriority.p1, TaskPriority.p2, TaskPriority.p3]) ...[
+            for (final p in [
+              TaskPriority.p0,
+              TaskPriority.p1,
+              TaskPriority.p2,
+              TaskPriority.p3,
+            ]) ...[
               if (p != TaskPriority.p0) const SizedBox(width: 8),
               _buildPriorityPill(p),
             ],
@@ -686,10 +867,10 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
         height: 32,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: isSelected ? activeBg : AppTheme.bgMuted,
+          color: isSelected ? activeBg : t.bgMuted,
           borderRadius: BorderRadius.circular(AppTheme.radiusSm),
           border: Border.all(
-            color: isSelected ? activeBorder : AppTheme.borderStrong,
+            color: isSelected ? activeBorder : t.borderStrong,
             width: isSelected ? 1 : 0.8,
           ),
         ),
@@ -699,7 +880,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: isSelected ? activeFg : AppTheme.fgSecondary,
+            color: isSelected ? activeFg : t.fgSecondary,
           ),
         ),
       ),
@@ -715,25 +896,22 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
       child: Container(
         height: 44,
         decoration: BoxDecoration(
-          color: enabled ? AppTheme.fg : AppTheme.bgMuted,
+          color: enabled ? t.fg : t.bgMuted,
           borderRadius: BorderRadius.circular(AppTheme.radiusMd),
         ),
         alignment: Alignment.center,
         child: _isSubmitting
-            ? const SizedBox(
+            ? SizedBox(
                 width: 16,
                 height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AppTheme.bg,
-                ),
+                child: CircularProgressIndicator(strokeWidth: 2, color: t.bg),
               )
             : Text(
                 _isEditMode ? '保存' : '创建',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: enabled ? AppTheme.bg : AppTheme.fgSubtle,
+                  color: enabled ? t.bg : t.fgSubtle,
                 ),
               ),
       ),

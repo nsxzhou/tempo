@@ -24,7 +24,8 @@ class AnimatedListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final delayMs = index.clamp(0, maxStagger - 1) * staggerInterval.inMilliseconds;
+    final delayMs =
+        index.clamp(0, maxStagger - 1) * staggerInterval.inMilliseconds;
 
     return child
         .animate(key: listKey != null ? ValueKey('$listKey-$index') : null)

@@ -32,11 +32,12 @@ class QuickCreateInput {
   });
 }
 
-typedef TaskCreationSnackbar = void Function({
-  required String message,
-  String? undoLabel,
-  Future<void> Function()? onUndo,
-});
+typedef TaskCreationSnackbar =
+    void Function({
+      required String message,
+      String? undoLabel,
+      Future<void> Function()? onUndo,
+    });
 
 typedef VoiceDraftConfirmCallback = void Function(VoiceTaskParseResult draft);
 
@@ -52,10 +53,10 @@ class TaskCreationOrchestrator {
     required TextParseService parseService,
     required NotificationService notificationService,
     required TaskCreationSnackbar showSnackbar,
-  })  : _repository = repository,
-        _parseService = parseService,
-        _notificationService = notificationService,
-        _showSnackbar = showSnackbar;
+  }) : _repository = repository,
+       _parseService = parseService,
+       _notificationService = notificationService,
+       _showSnackbar = showSnackbar;
 
   /// 快速创建：允许并行；调用方可 fire-and-forget。
   Future<void> enqueueQuickCreate(QuickCreateInput input) {
@@ -140,13 +141,16 @@ class TaskCreationOrchestrator {
     }
   }
 
-  Future<({
-    String title,
-    DateTime? dueDate,
-    bool isAllDay,
-    TaskPriority priority,
-    String? tag,
-  })> _resolveQuickCreateFields(QuickCreateInput input) async {
+  Future<
+    ({
+      String title,
+      DateTime? dueDate,
+      bool isAllDay,
+      TaskPriority priority,
+      String? tag,
+    })
+  >
+  _resolveQuickCreateFields(QuickCreateInput input) async {
     final rawTitle = input.title.trim();
     if (rawTitle.isEmpty) {
       throw ArgumentError('Task title cannot be empty');
@@ -174,8 +178,9 @@ class TaskCreationOrchestrator {
       );
     }
 
-    final createTitle =
-        parsed.title.trim().isNotEmpty ? parsed.title.trim() : rawTitle;
+    final createTitle = parsed.title.trim().isNotEmpty
+        ? parsed.title.trim()
+        : rawTitle;
     return (
       title: createTitle,
       dueDate: parsed.dueDate ?? input.dueDate,

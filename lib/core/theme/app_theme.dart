@@ -159,13 +159,14 @@ class AppTheme {
   static ThemeData get light {
     // 基础文本:Geist(已通过 pubspec 字体块落地,无需系统回退)
     final baseTextTheme = ThemeData.light().textTheme.apply(
-          fontFamily: fontSans,
-          bodyColor: fg,
-          displayColor: fg,
-        );
+      fontFamily: fontSans,
+      bodyColor: fg,
+      displayColor: fg,
+    );
 
     // Instrument Serif Italic(已落地)用于 display/headline 大标题与详情
-    TextStyle serifItalic(TextStyle? base) => base?.copyWith(
+    TextStyle serifItalic(TextStyle? base) =>
+        base?.copyWith(
           fontFamily: fontSerif,
           fontStyle: FontStyle.italic,
           fontWeight: FontWeight.w400,

@@ -4,12 +4,13 @@
 // ============================================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../theme/app_theme.dart';
+import '../theme/theme_manager.dart';
 import 'empty_state.dart';
 
 /// 功能暂未实现的占位页。
-class FeatureUnavailablePage extends StatelessWidget {
+class FeatureUnavailablePage extends ConsumerWidget {
   final IconData icon;
   final String title;
   final String? subtitle;
@@ -22,18 +23,14 @@ class FeatureUnavailablePage extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      backgroundColor: AppTheme.bg,
+      backgroundColor: ref.watch(scaffoldBackgroundProvider),
       body: SafeArea(
         bottom: false,
         child: Padding(
           padding: const EdgeInsets.only(bottom: 100),
-          child: EmptyState(
-            icon: icon,
-            title: title,
-            subtitle: subtitle,
-          ),
+          child: EmptyState(icon: icon, title: title, subtitle: subtitle),
         ),
       ),
     );

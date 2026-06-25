@@ -12,8 +12,6 @@ import 'package:tempo/features/tasks/domain/task.dart';
 
 class _MockDio extends Mock implements Dio {}
 
-class _MockAdapter extends Mock implements HttpClientAdapter {}
-
 void main() {
   group('TextParseService', () {
     late _MockDio dio;
@@ -34,8 +32,10 @@ void main() {
       final responseData = {
         'title': '开会',
         'description': null,
-        'due_date':
-            DateTime.now().add(const Duration(days: 1)).toUtc().toIso8601String(),
+        'due_date': DateTime.now()
+            .add(const Duration(days: 1))
+            .toUtc()
+            .toIso8601String(),
         'priority': 0,
         'confidence': 0.9,
         'raw_transcript': '明天下午三点开会',
@@ -53,14 +53,18 @@ void main() {
     });
 
     test('网络异常返回 null（降级信号）', () async {
-      when(() => dio.post<Map<String, dynamic>>(
-            any(),
-            data: any(named: 'data'),
-            options: any(named: 'options'),
-          )).thenThrow(DioException(
-        requestOptions: RequestOptions(path: ''),
-        type: DioExceptionType.connectionTimeout,
-      ));
+      when(
+        () => dio.post<Map<String, dynamic>>(
+          any(),
+          data: any(named: 'data'),
+          options: any(named: 'options'),
+        ),
+      ).thenThrow(
+        DioException(
+          requestOptions: RequestOptions(path: ''),
+          type: DioExceptionType.connectionTimeout,
+        ),
+      );
 
       final result = await service.parseText('明天开会');
 
@@ -160,11 +164,13 @@ void main() {
       clearInteractions(dio);
       final cached = await service.parseText('明天下午三点开会');
       expect(cached, isNotNull);
-      verifyNever(() => dio.post<Map<String, dynamic>>(
-            any(),
-            data: any(named: 'data'),
-            options: any(named: 'options'),
-          ));
+      verifyNever(
+        () => dio.post<Map<String, dynamic>>(
+          any(),
+          data: any(named: 'data'),
+          options: any(named: 'options'),
+        ),
+      );
     });
 
     test('cachedResultFor 返回最近一次解析', () async {
@@ -192,9 +198,11 @@ void _setupDioPost(_MockDio dio, Map<String, dynamic>? data, int statusCode) {
     statusCode: statusCode,
   );
 
-  when(() => dio.post<Map<String, dynamic>>(
-        any(),
-        data: any(named: 'data'),
-        options: any(named: 'options'),
-      )).thenAnswer((_) async => response);
+  when(
+    () => dio.post<Map<String, dynamic>>(
+      any(),
+      data: any(named: 'data'),
+      options: any(named: 'options'),
+    ),
+  ).thenAnswer((_) async => response);
 }

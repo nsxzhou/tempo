@@ -140,10 +140,7 @@ class FakeVoiceRecorder implements VoiceRecorder {
   bool stopped = false;
   bool canceled = false;
 
-  FakeVoiceRecorder({
-    this.permission = true,
-    StreamController<Uint8List>? audioController,
-  }) : audioController = audioController;
+  FakeVoiceRecorder({this.permission = true, this.audioController});
 
   @override
   Stream<Uint8List>? get audioStream => audioController?.stream;
@@ -279,7 +276,7 @@ class FakeTextParseService extends TextParseService {
   int parseCallCount = 0;
 
   FakeTextParseService({this.result})
-      : super(dio: Dio(), endpoint: 'http://test/parse-task');
+    : super(dio: Dio(), endpoint: 'http://test/parse-task');
 
   @override
   Future<VoiceTaskParseResult?> parseText(String text) async {

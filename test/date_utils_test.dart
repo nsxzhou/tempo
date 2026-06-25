@@ -26,11 +26,21 @@ void main() {
       final nextDay = DateTime(2026, 6, 20, 1);
 
       expect(
-        isTaskOverdue(dueDate: due, isAllDay: true, isCompleted: false, now: morning),
+        isTaskOverdue(
+          dueDate: due,
+          isAllDay: true,
+          isCompleted: false,
+          now: morning,
+        ),
         isFalse,
       );
       expect(
-        isTaskOverdue(dueDate: due, isAllDay: true, isCompleted: false, now: nextDay),
+        isTaskOverdue(
+          dueDate: due,
+          isAllDay: true,
+          isCompleted: false,
+          now: nextDay,
+        ),
         isTrue,
       );
     });
@@ -38,7 +48,11 @@ void main() {
     test('formatTaskDueLabel hides time for all-day tasks', () {
       final due = DateTime(2026, 6, 25);
       expect(
-        formatTaskDueLabel(dueDate: due, isAllDay: true),
+        formatTaskDueLabel(
+          dueDate: due,
+          isAllDay: true,
+          now: DateTime(2026, 1, 1),
+        ),
         '6月25日',
       );
     });

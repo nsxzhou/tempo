@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tempo/core/constants/app_constants.dart';
 import 'package:tempo/features/tasks/data/notification_service.dart';
@@ -45,24 +44,26 @@ void main() {
       await repository.dispose();
     });
 
-    test('quick create with parse resolves LLM fields and schedules reminder',
-        () async {
-      await orchestrator.enqueueQuickCreate(
-        const QuickCreateInput(title: '明天下午三点开会'),
-      );
+    test(
+      'quick create with parse resolves LLM fields and schedules reminder',
+      () async {
+        await orchestrator.enqueueQuickCreate(
+          const QuickCreateInput(title: '明天下午三点开会'),
+        );
 
-      expect(parseService.parseCallCount, 1);
-      expect(repository.tasks, hasLength(1));
-      expect(repository.tasks.single.title, '开会');
-      expect(repository.tasks.single.priority, TaskPriority.p1);
-      expect(repository.tasks.single.tag, AppConstants.tagWork);
-      expect(notifications.scheduledTaskIds, ['task-0']);
-      expect(snackbarMessages.single, '已创建:开会');
-    });
+        expect(parseService.parseCallCount, 1);
+        expect(repository.tasks, hasLength(1));
+        expect(repository.tasks.single.title, '开会');
+        expect(repository.tasks.single.priority, TaskPriority.p1);
+        expect(repository.tasks.single.tag, AppConstants.tagWork);
+        expect(notifications.scheduledTaskIds, ['task-0']);
+        expect(snackbarMessages.single, '已创建:开会');
+      },
+    );
 
     test('skipParse uses raw title and skips LLM', () async {
       await orchestrator.enqueueQuickCreate(
-        QuickCreateInput(
+        const QuickCreateInput(
           title: '明天下午三点开会',
           skipParse: true,
           priority: TaskPriority.p2,
@@ -97,6 +98,23 @@ void main() {
       );
 
       expect(repository.tasks.single.isAllDay, isTrue);
+    });
+
+    test('quick create with specific time schedules reminder', () async {
+      final dueDate = DateTime.now().add(const Duration(hours: 2));
+
+      await orchestrator.enqueueQuickCreate(
+        QuickCreateInput(
+          title: '开会',
+          dueDate: dueDate,
+          isAllDay: false,
+          skipParse: true,
+        ),
+      );
+
+      expect(repository.tasks.single.isAllDay, isFalse);
+      expect(repository.tasks.single.dueDate, dueDate);
+      expect(notifications.scheduledTaskIds, ['task-0']);
     });
 
     test('parse result carries isAllDay from LLM', () async {

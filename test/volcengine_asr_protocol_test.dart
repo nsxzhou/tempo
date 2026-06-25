@@ -60,10 +60,7 @@ void main() {
       final parsed = parseServerPacket(packetBytes);
       expect(parsed, isA<VolcengineAsrResponse>());
       final response = parsed as VolcengineAsrResponse;
-      expect(
-        extractTranscriptFromPayload(response.data),
-        '提交设计稿',
-      );
+      expect(extractTranscriptFromPayload(response.data), '提交设计稿');
     });
   });
 }

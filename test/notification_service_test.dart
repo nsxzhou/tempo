@@ -7,6 +7,30 @@ import 'package:tempo/features/tasks/domain/task.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  group('todoReminderDateTime', () {
+    test('uses calendar day at 08:00 for timed task', () {
+      final dueDate = DateTime(2026, 6, 25, 15, 30);
+      final reminderAt = todoReminderDateTime(dueDate);
+
+      expect(reminderAt, DateTime(2026, 6, 25, 8));
+    });
+
+    test('uses calendar day at 08:00 for all-day task', () {
+      final dueDate = DateTime(2026, 6, 25);
+      final reminderAt = todoReminderDateTime(dueDate);
+
+      expect(reminderAt, DateTime(2026, 6, 25, 8));
+    });
+
+    test('is not after now when due today and current time past 08:00', () {
+      final dueDate = DateTime(2026, 6, 25, 15, 0);
+      final reminderAt = todoReminderDateTime(dueDate);
+      final now = DateTime(2026, 6, 25, 10, 0);
+
+      expect(reminderAt.isAfter(now), isFalse);
+    });
+  });
+
   group('NotificationService preferences', () {
     late NotificationService service;
 
@@ -33,7 +57,7 @@ void main() {
         id: 'task-1',
         listId: 'inbox',
         title: '开会',
-        dueDate: DateTime.now().add(const Duration(hours: 2)),
+        dueDate: DateTime.now().add(const Duration(days: 1)),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );

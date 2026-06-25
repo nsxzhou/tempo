@@ -4,33 +4,33 @@
 import 'package:flutter/material.dart';
 import 'package:tempo/core/utils/date_utils.dart';
 
-import '../../../../core/theme/app_theme.dart';
+import '../../../../core/theme/tempo_theme_extension.dart';
+import '../../../../core/widgets/tempo/tempo.dart';
 import '../../tasks/domain/task.dart';
 
 class MonthView extends StatelessWidget {
   final DateTime selectedDate;
-  final List<Task> tasks;
+  final Map<DateTime, List<Task>> taskIndex;
   final ValueChanged<DateTime> onSelectDate;
 
   const MonthView({
     super.key,
     required this.selectedDate,
-    required this.tasks,
+    required this.taskIndex,
     required this.onSelectDate,
   });
 
-  List<Color> _dotsForDay(DateTime day) {
-    final dayTasks = tasks.where((t) {
-      if (t.dueDate == null || t.isCompleted) return false;
-      return isDueOnDate(t.dueDate!, day);
-    }).toList();
+  List<Color> _dotsForDay(DateTime day, TempoTokens tokens) {
+    final dayKey = DateTime(day.year, day.month, day.day);
+    final dayTasks = taskIndex[dayKey] ?? const [];
 
     // 取前 3 个不同优先级
     final seen = <int>{};
     final dots = <Color>[];
     for (final t in dayTasks) {
+      if (t.isCompleted) continue;
       if (seen.add(t.priority.value)) {
-        dots.add(AppTheme.priorityColor(t.priority.value));
+        dots.add(tokens.priorityColor(t.priority.value));
         if (dots.length >= 3) break;
       }
     }
@@ -39,11 +39,16 @@ class MonthView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = context.tokens;
     final now = DateTime.now();
     final firstDay = DateTime(selectedDate.year, selectedDate.month, 1);
     // 一周从周一开始 → weekday: 1=Mon..7=Sun
     final leadingEmpty = (firstDay.weekday - 1) % 7;
-    final daysInMonth = DateTime(selectedDate.year, selectedDate.month + 1, 0).day;
+    final daysInMonth = DateTime(
+      selectedDate.year,
+      selectedDate.month + 1,
+      0,
+    ).day;
 
     // 构造 6x7 = 42 格
     final cells = <_MonthCell>[];
@@ -54,7 +59,9 @@ class MonthView extends StatelessWidget {
     }
     // 当月
     for (int i = 1; i <= daysInMonth; i++) {
-      cells.add(_MonthCell(date: DateTime(selectedDate.year, selectedDate.month, i)));
+      cells.add(
+        _MonthCell(date: DateTime(selectedDate.year, selectedDate.month, i)),
+      );
     }
     // 尾部填充到 42
     while (cells.length < 42) {
@@ -62,32 +69,28 @@ class MonthView extends StatelessWidget {
       cells.add(_MonthCell(date: last, isOtherMonth: true));
     }
 
-    return Container(
+    return TempoGlassSurface(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.bgSubtle.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: AppTheme.borderStrong, width: 0.8),
-        boxShadow: AppTheme.shadowSm,
-      ),
       child: Column(
         children: [
           // 星期头
           Row(
-            children: const ['一', '二', '三', '四', '五', '六', '日']
-                .map((w) => Expanded(
-                      child: Center(
-                        child: Text(
-                          w,
-                          style: AppTheme.mono(
-                            size: 10,
-                            weight: FontWeight.w700,
-                            color: AppTheme.fgSubtle,
-                            letterSpacing: 0.4,
-                          ),
+            children: ['一', '二', '三', '四', '五', '六', '日']
+                .map(
+                  (w) => Expanded(
+                    child: Center(
+                      child: Text(
+                        w,
+                        style: tokens.mono(
+                          size: 10,
+                          weight: FontWeight.w700,
+                          color: tokens.fgSubtle,
+                          letterSpacing: 0.4,
                         ),
                       ),
-                    ))
+                    ),
+                  ),
+                )
                 .toList(),
           ),
           const SizedBox(height: 8),
@@ -101,9 +104,11 @@ class MonthView extends StatelessWidget {
                   return Expanded(
                     child: _DayCell(
                       cell: cell,
-                      dots: _dotsForDay(cell.date),
+                      dots: _dotsForDay(cell.date, tokens),
                       isToday: isSameDay(cell.date, now),
-                      isSelected: isSameDay(cell.date, selectedDate) && !cell.isOtherMonth,
+                      isSelected:
+                          isSameDay(cell.date, selectedDate) &&
+                          !cell.isOtherMonth,
                       onTap: cell.isOtherMonth
                           ? null
                           : () => onSelectDate(cell.date),
@@ -116,7 +121,6 @@ class MonthView extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class _MonthCell {
@@ -141,6 +145,7 @@ class _DayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = context.tokens;
     final dim = cell.isOtherMonth;
     return GestureDetector(
       onTap: onTap,
@@ -155,22 +160,22 @@ class _DayCell extends StatelessWidget {
               height: 28,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: isSelected ? AppTheme.fg : Colors.transparent,
+                color: isSelected ? tokens.fg : Colors.transparent,
                 shape: BoxShape.circle,
                 border: isToday && !isSelected
-                    ? Border.all(color: AppTheme.fg, width: 1)
+                    ? Border.all(color: tokens.fg, width: 1)
                     : null,
               ),
               child: Text(
                 '${cell.date.day}',
-                style: AppTheme.mono(
+                style: tokens.mono(
                   size: 12,
                   weight: FontWeight.w600,
                   color: isSelected
-                      ? AppTheme.bg
+                      ? tokens.bg
                       : (dim
-                          ? AppTheme.fgFaint
-                          : (isToday ? AppTheme.fg : AppTheme.fgSecondary)),
+                            ? tokens.fgFaint
+                            : (isToday ? tokens.fg : tokens.fgSecondary)),
                 ),
               ),
             ),
@@ -187,7 +192,7 @@ class _DayCell extends StatelessWidget {
                       width: 3,
                       height: 3,
                       decoration: BoxDecoration(
-                        color: isSelected ? AppTheme.bg : dots[i],
+                        color: isSelected ? tokens.bg : dots[i],
                         shape: BoxShape.circle,
                       ),
                     ),

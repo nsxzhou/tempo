@@ -6,11 +6,11 @@
 // ============================================================
 
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/theme/tempo_theme_extension.dart';
 import '../../../../core/widgets/tempo/tempo.dart';
 import '../../domain/task.dart';
 
@@ -61,10 +61,13 @@ class _TaskTileState extends State<TaskTile> {
       _contentOpacity = widget.task.isCompleted ? 0.6 : 1;
       return;
     }
-    if (!oldWidget.task.isCompleted && widget.task.isCompleted && !_isCollapsing) {
+    if (!oldWidget.task.isCompleted &&
+        widget.task.isCompleted &&
+        !_isCollapsing) {
       _localCompleted = true;
       _contentOpacity = 0.6;
-    } else if (widget.task.isCompleted != _localCompleted && !widget.task.isCompleted) {
+    } else if (widget.task.isCompleted != _localCompleted &&
+        !widget.task.isCompleted) {
       _localCompleted = false;
       _contentOpacity = 1;
     }
@@ -76,15 +79,18 @@ class _TaskTileState extends State<TaskTile> {
     return null;
   }
 
-  BoxDecoration _shellDecoration(bool completed) => BoxDecoration(
-        color: AppTheme.bg,
-        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-        border: Border.all(
-          color: completed ? AppTheme.borderSubtle : AppTheme.borderStrong,
-          width: 0.8,
-        ),
-        boxShadow: completed ? null : AppTheme.shadowSm,
-      );
+  Widget _wrapGlassShell({required bool completed, required Widget child}) {
+    final tokens = context.tokens;
+    final cardColor = tokens.taskCardBackground;
+    return TempoGlassSurface(
+      blur: false,
+      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+      fillColor: cardColor,
+      borderColor: completed ? tokens.borderSubtle : tokens.borderStrong,
+      showShadow: !completed,
+      child: child,
+    );
+  }
 
   Future<void> _handleToggle() async {
     if (_localCompleted) {
@@ -117,6 +123,7 @@ class _TaskTileState extends State<TaskTile> {
   }
 
   Widget _buildRowContent() {
+    final t = context.tokens;
     final category = _categoryLabel;
     final completed = _localCompleted;
 
@@ -138,9 +145,7 @@ class _TaskTileState extends State<TaskTile> {
             child: InkWell(
               onTap: widget.onTap,
               child: Padding(
-                padding: EdgeInsets.only(
-                  right: category != null ? 8 : 12,
-                ),
+                padding: EdgeInsets.only(right: category != null ? 8 : 12),
                 child: Row(
                   children: [
                     Expanded(
@@ -150,7 +155,7 @@ class _TaskTileState extends State<TaskTile> {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: completed ? AppTheme.fgMuted : AppTheme.fg,
+                          color: completed ? t.fgMuted : t.fg,
                           decoration: completed
                               ? TextDecoration.lineThrough
                               : null,
@@ -169,10 +174,10 @@ class _TaskTileState extends State<TaskTile> {
                         category,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
-                          color: AppTheme.fgMuted,
+                          color: t.fgMuted,
                           letterSpacing: -0.1,
                           height: 1.2,
                         ),
@@ -188,26 +193,28 @@ class _TaskTileState extends State<TaskTile> {
   }
 
   Widget _buildAnimatedShell({required Widget child}) {
-    return AnimatedOpacity(
-      opacity: _isDeleting ? 0 : _contentOpacity,
-      duration: AppTheme.durationFast,
-      curve: Curves.easeInCubic,
-      child: AnimatedSlide(
-        offset: _isDeleting ? const Offset(-0.15, 0) : Offset.zero,
+    return RepaintBoundary(
+      child: AnimatedOpacity(
+        opacity: _isDeleting ? 0 : _contentOpacity,
         duration: AppTheme.durationFast,
         curve: Curves.easeInCubic,
-        child: AnimatedSize(
-          duration: AppTheme.durationMedium,
-          curve: AppTheme.curveOrganic,
-          alignment: Alignment.topCenter,
-          clipBehavior: Clip.hardEdge,
-          child: _isCollapsing
-              ? const SizedBox(width: double.infinity, height: 0)
-              : SizedBox(
-                  height: _tileHeight,
-                  width: double.infinity,
-                  child: child,
-                ),
+        child: AnimatedSlide(
+          offset: _isDeleting ? const Offset(-0.15, 0) : Offset.zero,
+          duration: AppTheme.durationFast,
+          curve: Curves.easeInCubic,
+          child: AnimatedSize(
+            duration: AppTheme.durationMedium,
+            curve: AppTheme.curveOrganic,
+            alignment: Alignment.topCenter,
+            clipBehavior: Clip.hardEdge,
+            child: _isCollapsing
+                ? const SizedBox(width: double.infinity, height: 0)
+                : SizedBox(
+                    height: _tileHeight,
+                    width: double.infinity,
+                    child: child,
+                  ),
+          ),
         ),
       ),
     );
@@ -215,17 +222,18 @@ class _TaskTileState extends State<TaskTile> {
 
   Widget _buildStandaloneCard() {
     return Material(
-      color: AppTheme.bg,
-      child: DecoratedBox(
-        decoration: _shellDecoration(_localCompleted),
+      color: Colors.transparent,
+      child: _wrapGlassShell(
+        completed: _localCompleted,
         child: _buildAnimatedShell(child: _buildRowContent()),
       ),
     );
   }
 
   Widget _buildSlidableShell() {
-    return DecoratedBox(
-      decoration: _shellDecoration(_localCompleted),
+    final t = context.tokens;
+    return _wrapGlassShell(
+      completed: _localCompleted,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppTheme.radiusMd),
         child: Slidable(
@@ -239,25 +247,21 @@ class _TaskTileState extends State<TaskTile> {
               CustomSlidableAction(
                 onPressed: (_) => _handleDelete(),
                 backgroundColor: AppTheme.priorityP0,
-                foregroundColor: AppTheme.bg,
+                foregroundColor: t.bg,
                 padding: EdgeInsets.zero,
                 borderRadius: BorderRadius.zero,
                 child: Semantics(
                   button: true,
                   label: '删除',
                   child: Center(
-                    child: Icon(
-                      LucideIcons.trash_2,
-                      size: 16,
-                      color: AppTheme.bg,
-                    ),
+                    child: Icon(LucideIcons.trash_2, size: 16, color: t.bg),
                   ),
                 ),
               ),
             ],
           ),
           child: Material(
-            color: AppTheme.bg,
+            color: Colors.transparent,
             child: _buildAnimatedShell(child: _buildRowContent()),
           ),
         ),

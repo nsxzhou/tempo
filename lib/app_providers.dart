@@ -23,6 +23,9 @@ import 'features/tasks/data/text_parse_service.dart';
 import 'features/tasks/data/voice_recorder.dart';
 import 'features/tasks/data/volcengine_streaming_asr.dart';
 import 'features/tasks/domain/task.dart';
+import 'features/stats/data/stats_repository.dart';
+import 'features/stats/domain/stats_models.dart';
+import 'features/tasks/domain/task_counts.dart';
 
 // Re-export auth providers so consumers of app_providers can access them.
 export 'features/auth/data/auth_service.dart';
@@ -96,7 +99,8 @@ final taskRepositoryProvider = Provider<TaskRepository>((ref) {
   final userId = ref.watch(currentUserIdProvider);
   final connectivity = ref.watch(connectivityProvider);
   final listId =
-      ref.watch(defaultListIdProvider).valueOrNull ?? AppConstants.defaultListId;
+      ref.watch(defaultListIdProvider).valueOrNull ??
+      AppConstants.defaultListId;
 
   return SyncTaskRepository(
     localDb: db,
@@ -112,15 +116,74 @@ final taskListProvider = StreamProvider<List<Task>>((ref) {
   return repository.watchTasks();
 });
 
+/// 任务 id → Task 索引，供 taskByIdProvider O(1) 查找。
+final taskMapProvider = Provider<Map<String, Task>>((ref) {
+  final tasks = ref.watch(taskListProvider).valueOrNull ?? [];
+  return {for (final t in tasks) t.id: t};
+});
+
+/// 从 taskListProvider 缓存按 id 查找；详情页首帧优先使用，避免 loading 闪屏。
+final taskByIdProvider = Provider.family<Task?, String>((ref, id) {
+  return ref.watch(taskMapProvider)[id];
+});
+
+/// 统计页快照（内存聚合，移出 build）。
+final statsSnapshotProvider = Provider.family<StatsSnapshot, int>((ref, days) {
+  final tasks = ref.watch(taskListProvider).valueOrNull ?? [];
+  if (tasks.isEmpty) return StatsSnapshot.empty(days);
+  return ref.read(statsRepositoryProvider).computeSnapshot(tasks, days);
+});
+
+/// 单次遍历的任务计数（Bento + 分类筛选共用）。
+final taskCountsProvider = Provider<TaskCounts>((ref) {
+  final tasks = ref.watch(taskListProvider).valueOrNull ?? [];
+  return TaskCounts.from(tasks);
+});
+
+/// 按 dueDate 日历日索引（月视图 O(42) 查表）。
+final calendarTaskIndexProvider = Provider<Map<DateTime, List<Task>>>((ref) {
+  final tasks = ref.watch(taskListProvider).valueOrNull ?? [];
+  final index = <DateTime, List<Task>>{};
+  for (final task in tasks) {
+    final due = task.dueDate;
+    if (due == null) continue;
+    final day = DateTime(due.year, due.month, due.day);
+    index.putIfAbsent(day, () => []).add(task);
+  }
+  return index;
+});
+
+/// 选中日任务列表。
+final selectedDayTasksProvider = Provider.family<List<Task>, DateTime>((
+  ref,
+  selectedDate,
+) {
+  final index = ref.watch(calendarTaskIndexProvider);
+  final day = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+  return index[day] ?? const [];
+});
+
+// ── Stats ──
+
+final statsRepositoryProvider = Provider<StatsRepository>((ref) {
+  final db = ref.watch(databaseProvider);
+  return StatsRepository(db);
+});
+
+final statsDaysProvider = StateProvider<int>((ref) => 7);
+
+final dailyCompletionsProvider =
+    StreamProvider.family<List<DailyCompletion>, int>((ref, days) {
+      final repository = ref.watch(statsRepositoryProvider);
+      return repository.watchDailyCompletions(days);
+    });
+
 // ── SyncService ──
 
 final syncServiceProvider = Provider<SyncService>((ref) {
   final repository = ref.watch(taskRepositoryProvider);
   final connectivity = ref.watch(connectivityProvider);
-  return SyncService(
-    repository: repository,
-    connectivity: connectivity,
-  );
+  return SyncService(repository: repository, connectivity: connectivity);
 });
 
 // ── NotificationService ──
@@ -133,16 +196,14 @@ final notificationServiceProvider = Provider<NotificationService>((ref) {
 
 final textParseServiceProvider = Provider<TextParseService>((ref) {
   final dio = ref.watch(dioProvider);
-  return TextParseService(
-    dio: dio,
-    endpoint: AppConstants.parseTaskEndpoint,
-  );
+  return TextParseService(dio: dio, endpoint: AppConstants.parseTaskEndpoint);
 });
 
 // ── TaskCreationOrchestrator ──
 
-final taskCreationOrchestratorProvider =
-    Provider<TaskCreationOrchestrator>((ref) {
+final taskCreationOrchestratorProvider = Provider<TaskCreationOrchestrator>((
+  ref,
+) {
   return TaskCreationOrchestrator(
     repository: ref.watch(taskRepositoryProvider),
     parseService: ref.watch(textParseServiceProvider),
@@ -202,8 +263,9 @@ final siyuanPairingServiceProvider = Provider<SiyuanPairingService>((ref) {
 });
 
 /// 登录后预取思源绑定状态；设置页与其它 UI 共用同一份缓存。
-final siyuanBindingStatusProvider =
-    FutureProvider<SiyuanBindingStatus>((ref) async {
+final siyuanBindingStatusProvider = FutureProvider<SiyuanBindingStatus>((
+  ref,
+) async {
   final userId = ref.watch(currentUserIdProvider);
   if (userId == null) {
     return const SiyuanBindingStatus(isPaired: false);
@@ -218,8 +280,5 @@ final siyuanBindingStatusProvider =
 final feedbackServiceProvider = Provider<FeedbackService>((ref) {
   final supabase = ref.watch(supabaseProvider);
   final userId = ref.watch(currentUserIdProvider);
-  return FeedbackService(
-    supabase: supabase,
-    userId: userId,
-  );
+  return FeedbackService(supabase: supabase, userId: userId);
 });

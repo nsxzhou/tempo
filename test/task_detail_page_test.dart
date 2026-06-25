@@ -10,7 +10,6 @@ import 'package:tempo/core/providers/database_provider.dart';
 import 'package:tempo/core/router/app_router.dart';
 import 'package:tempo/database/database.dart' hide Task;
 import 'package:tempo/features/tasks/data/notification_service.dart';
-import 'package:tempo/features/tasks/data/text_parse_service.dart';
 import 'package:tempo/features/tasks/domain/task.dart';
 import 'package:tempo/features/tasks/presentation/task_detail_page.dart';
 
@@ -56,11 +55,7 @@ void main() {
     final repository = FakeTaskRepository();
     final task = await repository.createTask(title: '临时任务');
 
-    await _pumpDetailPage(
-      tester,
-      repository: repository,
-      task: task,
-    );
+    await _pumpDetailPage(tester, repository: repository, task: task);
 
     await tester.tap(find.byIcon(LucideIcons.ellipsis));
     await tester.pumpAndSettle();

@@ -20,7 +20,7 @@ void main() {
 class _MockAsrSessionClient implements AsrSessionClient {
   @override
   Future<AsrSessionConfig> fetchSession() async {
-    return AsrSessionConfig(
+    return const AsrSessionConfig(
       authMode: 'relay',
       appKey: '',
       accessKey: '',

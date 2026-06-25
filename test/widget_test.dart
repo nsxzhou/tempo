@@ -19,7 +19,9 @@ void main() {
             FakeStreamingVoiceSession(),
           ),
           textParseServiceProvider.overrideWithValue(FakeTextParseService()),
-          notificationServiceProvider.overrideWithValue(_NoopNotificationService()),
+          notificationServiceProvider.overrideWithValue(
+            _NoopNotificationService(),
+          ),
         ],
         child: const TempoApp(),
       ),

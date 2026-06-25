@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tempo/core/constants/app_constants.dart';
 import 'package:tempo/core/theme/app_theme.dart';
+import 'package:tempo/core/theme/theme_presets.dart';
 import 'package:tempo/app_providers.dart';
 import 'package:tempo/core/router/app_router.dart';
 import 'package:tempo/features/tasks/data/notification_service.dart';
@@ -17,10 +19,12 @@ import 'test_fakes.dart';
 void main() {
   setUpAll(() async {
     await initializeDateFormatting('zh_CN', null);
+    SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('high confidence voice parse creates task and supports undo',
-      (tester) async {
+  testWidgets('high confidence voice parse creates task and supports undo', (
+    tester,
+  ) async {
     final repository = FakeTaskRepository();
     final session = FakeStreamingVoiceSession();
     final parseService = FakeTextParseService(result: _voiceResult());
@@ -38,7 +42,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 200));
     });
     await tester.pump();
-    await tester.pump(const Duration(seconds: 4));
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(session.started, isTrue);
     expect(session.stopped, isTrue);
@@ -55,15 +59,19 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(repository.deletedTaskIds, ['task-0']);
+    await tester.pump(const Duration(seconds: 3));
     await repository.dispose();
     await session.dispose();
   });
 
-  testWidgets('low confidence voice parse opens editable draft', (tester) async {
+  testWidgets('low confidence voice parse opens editable draft', (
+    tester,
+  ) async {
     final repository = FakeTaskRepository();
     final session = FakeStreamingVoiceSession();
-    final parseService =
-        FakeTextParseService(result: _voiceResult(confidence: 0.52));
+    final parseService = FakeTextParseService(
+      result: _voiceResult(confidence: 0.52),
+    );
 
     await _pumpTasksPage(
       tester,
@@ -88,10 +96,11 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 200));
     });
     await tester.pump();
-    await tester.pump(const Duration(seconds: 4));
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(repository.tasks, hasLength(1));
     expect(repository.tasks.single.title, '提交设计稿');
+    await tester.pump(const Duration(seconds: 3));
     await repository.dispose();
     await session.dispose();
   });
@@ -118,7 +127,7 @@ void main() {
 
     expect(repository.tasks, isEmpty);
     expect(find.textContaining('创建失败'), findsOneWidget);
-    await tester.pump(const Duration(seconds: 4));
+    await tester.pump(const Duration(seconds: 3));
     await repository.dispose();
     await session.dispose();
   });
@@ -166,25 +175,34 @@ void main() {
     await session.dispose();
   });
 
-  testWidgets('category filter shows all segment and filters untagged tasks',
-      (tester) async {
+  testWidgets('category filter shows all segment and filters untagged tasks', (
+    tester,
+  ) async {
     final repository = FakeTaskRepository();
-    await repository.createTask(
-      title: '海底捞',
-      tag: AppConstants.tagLife,
-    );
+    await repository.createTask(title: '海底捞', tag: AppConstants.tagLife);
     await repository.createTask(title: '去吃KFC');
+
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           taskRepositoryProvider.overrideWithValue(repository),
-          streamingVoiceSessionProvider
-              .overrideWithValue(FakeStreamingVoiceSession()),
+          streamingVoiceSessionProvider.overrideWithValue(
+            FakeStreamingVoiceSession(),
+          ),
           textParseServiceProvider.overrideWithValue(FakeTextParseService()),
-          notificationServiceProvider.overrideWithValue(_NoopNotificationService()),
+          notificationServiceProvider.overrideWithValue(
+            _NoopNotificationService(),
+          ),
         ],
-        child: const MaterialApp(home: TasksPage()),
+        child: MaterialApp(
+          theme: TempoThemePresets.minimalWhite.toThemeData(),
+          home: const TasksPage(),
+        ),
       ),
     );
     await tester.pump();
@@ -218,6 +236,11 @@ Future<void> _pumpTasksPage(
   required FakeStreamingVoiceSession session,
   required FakeTextParseService parseService,
 }) async {
+  tester.view.physicalSize = const Size(800, 1200);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
   final navigatorKey = GlobalKey<NavigatorState>();
   await tester.pumpWidget(
     ProviderScope(
@@ -225,11 +248,14 @@ Future<void> _pumpTasksPage(
         taskRepositoryProvider.overrideWithValue(repository),
         streamingVoiceSessionProvider.overrideWithValue(session),
         textParseServiceProvider.overrideWithValue(parseService),
-        notificationServiceProvider.overrideWithValue(_NoopNotificationService()),
+        notificationServiceProvider.overrideWithValue(
+          _NoopNotificationService(),
+        ),
         appNavigatorKeyProvider.overrideWithValue(navigatorKey),
       ],
       child: MaterialApp(
         navigatorKey: navigatorKey,
+        theme: TempoThemePresets.minimalWhite.toThemeData(),
         home: const TasksPage(),
       ),
     ),

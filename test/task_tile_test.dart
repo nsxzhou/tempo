@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tempo/core/constants/app_constants.dart';
 import 'package:tempo/core/theme/app_theme.dart';
+import 'package:tempo/core/theme/theme_presets.dart';
 import 'package:tempo/features/tasks/domain/task.dart';
 import 'package:tempo/features/tasks/presentation/widgets/task_tile.dart';
 
@@ -32,14 +35,18 @@ Task _task({
 }
 
 void main() {
+  setUpAll(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   Widget wrap(Widget child) {
-    return MaterialApp(
-      theme: AppTheme.light,
-      home: Scaffold(
-        body: SlidableAutoCloseBehavior(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: child,
+    final tokens = TempoThemePresets.minimalWhite;
+    return ProviderScope(
+      child: MaterialApp(
+        theme: tokens.toThemeData(),
+        home: Scaffold(
+          body: SlidableAutoCloseBehavior(
+            child: Padding(padding: const EdgeInsets.all(16), child: child),
           ),
         ),
       ),
@@ -48,7 +55,11 @@ void main() {
 
   testWidgets('compact layout: title only, no meta', (tester) async {
     await tester.pumpWidget(
-      wrap(TaskTile(task: _task(description: '全脂牛奶', priority: TaskPriority.p1))),
+      wrap(
+        TaskTile(
+          task: _task(description: '全脂牛奶', priority: TaskPriority.p1),
+        ),
+      ),
     );
 
     expect(find.text('牛奶'), findsOneWidget);
@@ -70,10 +81,7 @@ void main() {
   testWidgets('tap on title area triggers onTap', (tester) async {
     var tapped = false;
     await tester.pumpWidget(
-      wrap(TaskTile(
-        task: _task(),
-        onTap: () => tapped = true,
-      )),
+      wrap(TaskTile(task: _task(), onTap: () => tapped = true)),
     );
 
     await tester.tap(find.text('牛奶'));
@@ -82,15 +90,19 @@ void main() {
     expect(tapped, isTrue);
   });
 
-  testWidgets('tap on checkbox toggles without triggering onTap', (tester) async {
+  testWidgets('tap on checkbox toggles without triggering onTap', (
+    tester,
+  ) async {
     var tapped = false;
     var toggled = false;
     await tester.pumpWidget(
-      wrap(TaskTile(
-        task: _task(),
-        onTap: () => tapped = true,
-        onToggleComplete: () => toggled = true,
-      )),
+      wrap(
+        TaskTile(
+          task: _task(),
+          onTap: () => tapped = true,
+          onToggleComplete: () => toggled = true,
+        ),
+      ),
     );
 
     await tester.tap(find.bySemanticsLabel('未完成'));
@@ -104,11 +116,7 @@ void main() {
 
   testWidgets('swipe left reveals delete action', (tester) async {
     await tester.pumpWidget(
-      wrap(TaskTile(
-        task: _task(),
-        showDelete: true,
-        onDelete: () {},
-      )),
+      wrap(TaskTile(task: _task(), showDelete: true, onDelete: () {})),
     );
 
     expect(find.bySemanticsLabel('删除'), findsNothing);
@@ -122,11 +130,13 @@ void main() {
   testWidgets('delete action calls onDelete', (tester) async {
     var deleted = false;
     await tester.pumpWidget(
-      wrap(TaskTile(
-        task: _task(),
-        showDelete: true,
-        onDelete: () => deleted = true,
-      )),
+      wrap(
+        TaskTile(
+          task: _task(),
+          showDelete: true,
+          onDelete: () => deleted = true,
+        ),
+      ),
     );
 
     await tester.drag(find.byType(Slidable), const Offset(-200, 0));
@@ -140,11 +150,7 @@ void main() {
 
   testWidgets('no slidable when showDelete is false', (tester) async {
     await tester.pumpWidget(
-      wrap(TaskTile(
-        task: _task(),
-        onDelete: () {},
-        showDelete: false,
-      )),
+      wrap(TaskTile(task: _task(), onDelete: () {}, showDelete: false)),
     );
 
     expect(find.byType(Slidable), findsNothing);

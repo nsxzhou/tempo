@@ -21,7 +21,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
@@ -41,6 +41,32 @@ class AppDatabase extends _$AppDatabase {
         if (from < 4) {
           await m.addColumn(tasks, tasks.isAllDay);
         }
+        if (from < 5) {
+          await m.createIndex(
+            Index(
+              'idx_tasks_due_date',
+              'CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks (due_date)',
+            ),
+          );
+          await m.createIndex(
+            Index(
+              'idx_tasks_is_completed',
+              'CREATE INDEX IF NOT EXISTS idx_tasks_is_completed ON tasks (is_completed)',
+            ),
+          );
+          await m.createIndex(
+            Index(
+              'idx_tasks_completed_at',
+              'CREATE INDEX IF NOT EXISTS idx_tasks_completed_at ON tasks (completed_at)',
+            ),
+          );
+          await m.createIndex(
+            Index(
+              'idx_tasks_list_id',
+              'CREATE INDEX IF NOT EXISTS idx_tasks_list_id ON tasks (list_id)',
+            ),
+          );
+        }
       },
     );
   }
@@ -56,6 +82,19 @@ class AppDatabase extends _$AppDatabase {
   /// 按 ID 获取任务列表（详情页归属名称用）。
   Future<TaskList?> getTaskListById(String id) =>
       (select(taskLists)..where((l) => l.id.equals(id))).getSingleOrNull();
+
+  /// 监听指定时间范围内已完成的任务（统计趋势用）。
+  Stream<List<Task>> watchCompletedTasksInRange(
+    DateTime startInclusive,
+    DateTime endExclusive,
+  ) {
+    return (select(tasks)
+          ..where((t) => t.isCompleted.equals(true))
+          ..where((t) => t.completedAt.isNotNull())
+          ..where((t) => t.completedAt.isBiggerOrEqualValue(startInclusive))
+          ..where((t) => t.completedAt.isSmallerThanValue(endExclusive)))
+        .watch();
+  }
 }
 
 LazyDatabase _openConnection() {

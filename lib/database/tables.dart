@@ -9,8 +9,7 @@ class TaskLists extends Table {
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
   /// 同步待推送标记：true 表示本地写入但尚未推送到云端。
-  BoolColumn get syncPending =>
-      boolean().withDefault(const Constant(false))();
+  BoolColumn get syncPending => boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -42,8 +41,7 @@ class Tasks extends Table {
   TextColumn get tag => text().nullable()();
 
   /// 同步待推送标记：true 表示本地写入但尚未推送到云端。
-  BoolColumn get syncPending =>
-      boolean().withDefault(const Constant(false))();
+  BoolColumn get syncPending => boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {id};

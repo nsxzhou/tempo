@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../../app_providers.dart';
 import '../constants/app_constants.dart';
 import '../theme/app_theme.dart';
+import '../theme/theme_manager.dart';
 import '../widgets/tempo/tempo.dart';
 
 class ShellScaffold extends ConsumerStatefulWidget {
@@ -26,7 +27,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
     final location = GoRouterState.of(context).matchedLocation;
     if (location.startsWith(AppConstants.routeTasks)) return 0;
     if (location.startsWith(AppConstants.routeCalendar)) return 1;
-    if (location.startsWith(AppConstants.routePlan)) return 2;
+    if (location.startsWith(AppConstants.routeStats)) return 2;
     if (location.startsWith(AppConstants.routeSettings)) return 3;
     return 0;
   }
@@ -53,15 +54,15 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
     _lastShellIndex = index;
 
     final tabBarVisible = ref.watch(shellTabBarVisibleProvider);
-    final paths = const [
+    const paths = [
       AppConstants.routeTasks,
       AppConstants.routeCalendar,
-      AppConstants.routePlan,
+      AppConstants.routeStats,
       AppConstants.routeSettings,
     ];
 
     return Scaffold(
-      backgroundColor: AppTheme.bg,
+      backgroundColor: ref.watch(scaffoldBackgroundProvider),
       body: Stack(
         children: [
           Positioned.fill(child: widget.child),

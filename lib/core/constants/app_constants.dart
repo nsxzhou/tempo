@@ -12,7 +12,7 @@ class AppConstants {
   // ── 路由路径 ──
   static const String routeTasks = '/tasks';
   static const String routeCalendar = '/calendar';
-  static const String routePlan = '/plan';
+  static const String routeStats = '/stats';
   static const String routeSettings = '/settings';
   static const String routeOnboarding = '/onboarding';
   static const String routeLogin = '/login';
@@ -27,10 +27,9 @@ class AppConstants {
   static const String tagLife = 'life';
 
   // ── 通知 ──
-  static const int reminderBeforeMinutes = 15;
   static const String notificationChannelId = 'tempo_reminders';
-  static const String notificationChannelName = 'Tempo 任务提醒';
-  static const String notificationChannelDesc = '任务到期前的提醒通知';
+  static const String notificationChannelName = 'Tempo 待办提醒';
+  static const String notificationChannelDesc = '有日期的待办，在对应日当天早上推送';
 
   // ── 分页 ──
   static const int defaultPageSize = 20;
@@ -43,24 +42,22 @@ class AppConstants {
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
 
   /// Supabase 项目 URL。
-  static String get supabaseUrl => const String.fromEnvironment(
-        'SUPABASE_URL',
-      ).isNotEmpty
+  static String get supabaseUrl =>
+      const String.fromEnvironment('SUPABASE_URL').isNotEmpty
       ? const String.fromEnvironment('SUPABASE_URL')
       : (dotenv.env['SUPABASE_URL'] ?? _localSupabaseUrl);
 
   /// Supabase Anon Key(公开密钥,非 service_role key)。
-  static String get supabaseAnonKey => const String.fromEnvironment(
-        'SUPABASE_ANON_KEY',
-      ).isNotEmpty
+  static String get supabaseAnonKey =>
+      const String.fromEnvironment('SUPABASE_ANON_KEY').isNotEmpty
       ? const String.fromEnvironment('SUPABASE_ANON_KEY')
       : (dotenv.env['SUPABASE_ANON_KEY'] ?? _localAnonKey);
 
   /// Supabase Edge Function 请求头（Authorization + apikey）。
   static Map<String, String> get supabaseEdgeHeaders => {
-        'Authorization': 'Bearer $supabaseAnonKey',
-        'apikey': supabaseAnonKey,
-      };
+    'Authorization': 'Bearer $supabaseAnonKey',
+    'apikey': supabaseAnonKey,
+  };
 
   // ── Deep Link ──
   /// Custom URL scheme（方案 B 降级，公开测试前迁移到 Universal Links / App Links）。
@@ -69,32 +66,33 @@ class AppConstants {
 
   // ── Edge Function 端点 ──
   /// parse-task 统一解析端点（语音 + 文本共用）。
-  static String get parseTaskEndpoint => const String.fromEnvironment(
-        'TEMPO_PARSE_TASK_ENDPOINT',
-      ).isNotEmpty
+  static String get parseTaskEndpoint =>
+      const String.fromEnvironment('TEMPO_PARSE_TASK_ENDPOINT').isNotEmpty
       ? const String.fromEnvironment('TEMPO_PARSE_TASK_ENDPOINT')
       : (dotenv.env['TEMPO_PARSE_TASK_ENDPOINT'] ??
-          'http://127.0.0.1:54321/functions/v1/parse-task');
+            'http://127.0.0.1:54321/functions/v1/parse-task');
 
   /// asr-session 流式语音识别会话配置端点。
-  static String get asrSessionEndpoint => const String.fromEnvironment(
-        'TEMPO_ASR_SESSION_ENDPOINT',
-      ).isNotEmpty
+  static String get asrSessionEndpoint =>
+      const String.fromEnvironment('TEMPO_ASR_SESSION_ENDPOINT').isNotEmpty
       ? const String.fromEnvironment('TEMPO_ASR_SESSION_ENDPOINT')
       : (dotenv.env['TEMPO_ASR_SESSION_ENDPOINT'] ??
-          'http://127.0.0.1:54321/functions/v1/asr-session');
+            'http://127.0.0.1:54321/functions/v1/asr-session');
 
   /// siyuan-pairing 配对码交换端点。
-  static String get siyuanPairingEndpoint => const String.fromEnvironment(
-        'TEMPO_SIYUAN_PAIRING_ENDPOINT',
-      ).isNotEmpty
+  static String get siyuanPairingEndpoint =>
+      const String.fromEnvironment('TEMPO_SIYUAN_PAIRING_ENDPOINT').isNotEmpty
       ? const String.fromEnvironment('TEMPO_SIYUAN_PAIRING_ENDPOINT')
       : (dotenv.env['TEMPO_SIYUAN_PAIRING_ENDPOINT'] ??
-          'http://127.0.0.1:54321/functions/v1/siyuan-pairing');
+            'http://127.0.0.1:54321/functions/v1/siyuan-pairing');
 
   // ── SharedPreferences Keys ──
   static const String prefOnboardingCompleted = 'onboarding_completed';
   static const String prefNotificationEnabled = 'notification_enabled';
+  static const String prefThemeId = 'theme_id';
+  static const String prefBackgroundImagePath = 'background_image_path';
+  static const String prefTaskCardColorPrefix = 'task_card_color_';
+  static const String prefHeaderColorPrefix = 'header_color_';
 
   // ── 配对码 ──
   static const int pairingCodeLength = 6;

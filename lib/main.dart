@@ -3,6 +3,7 @@
 // 初始化 Supabase + 通知 + timezone
 // ============================================================
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +13,7 @@ import 'package:timezone/data/latest_all.dart' as tz;
 
 import 'app.dart';
 import 'core/constants/app_constants.dart';
+import 'core/providers/rebuild_observer.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,5 +36,19 @@ Future<void> main() async {
   // 4) 初始化 intl locale 数据(tasks_page / calendar_page 用了 zh_CN 的 DateFormat)
   await initializeDateFormatting('zh_CN');
 
-  runApp(const ProviderScope(child: TempoApp()));
+  runApp(
+    ProviderScope(
+      observers: kDebugMode
+          ? [
+              RebuildObserver(const {
+                'taskListProvider',
+                'calendarTaskIndexProvider',
+                'dailyCompletionsProvider',
+                'statsSnapshotProvider',
+              }),
+            ]
+          : const [],
+      child: const TempoApp(),
+    ),
+  );
 }

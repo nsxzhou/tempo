@@ -119,12 +119,14 @@ class _TasksPageState extends ConsumerState<TasksPage>
             Positioned(
               right: 20,
               bottom: 120,
-              child: _FloatingActions(
-                onVoice: () {
-                  ref.read(shellTabBarVisibleProvider.notifier).state = false;
-                  setState(() => _showVoiceOverlay = true);
-                },
-                onAdd: _openQuickCreate,
+              child: RepaintBoundary(
+                child: _FloatingActions(
+                  onVoice: () {
+                    ref.read(shellTabBarVisibleProvider.notifier).state = false;
+                    setState(() => _showVoiceOverlay = true);
+                  },
+                  onAdd: _openQuickCreate,
+                ),
               ),
             ),
           // 语音录入浮层
@@ -150,57 +152,59 @@ class _TasksPageState extends ConsumerState<TasksPage>
     final dateText = DateFormat('M 月 d 日 · EEEE', 'zh_CN').format(now);
     final tokens = context.tokens;
     final headerColor = ref.watch(headerBackgroundProvider);
-    return Container(
-      color: headerColor,
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'TODO',
-                  style: tokens.sansSemibold(
-                    size: 32,
-                    letterSpacing: -0.8,
-                    height: 1.0,
+    return RepaintBoundary(
+      child: Container(
+        color: headerColor,
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'TODO',
+                    style: tokens.sansSemibold(
+                      size: 32,
+                      letterSpacing: -0.8,
+                      height: 1.0,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  dateText,
-                  style: tokens.mono(
-                    size: 12,
-                    color: tokens.fgMuted,
-                    letterSpacing: -0.2,
+                  const SizedBox(height: 6),
+                  Text(
+                    dateText,
+                    style: tokens.mono(
+                      size: 12,
+                      color: tokens.fgMuted,
+                      letterSpacing: -0.2,
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onTap: () => setState(() => _showSearch = !_showSearch),
-            child: Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: _showSearch ? tokens.bgSubtle : tokens.bg,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: _showSearch ? tokens.fg : tokens.borderStrong,
-                  width: 0.8,
-                ),
-              ),
-              child: Icon(
-                LucideIcons.search,
-                size: 14,
-                color: tokens.fgSecondary,
+                ],
               ),
             ),
-          ),
-        ],
+            GestureDetector(
+              onTap: () => setState(() => _showSearch = !_showSearch),
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: _showSearch ? tokens.bgSubtle : tokens.bg,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _showSearch ? tokens.fg : tokens.borderStrong,
+                    width: 0.8,
+                  ),
+                ),
+                child: Icon(
+                  LucideIcons.search,
+                  size: 14,
+                  color: tokens.fgSecondary,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -276,7 +280,10 @@ class _TasksPageState extends ConsumerState<TasksPage>
   }
 
   void _navigateToDetail(Task task) {
-    context.push('/tasks/${task.id}');
+    ref.read(taskDetailOverlayProvider.notifier).state = true;
+    context.push('/tasks/${task.id}').whenComplete(() {
+      ref.read(taskDetailOverlayProvider.notifier).state = false;
+    });
   }
 
   Future<void> _deleteTask(Task task) async {
@@ -330,6 +337,28 @@ class _TaskListGroups {
 
   const _TaskListGroups({required this.active, required this.completed});
 }
+
+/// filter family 的 key：time / category / search 三元组。
+/// enum + String 都有值语义，record 自动获得 == / hashCode。
+typedef _FilterKey = ({
+  _TimeFilter time,
+  _CategoryFilter category,
+  String search,
+});
+
+/// 派生 provider：把 _filterTaskGroups 从 build 内重算提到 provider 层。
+/// 仅在 taskListProvider 数据或 filter 输入变化时重算，避免无关 rebuild 重算。
+final _filteredTaskGroupsProvider =
+    Provider.family<_TaskListGroups, _FilterKey>((ref, key) {
+      final allTasks =
+          ref.watch(taskListProvider).valueOrNull ?? const <Task>[];
+      return _filterTaskGroups(
+        allTasks: allTasks,
+        timeFilter: key.time,
+        categoryFilter: key.category,
+        searchQuery: key.search,
+      );
+    });
 
 _TaskListGroups _filterTaskGroups({
   required List<Task> allTasks,
@@ -544,106 +573,109 @@ class _TaskListSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tasksAsync = ref.watch(taskListProvider);
     final t = context.tokens;
+    // filter 重算移入 _filteredTaskGroupsProvider，build 内不再遍历全量任务。
+    final groups = ref.watch(
+      _filteredTaskGroupsProvider((
+        time: timeFilter,
+        category: categoryFilter,
+        search: searchQuery,
+      )),
+    );
+    final async = ref.watch(taskListProvider);
 
-    return tasksAsync.when(
-      data: (allTasks) {
-        final groups = _filterTaskGroups(
-          allTasks: allTasks,
-          timeFilter: timeFilter,
-          categoryFilter: categoryFilter,
-          searchQuery: searchQuery,
-        );
-
-        if (groups.active.isEmpty && groups.completed.isEmpty) {
-          return SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 40, 20, 40),
-              child: Center(
-                child: Text(
-                  '暂无任务',
-                  style: TextStyle(fontSize: 13, color: t.fgMuted),
-                ),
-              ),
-            ),
-          );
-        }
-
-        final active = groups.active;
-        final completed = groups.completed;
-
-        return SliverMainAxisGroup(
-          slivers: [
-            if (active.isNotEmpty) ...[
-              SliverToBoxAdapter(
-                child: TempoSectionHeader(label: '待办 · ${active.length}'),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                sliver: SliverList.separated(
-                  itemCount: active.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final task = active[index];
-                    return RepaintBoundary(
-                      child: TaskTile(
-                        key: ValueKey('task-${task.id}'),
-                        task: task,
-                        onTap: () => onTap(task),
-                        onToggleComplete: () => onToggle(task),
-                        showDelete: true,
-                        onDelete: () => onDelete(task),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-            if (completed.isNotEmpty) ...[
-              SliverToBoxAdapter(
-                child: TempoSectionHeader(
-                  label: '已完成 · ${completed.length}',
-                  color: t.fgSubtle,
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                sliver: SliverList.separated(
-                  itemCount: completed.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final task = completed[index];
-                    return RepaintBoundary(
-                      child: TaskTile(
-                        key: ValueKey('task-${task.id}'),
-                        task: task,
-                        onTap: () => onTap(task),
-                        onToggleComplete: () => onToggle(task),
-                        showDelete: true,
-                        onDelete: () => onDelete(task),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ],
-        );
-      },
-      loading: () => const SliverToBoxAdapter(
+    // 首帧 loading：taskListProvider 尚无数据时显示加载态。
+    if (!async.hasValue && !async.hasError) {
+      return const SliverToBoxAdapter(
         child: Padding(
           padding: EdgeInsets.all(40),
           child: Center(child: CircularProgressIndicator()),
         ),
-      ),
-      error: (error, _) => SliverToBoxAdapter(
+      );
+    }
+    if (async.hasError) {
+      return SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.all(40),
-          child: Center(child: Text('加载失败:$error')),
+          child: Center(child: Text('加载失败:${async.error}')),
         ),
-      ),
+      );
+    }
+
+    if (groups.active.isEmpty && groups.completed.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 40, 20, 40),
+          child: Center(
+            child: Text(
+              '暂无任务',
+              style: TextStyle(fontSize: 13, color: t.fgMuted),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final active = groups.active;
+    final completed = groups.completed;
+
+    return SliverMainAxisGroup(
+      slivers: [
+        if (active.isNotEmpty) ...[
+          SliverToBoxAdapter(
+            child: TempoSectionHeader(label: '待办 · ${active.length}'),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            sliver: SliverList.separated(
+              itemCount: active.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final task = active[index];
+                return RepaintBoundary(
+                  child: TaskTile(
+                    key: ValueKey('task-${task.id}'),
+                    task: task,
+                    onTap: () => onTap(task),
+                    onToggleComplete: () => onToggle(task),
+                    showDelete: true,
+                    onDelete: () => onDelete(task),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+        if (completed.isNotEmpty) ...[
+          SliverToBoxAdapter(
+            child: TempoSectionHeader(
+              label: '已完成 · ${completed.length}',
+              color: t.fgSubtle,
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            sliver: SliverList.separated(
+              itemCount: completed.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final task = completed[index];
+                return RepaintBoundary(
+                  child: TaskTile(
+                    key: ValueKey('task-${task.id}'),
+                    task: task,
+                    onTap: () => onTap(task),
+                    onToggleComplete: () => onToggle(task),
+                    showDelete: true,
+                    onDelete: () => onDelete(task),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -686,19 +718,26 @@ class _BentoCardState extends ConsumerState<_BentoCard>
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     );
-    if (widget.dotPulse) {
-      _pulseController.repeat(reverse: true);
-    }
+    _maybeStartPulse();
   }
 
   @override
   void didUpdateWidget(_BentoCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.dotPulse && !_pulseController.isAnimating) {
+    if (_shouldPulse() && !_pulseController.isAnimating) {
       _pulseController.repeat(reverse: true);
-    } else if (!widget.dotPulse && _pulseController.isAnimating) {
+    } else if (!_shouldPulse() && _pulseController.isAnimating) {
       _pulseController.stop();
       _pulseController.value = 0;
+    }
+  }
+
+  /// 仅在 dotPulse 且 selected 时 tick：减少常驻 ticker，激进减负。
+  bool _shouldPulse() => widget.dotPulse && widget.selected;
+
+  void _maybeStartPulse() {
+    if (_shouldPulse()) {
+      _pulseController.repeat(reverse: true);
     }
   }
 
@@ -816,7 +855,7 @@ class _BentoCardState extends ConsumerState<_BentoCard>
   }
 
   Widget _buildDot() {
-    if (!widget.dotPulse) {
+    if (!_shouldPulse()) {
       return Container(
         width: 6,
         height: 6,

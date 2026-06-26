@@ -55,7 +55,7 @@ class TempoTabBar extends ConsumerWidget {
         borderRadius: BorderRadius.zero,
         showShadow: false,
         blur: false,
-        fillColor: ref.watch(glassSurfaceStyleProvider).enabled
+        fillColor: ref.watch(glassSurfaceStyleProvider.select((s) => s.enabled))
             ? tokens.bg.withValues(
                 alpha:
                     ThemeData.estimateBrightnessForColor(tokens.bg) ==

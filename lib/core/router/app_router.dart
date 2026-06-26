@@ -38,15 +38,23 @@ CustomTransitionPage<void> _shellTabPage(Widget child) {
   );
 }
 
-/// 详情页轻量淡入(200ms)
+/// 详情页右滑入(250ms)；列表隐藏由 ShellScaffold 在 isDetail 时处理
 CustomTransitionPage<void> _taskDetailPage(Widget child) {
   return CustomTransitionPage<void>(
     child: child,
-    transitionDuration: const Duration(milliseconds: 200),
-    reverseTransitionDuration: const Duration(milliseconds: 200),
+    transitionDuration: const Duration(milliseconds: 250),
+    reverseTransitionDuration: const Duration(milliseconds: 250),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      return FadeTransition(
-        opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(1, 0),
+          end: Offset.zero,
+        ).animate(curved),
         child: child,
       );
     },

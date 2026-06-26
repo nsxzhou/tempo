@@ -293,18 +293,23 @@ class _SelectedDayPanel extends StatelessWidget {
   }
 }
 
-class _CalendarTaskRow extends StatelessWidget {
+class _CalendarTaskRow extends ConsumerWidget {
   final Task task;
   final Color cardColor;
   const _CalendarTaskRow({required this.task, required this.cardColor});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final tokens = context.tokens;
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => context.push('/tasks/${task.id}'),
+        onTap: () {
+          ref.read(taskDetailOverlayProvider.notifier).state = true;
+          context.push('/tasks/${task.id}').whenComplete(() {
+            ref.read(taskDetailOverlayProvider.notifier).state = false;
+          });
+        },
         borderRadius: BorderRadius.circular(AppTheme.radiusMd),
         child: Container(
           padding: const EdgeInsets.all(14),

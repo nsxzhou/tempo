@@ -18,6 +18,14 @@ class AppConstants {
   static const String routeLogin = '/login';
   static const String routeTaskDetail = '/tasks/:id';
 
+  /// 是否为任务详情页路径（如 `/tasks/<id>`，不含 `/tasks` 列表页）。
+  static bool isTaskDetailLocation(String location) {
+    final uri = Uri.parse(location);
+    return uri.pathSegments.length == 2 &&
+        uri.pathSegments.first == 'tasks' &&
+        uri.pathSegments.last.isNotEmpty;
+  }
+
   // ── 任务来源 ──
   static const String sourceText = 'text';
   static const String sourceVoice = 'voice';

@@ -121,6 +121,11 @@ class FakeTaskRepository implements TaskRepository {
     _emit();
   }
 
+  @override
+  void requestRefresh() {
+    // 测试 fake 不触发真实远端刷新。
+  }
+
   Future<void> dispose() {
     return _controller.close();
   }

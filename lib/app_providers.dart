@@ -5,6 +5,7 @@
 //       / SiyuanPairingService / FeedbackService / Connectivity
 // ============================================================
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -32,6 +33,9 @@ export 'features/auth/data/auth_service.dart';
 
 // ── Shell ──
 final shellTabBarVisibleProvider = StateProvider<bool>((ref) => true);
+
+/// push 详情前同步置 true，避免 Shell 未及时 rebuild 导致列表透出。
+final taskDetailOverlayProvider = StateProvider<bool>((ref) => false);
 
 // ── Dio ──
 
@@ -102,19 +106,34 @@ final taskRepositoryProvider = Provider<TaskRepository>((ref) {
       ref.watch(defaultListIdProvider).valueOrNull ??
       AppConstants.defaultListId;
 
-  return SyncTaskRepository(
+  final repository = SyncTaskRepository(
     localDb: db,
     supabase: supabase,
     userId: userId,
     listId: listId,
     connectivity: connectivity,
   );
+
+  // 应用级单例刷新触发：连接恢复 + 用户变更。
+  final connectivitySub = connectivity.onConnectivityChanged.listen((result) {
+    if (result != ConnectivityResult.none) {
+      repository.requestRefresh();
+    }
+  });
+  ref.onDispose(connectivitySub.cancel);
+
+  // 用户切换时刷新一次（登录/换号后拉取新用户数据）。
+  ref.listen<String?>(currentUserIdProvider, (_, _) {
+    repository.requestRefresh();
+  });
+
+  return repository;
 });
 
 final taskListProvider = StreamProvider<List<Task>>((ref) {
   final repository = ref.watch(taskRepositoryProvider);
   return repository.watchTasks();
-});
+}, name: 'taskListProvider');
 
 /// 任务 id → Task 索引，供 taskByIdProvider O(1) 查找。
 final taskMapProvider = Provider<Map<String, Task>>((ref) {
@@ -132,7 +151,7 @@ final statsSnapshotProvider = Provider.family<StatsSnapshot, int>((ref, days) {
   final tasks = ref.watch(taskListProvider).valueOrNull ?? [];
   if (tasks.isEmpty) return StatsSnapshot.empty(days);
   return ref.read(statsRepositoryProvider).computeSnapshot(tasks, days);
-});
+}, name: 'statsSnapshotProvider');
 
 /// 单次遍历的任务计数（Bento + 分类筛选共用）。
 final taskCountsProvider = Provider<TaskCounts>((ref) {
@@ -151,7 +170,7 @@ final calendarTaskIndexProvider = Provider<Map<DateTime, List<Task>>>((ref) {
     index.putIfAbsent(day, () => []).add(task);
   }
   return index;
-});
+}, name: 'calendarTaskIndexProvider');
 
 /// 选中日任务列表。
 final selectedDayTasksProvider = Provider.family<List<Task>, DateTime>((
@@ -176,7 +195,7 @@ final dailyCompletionsProvider =
     StreamProvider.family<List<DailyCompletion>, int>((ref, days) {
       final repository = ref.watch(statsRepositoryProvider);
       return repository.watchDailyCompletions(days);
-    });
+    }, name: 'dailyCompletionsProvider');
 
 // ── SyncService ──
 

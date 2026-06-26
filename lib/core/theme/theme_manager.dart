@@ -201,17 +201,26 @@ final themeManagerProvider =
       return ThemeManager();
     });
 
+const _customBackgroundOverlayOpacity = 0.18;
+const _customBackgroundCustomCardAlpha = 0.76;
+const _customBackgroundBorderAlpha = 0.62;
+const _customBackgroundHeaderAlpha = 0.24;
+
 final activeTempoTokensProvider = Provider<TempoTokens>((ref) {
   final customization = ref.watch(themeManagerProvider);
   var tokens = TempoThemePresets.tokensFor(customization.themeId);
   final hasBg = customization.backgroundImageValid;
   if (hasBg) {
-    tokens = tokens.copyWith(backgroundOverlayOpacity: 0.28);
+    tokens = tokens.copyWith(
+      backgroundOverlayOpacity: _customBackgroundOverlayOpacity,
+    );
   }
   final custom = customization.componentColors.taskCardColor;
   Color taskCardBg;
   if (custom != null) {
-    taskCardBg = hasBg ? custom.withValues(alpha: 0.65) : custom;
+    taskCardBg = hasBg
+        ? custom.withValues(alpha: _customBackgroundCustomCardAlpha)
+        : custom;
   } else if (hasBg) {
     taskCardBg = _glassFillAlpha(tokens.bg);
   } else {
@@ -253,8 +262,8 @@ class GlassSurfaceStyle {
 Color _glassFillAlpha(Color base, {double? lightAlpha, double? darkAlpha}) {
   final brightness = ThemeData.estimateBrightnessForColor(base);
   final alpha = brightness == Brightness.dark
-      ? (darkAlpha ?? 0.42)
-      : (lightAlpha ?? 0.58);
+      ? (darkAlpha ?? 0.68)
+      : (lightAlpha ?? 0.78);
   return base.withValues(alpha: alpha);
 }
 
@@ -270,7 +279,9 @@ final glassSurfaceStyleProvider = Provider<GlassSurfaceStyle>((ref) {
     enabled: true,
     blurSigma: 16,
     fillColor: _glassFillAlpha(tokens.bg),
-    borderColor: tokens.borderStrong.withValues(alpha: 0.45),
+    borderColor: tokens.borderStrong.withValues(
+      alpha: _customBackgroundBorderAlpha,
+    ),
     solidColor: tokens.bg,
   );
 });
@@ -297,10 +308,10 @@ final headerBackgroundProvider = Provider<Color>((ref) {
   final hasBg = ref.watch(hasCustomBackgroundProvider);
   final custom = customization.componentColors.headerColor;
   if (custom != null) {
-    return hasBg ? custom.withValues(alpha: 0.35) : custom;
+    return hasBg ? custom.withValues(alpha: 0.42) : custom;
   }
   if (hasBg) {
-    return Colors.transparent;
+    return tokens.bg.withValues(alpha: _customBackgroundHeaderAlpha);
   }
   return tokens.bg;
 });

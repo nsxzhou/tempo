@@ -50,7 +50,6 @@ class _CalendarPageState extends ConsumerState<CalendarPage>
     final taskIndex = ref.watch(calendarTaskIndexProvider);
     final dayTasks = ref.watch(selectedDayTasksProvider(_selectedDate));
     final tokens = context.tokens;
-    final headerColor = ref.watch(headerBackgroundProvider);
     final now = DateTime.now();
     final monthLabel = DateFormat('yyyy 年 M 月').format(_selectedDate);
     final weekNum =
@@ -70,8 +69,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                color: headerColor,
+              Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

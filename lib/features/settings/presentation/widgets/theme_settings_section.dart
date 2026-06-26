@@ -115,14 +115,12 @@ class ThemeSettingsSection extends ConsumerWidget {
         ),
         _ComponentColorsBlock(
           taskCardColor: customization.componentColors.taskCardColor,
-          headerColor: customization.componentColors.headerColor,
           onTaskCardColor: manager.setTaskCardColor,
-          onHeaderColor: manager.setHeaderColor,
         ),
         TempoPreferenceRow(
           icon: LucideIcons.rotate_ccw,
           title: '恢复组件默认色',
-          subtitle: '清除当前主题下的卡片/顶栏配色',
+          subtitle: '清除当前主题下的卡片配色',
           onTap: () => manager.resetComponentColors(),
         ),
       ],
@@ -243,15 +241,11 @@ class _SettingsPill extends StatelessWidget {
 
 class _ComponentColorsBlock extends ConsumerWidget {
   final Color? taskCardColor;
-  final Color? headerColor;
   final Future<void> Function(Color?) onTaskCardColor;
-  final Future<void> Function(Color?) onHeaderColor;
 
   const _ComponentColorsBlock({
     required this.taskCardColor,
-    required this.headerColor,
     required this.onTaskCardColor,
-    required this.onHeaderColor,
   });
 
   @override
@@ -269,12 +263,6 @@ class _ComponentColorsBlock extends ConsumerWidget {
             title: '任务卡片背景',
             current: taskCardColor,
             onSelect: onTaskCardColor,
-          ),
-          const SizedBox(height: 12),
-          _ComponentColorRow(
-            title: '顶栏背景',
-            current: headerColor,
-            onSelect: onHeaderColor,
           ),
         ],
       ),

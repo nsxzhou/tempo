@@ -140,10 +140,8 @@ class _TasksPageState extends ConsumerState<TasksPage>
     final now = DateTime.now();
     final dateText = DateFormat('M 月 d 日 · EEEE', 'zh_CN').format(now);
     final tokens = context.tokens;
-    final headerColor = ref.watch(headerBackgroundProvider);
     return RepaintBoundary(
-      child: Container(
-        color: headerColor,
+      child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,

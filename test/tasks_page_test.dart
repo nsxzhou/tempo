@@ -182,12 +182,60 @@ void main() {
     await session.dispose();
   });
 
-  testWidgets('category filter shows all segment and filters untagged tasks', (
+  testWidgets(
+    'task page has no category filter and keeps all pending visible',
+    (tester) async {
+      final repository = FakeTaskRepository();
+      await repository.createTask(title: '海底捞', tag: AppConstants.tagLife);
+      await repository.createTask(title: '去吃KFC');
+
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            taskRepositoryProvider.overrideWithValue(repository),
+            streamingVoiceSessionProvider.overrideWithValue(
+              FakeStreamingVoiceSession(),
+            ),
+            textParseServiceProvider.overrideWithValue(FakeTextParseService()),
+            notificationServiceProvider.overrideWithValue(
+              _NoopNotificationService(),
+            ),
+          ],
+          child: MaterialApp(
+            theme: TempoThemePresets.minimalWhite.toThemeData(),
+            home: const TasksPage(),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('海底捞'), findsOneWidget);
+      expect(find.text('去吃KFC'), findsOneWidget);
+      expect(find.text('全部'), findsOneWidget);
+      expect(find.text('工作'), findsNothing);
+      expect(find.text('生活'), findsNothing);
+      expect(find.text('未分类'), findsNothing);
+      await _settleAnimations(tester);
+      await repository.dispose();
+    },
+  );
+
+  testWidgets('all scope shows completed without category filtering', (
     tester,
   ) async {
     final repository = FakeTaskRepository();
-    await repository.createTask(title: '海底捞', tag: AppConstants.tagLife);
-    await repository.createTask(title: '去吃KFC');
+    final doneWork = await repository.createTask(
+      title: '已完成工作',
+      tag: AppConstants.tagWork,
+    );
+    await repository.toggleComplete(doneWork.id);
+    await repository.createTask(title: '活跃生活', tag: AppConstants.tagLife);
+    await repository.createTask(title: '未分类任务');
 
     tester.view.physicalSize = const Size(800, 1200);
     tester.view.devicePixelRatio = 1.0;
@@ -214,20 +262,15 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('海底捞'), findsOneWidget);
-    expect(find.text('去吃KFC'), findsOneWidget);
-    expect(find.text('全部'), findsOneWidget);
-
-    await tester.tap(find.text('生活'));
-    await tester.pump();
-
-    expect(find.text('海底捞'), findsOneWidget);
-    expect(find.text('去吃KFC'), findsNothing);
+    expect(find.text('已完成工作'), findsNothing);
+    expect(find.text('活跃生活'), findsOneWidget);
+    expect(find.text('未分类任务'), findsOneWidget);
 
     await tester.tap(find.text('全部'));
     await tester.pump();
 
-    expect(find.text('去吃KFC'), findsOneWidget);
+    expect(find.text('已完成工作'), findsOneWidget);
+    expect(find.text('已完成 · 1'), findsOneWidget);
     await _settleAnimations(tester);
     await repository.dispose();
   });

@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tempo/features/settings/data/siyuan_pairing_service.dart';
 
 void main() {
-  test('siyuan status load timeout falls back to unpaired state', () async {
+  test('siyuan status load timeout returns recoverable failed state', () async {
     SiyuanBindingStatus? status;
 
     try {
@@ -13,10 +13,14 @@ void main() {
         return completer.future;
       }).timeout(const Duration(milliseconds: 50));
     } catch (_) {
-      status = const SiyuanBindingStatus(isPaired: false);
+      status = const SiyuanBindingStatus(
+        isPaired: false,
+        statusLoadFailed: true,
+      );
     }
 
     expect(status, isNotNull);
     expect(status.isPaired, isFalse);
+    expect(status.statusLoadFailed, isTrue);
   });
 }

@@ -56,12 +56,31 @@ void main() {
 
       expect(badge.label, '未启用');
     });
+
+    test('status load failure shows 连接异常', () {
+      const status = SiyuanBindingStatus(
+        isPaired: false,
+        statusLoadFailed: true,
+      );
+      final badge = siyuanIntegrationBadge(status);
+
+      expect(badge.label, '连接异常');
+      expect(badge.kind, TempoBadgeKind.error);
+    });
   });
 
   group('siyuanIntegrationSubtitle', () {
     test('paired without sync explains plugin pairing', () {
       const status = SiyuanBindingStatus(isPaired: true);
       expect(siyuanIntegrationSubtitle(status), '云端已记录绑定 · 请在思源插件输入配对码');
+    });
+
+    test('status load failure asks user to retry', () {
+      const status = SiyuanBindingStatus(
+        isPaired: false,
+        statusLoadFailed: true,
+      );
+      expect(siyuanIntegrationSubtitle(status), contains('点击重试'));
     });
 
     test('paired with sync shows last sync summary', () {
@@ -87,6 +106,7 @@ extension on SiyuanBindingStatus {
   SiyuanBindingStatus copyWith({DateTime? lastSyncAt}) {
     return SiyuanBindingStatus(
       isPaired: isPaired,
+      statusLoadFailed: statusLoadFailed,
       pairedAt: pairedAt,
       lastSyncAt: lastSyncAt ?? this.lastSyncAt,
       lastImportedCount: lastImportedCount,

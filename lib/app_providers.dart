@@ -291,7 +291,11 @@ final siyuanBindingStatusProvider = FutureProvider<SiyuanBindingStatus>((
   }
 
   final service = ref.read(siyuanPairingServiceProvider);
-  return service.getBindingStatus().timeout(const Duration(seconds: 8));
+  try {
+    return await service.getBindingStatus().timeout(const Duration(seconds: 8));
+  } catch (_) {
+    return const SiyuanBindingStatus(isPaired: false, statusLoadFailed: true);
+  }
 });
 
 // ── FeedbackService ──

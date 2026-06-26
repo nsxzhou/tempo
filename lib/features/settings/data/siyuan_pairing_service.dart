@@ -34,6 +34,7 @@ class PairingCode {
 /// 思源绑定与同步状态（来自 siyuan_bindings 表）。
 class SiyuanBindingStatus {
   final bool isPaired;
+  final bool statusLoadFailed;
   final DateTime? pairedAt;
   final DateTime? lastSyncAt;
   final int lastImportedCount;
@@ -42,6 +43,7 @@ class SiyuanBindingStatus {
 
   const SiyuanBindingStatus({
     required this.isPaired,
+    this.statusLoadFailed = false,
     this.pairedAt,
     this.lastSyncAt,
     this.lastImportedCount = 0,
@@ -146,7 +148,11 @@ class SiyuanPairingService {
         pendingCode: pendingCode,
       );
     } catch (_) {
-      return SiyuanBindingStatus(isPaired: false, pendingCode: pendingCode);
+      return SiyuanBindingStatus(
+        isPaired: false,
+        statusLoadFailed: true,
+        pendingCode: pendingCode,
+      );
     }
   }
 

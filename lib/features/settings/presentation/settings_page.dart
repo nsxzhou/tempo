@@ -219,6 +219,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   }
 
   Future<void> _handleSiyuanTap(SiyuanBindingStatus status) async {
+    if (status.statusLoadFailed) {
+      _refreshSiyuanStatus();
+      TempoSnackbar.show(context, message: '正在重新检查思源连接状态');
+      return;
+    }
+
     if (!status.isPaired) {
       await PairingCodeDialog.show(
         context,

@@ -86,6 +86,7 @@ void main() {
   });
 
   test('computeSnapshot counts priority and categories for active tasks', () {
+    final now = DateTime.now();
     final tasks = [
       Task(
         id: '1',
@@ -93,8 +94,9 @@ void main() {
         title: 'P0 work',
         priority: TaskPriority.p0,
         tag: AppConstants.tagWork,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
+        dueDate: now.add(const Duration(days: 2)),
+        createdAt: now,
+        updatedAt: now,
       ),
       Task(
         id: '2',
@@ -102,32 +104,38 @@ void main() {
         title: 'P1 life',
         priority: TaskPriority.p1,
         tag: AppConstants.tagLife,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
+        dueDate: now.subtract(const Duration(days: 1)),
+        createdAt: now,
+        updatedAt: now,
       ),
       Task(
         id: '3',
         listId: AppConstants.defaultListId,
         title: 'untagged',
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
+        createdAt: now,
+        updatedAt: now,
       ),
       Task(
         id: '4',
         listId: AppConstants.defaultListId,
         title: 'done',
         isCompleted: true,
-        completedAt: DateTime.now(),
+        completedAt: now,
         priority: TaskPriority.p0,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
+        createdAt: now,
+        updatedAt: now,
       ),
     ];
 
     final snapshot = repository.computeSnapshot(tasks, 7);
 
+    expect(snapshot.health.pending, 3);
+    expect(snapshot.health.overdue, 1);
+    expect(snapshot.health.weekDue, 1);
+    expect(snapshot.health.completedInPeriod, 1);
     expect(snapshot.prioritySlices, hasLength(2));
     expect(snapshot.categorySlices, hasLength(3));
+    expect(snapshot.categorySlices.last.label, '未分类');
     expect(snapshot.completionRate.total, 4);
     expect(snapshot.completionRate.completed, 1);
   });

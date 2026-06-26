@@ -30,6 +30,7 @@ void main() {
 
       await container.read(taskListProvider.future);
       final snapshot = container.read(statsSnapshotProvider(7));
+      expect(snapshot.health.pending, 75);
       expect(snapshot.completionRate.total, 100);
       expect(snapshot.categorySlices, isNotEmpty);
     },

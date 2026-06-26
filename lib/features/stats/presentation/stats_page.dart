@@ -147,36 +147,143 @@ class _StatsChartsGroup extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _HealthMetricsGrid(
+              health: snapshot.health,
+              periodLabel: periodLabel,
+            ),
+            const SizedBox(height: 20),
             _StatsSubsection(
               title: '完成量趋势',
+              subtitle: periodLabel,
               child: RepaintBoundary(
                 child: _CompletionTrendChart(daily: daily),
               ),
             ),
             const SizedBox(height: 20),
             _StatsSubsection(
-              title: '优先级分布',
-              subtitle: '未完成待办',
-              child: RepaintBoundary(
-                child: _PriorityDonutChart(slices: snapshot.prioritySlices),
-              ),
-            ),
-            const SizedBox(height: 20),
-            _StatsSubsection(
-              title: '完成率',
-              subtitle: periodLabel,
+              title: '$periodLabel 创建任务完成率',
               child: _CompletionRateBar(rate: snapshot.completionRate),
             ),
             const SizedBox(height: 20),
             _StatsSubsection(
-              title: '工作 vs 生活',
+              title: '分类结构',
               subtitle: '未完成待办',
               child: RepaintBoundary(
-                child: _CategoryPieChart(slices: snapshot.categorySlices),
+                child: _CategoryBars(slices: snapshot.categorySlices),
+              ),
+            ),
+            const SizedBox(height: 20),
+            _StatsSubsection(
+              title: '优先级压力',
+              subtitle: '未完成待办',
+              child: RepaintBoundary(
+                child: _PriorityBars(slices: snapshot.prioritySlices),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _HealthMetricsGrid extends StatelessWidget {
+  final StatsHealth health;
+  final String periodLabel;
+
+  const _HealthMetricsGrid({required this.health, required this.periodLabel});
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.count(
+      crossAxisCount: 2,
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      childAspectRatio: 2.45,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      children: [
+        _HealthMetricTile(label: '待处理', value: '${health.pending}'),
+        _HealthMetricTile(
+          label: '已逾期',
+          value: '${health.overdue}',
+          tone: _HealthMetricTone.danger,
+        ),
+        _HealthMetricTile(label: '本周到期', value: '${health.weekDue}'),
+        _HealthMetricTile(
+          label: '$periodLabel 完成',
+          value: '${health.completedInPeriod}',
+          tone: _HealthMetricTone.success,
+        ),
+      ],
+    );
+  }
+}
+
+enum _HealthMetricTone { neutral, danger, success }
+
+class _HealthMetricTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final _HealthMetricTone tone;
+
+  const _HealthMetricTile({
+    required this.label,
+    required this.value,
+    this.tone = _HealthMetricTone.neutral,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    final valueColor = switch (tone) {
+      _HealthMetricTone.danger => AppTheme.priorityP0,
+      _HealthMetricTone.success => t.success,
+      _HealthMetricTone.neutral => t.fg,
+    };
+    final bg = switch (tone) {
+      _HealthMetricTone.danger => AppTheme.priorityP0Bg,
+      _HealthMetricTone.success => t.successBg,
+      _HealthMetricTone.neutral => t.bgMuted,
+    };
+    final border = switch (tone) {
+      _HealthMetricTone.danger => AppTheme.priorityP0Border,
+      _HealthMetricTone.success => AppTheme.successBorder,
+      _HealthMetricTone.neutral => t.borderStrong,
+    };
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        border: Border.all(color: border, width: 0.7),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: t.mono(
+              size: 9,
+              weight: FontWeight.w700,
+              color: t.fgMuted,
+              letterSpacing: 0.8,
+            ),
+          ),
+          Text(
+            value,
+            style: t.mono(
+              size: 22,
+              weight: FontWeight.w700,
+              color: valueColor,
+              letterSpacing: -0.5,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -323,10 +430,10 @@ class _CompletionTrendChart extends StatelessWidget {
   }
 }
 
-class _PriorityDonutChart extends StatelessWidget {
+class _PriorityBars extends StatelessWidget {
   final List<PrioritySlice> slices;
 
-  const _PriorityDonutChart({required this.slices});
+  const _PriorityBars({required this.slices});
 
   @override
   Widget build(BuildContext context) {
@@ -335,58 +442,23 @@ class _PriorityDonutChart extends StatelessWidget {
       return _emptyChart(context, '暂无带优先级的待办');
     }
 
-    final total = slices.fold<int>(0, (sum, s) => sum + s.count);
-
-    return SizedBox(
-      height: 180,
-      child: Row(
-        children: [
-          Expanded(
-            flex: 3,
-            child: PieChart(
-              PieChartData(
-                sectionsSpace: 2,
-                centerSpaceRadius: 36,
-                sections: [
-                  for (final slice in slices)
-                    PieChartSectionData(
-                      value: slice.count.toDouble(),
-                      color: t.priorityColor(slice.priority.value),
-                      radius: 28,
-                      title: '',
-                    ),
-                ],
-              ),
-            ),
+    return _DistributionBars(
+      rows: [
+        for (final slice in slices)
+          _DistributionRowData(
+            label: slice.label,
+            count: slice.count,
+            color: t.priorityColor(slice.priority.value),
           ),
-          Expanded(
-            flex: 2,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final slice in slices)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _LegendRow(
-                      color: t.priorityColor(slice.priority.value),
-                      label: slice.label,
-                      value: '${((slice.count / total) * 100).round()}%',
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
 
-class _CategoryPieChart extends StatelessWidget {
+class _CategoryBars extends StatelessWidget {
   final List<CategorySlice> slices;
 
-  const _CategoryPieChart({required this.slices});
+  const _CategoryBars({required this.slices});
 
   Color _colorFor(BuildContext context, String id) {
     final t = context.tokens;
@@ -406,50 +478,104 @@ class _CategoryPieChart extends StatelessWidget {
       return _emptyChart(context, '暂无待办任务');
     }
 
-    final total = slices.fold<int>(0, (sum, s) => sum + s.count);
+    return _DistributionBars(
+      rows: [
+        for (final slice in slices)
+          _DistributionRowData(
+            label: slice.label,
+            count: slice.count,
+            color: _colorFor(context, slice.id),
+          ),
+      ],
+    );
+  }
+}
 
-    return SizedBox(
-      height: 180,
-      child: Row(
-        children: [
-          Expanded(
-            flex: 3,
-            child: PieChart(
-              PieChartData(
-                sectionsSpace: 2,
-                centerSpaceRadius: 0,
-                sections: [
-                  for (final slice in slices)
-                    PieChartSectionData(
-                      value: slice.count.toDouble(),
-                      color: _colorFor(context, slice.id),
-                      radius: 56,
-                      title: '',
-                    ),
-                ],
+class _DistributionRowData {
+  final String label;
+  final int count;
+  final Color color;
+
+  const _DistributionRowData({
+    required this.label,
+    required this.count,
+    required this.color,
+  });
+}
+
+class _DistributionBars extends StatelessWidget {
+  final List<_DistributionRowData> rows;
+
+  const _DistributionBars({required this.rows});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    final maxCount = rows.fold<int>(
+      0,
+      (current, row) => row.count > current ? row.count : current,
+    );
+
+    return Column(
+      children: [
+        for (var i = 0; i < rows.length; i++) ...[
+          _DistributionBarRow(row: rows[i], maxCount: maxCount),
+          if (i != rows.length - 1)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Divider(height: 1, color: t.borderSubtle),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+class _DistributionBarRow extends StatelessWidget {
+  final _DistributionRowData row;
+  final int maxCount;
+
+  const _DistributionBarRow({required this.row, required this.maxCount});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    final ratio = maxCount == 0 ? 0.0 : row.count / maxCount;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                row.label,
+                style: t.sansSemibold(size: 12, color: t.fgSecondary),
+              ),
+            ),
+            Text(
+              '${row.count}',
+              style: t.mono(size: 12, weight: FontWeight.w700, color: t.fg),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+          child: Container(
+            height: 8,
+            color: t.bgMuted,
+            alignment: Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: ratio.clamp(0.0, 1.0),
+              alignment: Alignment.centerLeft,
+              child: DecoratedBox(
+                decoration: BoxDecoration(color: row.color),
+                child: const SizedBox.expand(),
               ),
             ),
           ),
-          Expanded(
-            flex: 2,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final slice in slices)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _LegendRow(
-                      color: _colorFor(context, slice.id),
-                      label: slice.label,
-                      value: '${((slice.count / total) * 100).round()}%',
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -496,37 +622,6 @@ class _CompletionRateBar extends StatelessWidget {
             color: t.fg,
           ),
         ),
-      ],
-    );
-  }
-}
-
-class _LegendRow extends StatelessWidget {
-  final Color color;
-  final String label;
-  final String value;
-
-  const _LegendRow({
-    required this.color,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    return Row(
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(label, style: t.mono(size: 11, color: t.fgSecondary)),
-        ),
-        Text(value, style: t.mono(size: 11, weight: FontWeight.w700)),
       ],
     );
   }

@@ -49,13 +49,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('统计'), findsOneWidget);
+    expect(find.text('待处理'), findsOneWidget);
+    expect(find.text('已逾期'), findsOneWidget);
     expect(find.text('暂无完成记录'), findsOneWidget);
+    expect(find.text('分类结构'), findsOneWidget);
+    expect(find.text('优先级压力'), findsOneWidget);
     expect(find.text('7 天'), findsOneWidget);
     expect(find.text('30 天'), findsOneWidget);
 
     await tester.tap(find.text('30 天'));
     await tester.pumpAndSettle();
 
-    expect(find.text('近 30 天'), findsNWidgets(2));
+    expect(find.text('近 30 天'), findsAtLeastNWidgets(2));
+    expect(find.text('近 30 天 创建任务完成率'), findsOneWidget);
   });
 }

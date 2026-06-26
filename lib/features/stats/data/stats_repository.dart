@@ -1,4 +1,5 @@
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/date_utils.dart';
 import '../../../database/database.dart' as db;
 import '../../tasks/domain/task.dart';
 import '../domain/stats_models.dart';
@@ -19,15 +20,32 @@ class StatsRepository {
   /// 内存聚合：优先级 / 分类 / 完成率。
   StatsSnapshot computeSnapshot(List<Task> tasks, int days) {
     final active = tasks.where((t) => !t.isCompleted).toList();
-    final windowStart = _dateOnly(
-      DateTime.now(),
-    ).subtract(Duration(days: days - 1));
-    final windowEnd = _dateOnly(DateTime.now()).add(const Duration(days: 1));
+    final now = DateTime.now();
+    final windowStart = _dateOnly(now).subtract(Duration(days: days - 1));
+    final windowEnd = _dateOnly(now).add(const Duration(days: 1));
 
     final windowTasks = tasks.where((t) {
       final created = _dateOnly(t.createdAt);
       return !created.isBefore(windowStart) && created.isBefore(windowEnd);
     }).toList();
+
+    var overdue = 0;
+    var weekDue = 0;
+    for (final task in active) {
+      final due = task.dueDate;
+      if (due == null) continue;
+      if (isTaskOverdue(
+        dueDate: due,
+        isAllDay: task.isAllDay,
+        isCompleted: task.isCompleted,
+        now: now,
+      )) {
+        overdue++;
+      }
+      if (isDueInWeekRange(due, now)) {
+        weekDue++;
+      }
+    }
 
     final priorityCounts = <TaskPriority, int>{
       TaskPriority.p0: 0,
@@ -73,8 +91,21 @@ class StatsRepository {
     ];
 
     final completedInWindow = windowTasks.where((t) => t.isCompleted).length;
+    final completedInPeriod = tasks.where((t) {
+      final completedAt = t.completedAt;
+      if (completedAt == null) return false;
+      final completedDay = _dateOnly(completedAt);
+      return !completedDay.isBefore(windowStart) &&
+          completedDay.isBefore(windowEnd);
+    }).length;
 
     return StatsSnapshot(
+      health: StatsHealth(
+        pending: active.length,
+        overdue: overdue,
+        weekDue: weekDue,
+        completedInPeriod: completedInPeriod,
+      ),
       prioritySlices: prioritySlices,
       categorySlices: categorySlices,
       completionRate: CompletionRate(

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -18,6 +19,7 @@ class TempoBackground extends ConsumerStatefulWidget {
 
 class _TempoBackgroundState extends ConsumerState<TempoBackground> {
   final _imageCache = TempoBackgroundImageCache();
+  ImageProvider? _lastPrecachedProvider;
 
   ImageProvider _resolveImageProvider(String imagePath) {
     final size = MediaQuery.sizeOf(context);
@@ -30,10 +32,13 @@ class _TempoBackgroundState extends ConsumerState<TempoBackground> {
       cacheHeight: cacheHeight,
     );
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      precacheImage(provider, context);
-    });
+    if (!identical(_lastPrecachedProvider, provider)) {
+      _lastPrecachedProvider = provider;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(precacheImage(provider, context).catchError((_) {}));
+      });
+    }
 
     return provider;
   }
@@ -46,6 +51,7 @@ class _TempoBackgroundState extends ConsumerState<TempoBackground> {
 
     if (!customization.backgroundImageValid || imagePath == null) {
       _imageCache.clear();
+      _lastPrecachedProvider = null;
       return widget.child;
     }
 
@@ -75,6 +81,7 @@ class _TempoBackgroundState extends ConsumerState<TempoBackground> {
                     ),
                   ),
                 ),
+                buildTempoBackgroundReadabilityOverlay(tokens),
               ],
             ),
           ),
@@ -83,6 +90,27 @@ class _TempoBackgroundState extends ConsumerState<TempoBackground> {
       ],
     );
   }
+}
+
+@visibleForTesting
+Widget buildTempoBackgroundReadabilityOverlay(TempoTokens tokens) {
+  return Positioned.fill(
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            tokens.bg.withValues(alpha: 0.30),
+            tokens.bg.withValues(alpha: 0.06),
+            tokens.bg.withValues(alpha: 0.08),
+            tokens.bg.withValues(alpha: 0.34),
+          ],
+          stops: const [0, 0.28, 0.66, 1],
+        ),
+      ),
+    ),
+  );
 }
 
 class TempoBackgroundImageCache {

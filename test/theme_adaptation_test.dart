@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tempo/core/constants/app_constants.dart';
 import 'package:tempo/core/theme/app_theme.dart';
 import 'package:tempo/core/theme/tempo_theme_extension.dart';
+import 'package:tempo/core/theme/theme_manager.dart';
 import 'package:tempo/core/theme/theme_presets.dart';
 import 'package:tempo/core/widgets/tempo/tempo.dart';
 import 'package:tempo/features/calendar/presentation/calendar_page.dart';
@@ -20,7 +24,7 @@ Widget wrapWithTheme(Widget child, TempoTokens tokens) {
 }
 
 void main() {
-  setUpAll(() {
+  setUp(() {
     SharedPreferences.setMockInitialValues({});
   });
 
@@ -107,9 +111,41 @@ void main() {
     'toThemeData uses transparent scaffold when custom background overlay active',
     () {
       final tokens = TempoThemePresets.minimalWhite.copyWith(
-        backgroundOverlayOpacity: 0.28,
+        backgroundOverlayOpacity: 0.18,
       );
       expect(tokens.toThemeData().scaffoldBackgroundColor, Colors.transparent);
+    },
+  );
+
+  test(
+    'active tokens increase card readability with custom background',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'tempo_theme_bg_test_',
+      );
+      addTearDown(() => tempDir.delete(recursive: true));
+
+      final bgFile = File('${tempDir.path}/background.jpg');
+      await bgFile.writeAsBytes([0]);
+      SharedPreferences.setMockInitialValues({
+        AppConstants.prefBackgroundImagePath: bgFile.path,
+      });
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      for (var i = 0; i < 5; i++) {
+        if (container.read(themeManagerProvider).backgroundImageValid) break;
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      expect(container.read(themeManagerProvider).backgroundImageValid, isTrue);
+      final tokens = container.read(activeTempoTokensProvider);
+      expect(tokens.backgroundOverlayOpacity, 0.18);
+      expect(
+        tokens.taskCardBackground,
+        TempoThemePresets.minimalWhite.bg.withValues(alpha: 0.78),
+      );
     },
   );
 }

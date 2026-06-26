@@ -36,7 +36,7 @@ void main() {
         ),
       ];
 
-      final counts = TaskCounts.from(tasks);
+      final counts = TaskCounts.from(tasks, now: now);
       expect(counts.total, 3);
       expect(counts.pending, 2);
       expect(counts.overdue, 1);

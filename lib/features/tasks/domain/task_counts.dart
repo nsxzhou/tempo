@@ -29,7 +29,7 @@ class TaskCounts {
     life: 0,
   );
 
-  factory TaskCounts.from(List<Task> tasks) {
+  factory TaskCounts.from(List<Task> tasks, {DateTime? now}) {
     if (tasks.isEmpty) return TaskCounts.empty;
 
     var pending = 0;
@@ -37,7 +37,7 @@ class TaskCounts {
     var weekCount = 0;
     var work = 0;
     var life = 0;
-    final now = DateTime.now();
+    final current = now ?? DateTime.now();
 
     for (final task in tasks) {
       if (!task.isCompleted) pending++;
@@ -46,11 +46,11 @@ class TaskCounts {
             dueDate: task.dueDate!,
             isAllDay: task.isAllDay,
             isCompleted: task.isCompleted,
-            now: now,
+            now: current,
           )) {
         overdue++;
       }
-      if (task.dueDate != null && isDueInWeekRange(task.dueDate!, now)) {
+      if (task.dueDate != null && isDueInWeekRange(task.dueDate!, current)) {
         weekCount++;
       }
       if (task.tag == AppConstants.tagWork) work++;

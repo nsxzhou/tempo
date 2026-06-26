@@ -254,7 +254,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
               icon: LucideIcons.folder,
               label: '归属',
               value: Text(
-                _listName ?? _resolveListName(task.listId, null),
+                _listName ?? '加载中…',
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,

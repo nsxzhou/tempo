@@ -6,11 +6,13 @@
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_providers.dart';
+import 'core/constants/app_constants.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/theme_manager.dart';
 import 'core/widgets/tempo/src/tempo_background.dart';
@@ -32,7 +34,13 @@ class _TempoAppState extends ConsumerState<TempoApp> {
     final notificationService = ref.read(notificationServiceProvider);
     final router = ref.read(routerProvider);
     notificationService.onNotificationTap = (taskId) {
-      router.go('/tasks/$taskId');
+      router.go(AppConstants.routeTasks);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(taskDetailOverlayProvider.notifier).state = true;
+        router.push('/tasks/$taskId').whenComplete(() {
+          ref.read(taskDetailOverlayProvider.notifier).state = false;
+        });
+      });
     };
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -71,6 +79,7 @@ class _TempoAppState extends ConsumerState<TempoApp> {
         child: MaterialApp.router(
           title: 'Tempo',
           debugShowCheckedModeBanner: false,
+          showPerformanceOverlay: kDebugMode,
           theme: tokens.toThemeData(),
           routerConfig: router,
           builder: (context, child) {

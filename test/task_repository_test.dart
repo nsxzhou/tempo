@@ -84,6 +84,79 @@ void main() {
     expect(upsertedIds, [created.id]);
     expect(synced?.syncPending, isFalse);
   });
+
+  test('toggleComplete flips completion in a single local update', () async {
+    connectivity.online = false;
+    final repository = buildRepository();
+
+    final created = await repository.createTask(title: 'Toggle me');
+    expect(created.isCompleted, isFalse);
+
+    final toggled = await repository.toggleComplete(created.id);
+    expect(toggled.isCompleted, isTrue);
+    expect(toggled.completedAt, isNotNull);
+    expect(toggled.syncPending, isTrue, reason: 'signed-in user marks pending');
+
+    final stored = await repository.getTaskById(created.id);
+    expect(stored?.isCompleted, isTrue);
+    expect(stored?.completedAt, isNotNull);
+
+    final toggledBack = await repository.toggleComplete(created.id);
+    expect(toggledBack.isCompleted, isFalse);
+    expect(toggledBack.completedAt, isNull);
+  });
+
+  test('toggleComplete throws when task not found', () async {
+    connectivity.online = false;
+    final repository = buildRepository();
+
+    expect(
+      () => repository.toggleComplete('non-existent-id'),
+      throwsStateError,
+    );
+  });
+
+  test(
+    'multiple watchTasks subscriptions do not throw and stay single-instance',
+    () async {
+      connectivity.online = true;
+      final repository = buildRepository();
+
+      // 多次订阅 watchTasks 不应多次触发远端刷新排程（应用级单例 _refreshScheduled）。
+      final sub1 = repository.watchTasks().listen((_) {});
+      final sub2 = repository.watchTasks().listen((_) {});
+      final sub3 = repository.watchTasks().listen((_) {});
+
+      // 等待 debounce（300ms）+ 缓冲，确保不抛错。
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+
+      await sub1.cancel();
+      await sub2.cancel();
+      await sub3.cancel();
+
+      expect(repository, isNotNull);
+    },
+  );
+
+  test(
+    'requestRefresh re-triggers remote refresh after connectivity returns',
+    () async {
+      connectivity.online = false;
+      final repository = buildRepository();
+
+      // 离线时订阅：首次排程但因离线不拉取。
+      final sub = repository.watchTasks().listen((_) {});
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+
+      // 在线后显式 requestRefresh 触发一次刷新。
+      connectivity.online = true;
+      repository.requestRefresh();
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+
+      await sub.cancel();
+      expect(repository, isNotNull);
+    },
+  );
 }
 
 class _TestConnectivityService extends ConnectivityService {

@@ -50,6 +50,9 @@ abstract class TaskRepository {
 
   /// 推送离线待同步记录到云端（SyncService 调用）。
   Future<void> pushPending();
+
+  /// 请求一次后台远端刷新（连接恢复 / 用户变更 / 下拉刷新触发）。
+  void requestRefresh();
 }
 
 /// 网络连接服务封装。
@@ -203,13 +206,32 @@ class SyncTaskRepository implements TaskRepository {
     }
 
     final now = DateTime.now();
-    final toggled = current.copyWith(
-      isCompleted: !current.isCompleted,
-      completedAt: !current.isCompleted ? now : null,
-      updatedAt: now,
+    final newCompleted = !current.isCompleted;
+    final shouldSync = _userId != null;
+
+    // 单条 update 翻转，仅写变化列，避免 updateTask 的全列 insertOnConflictUpdate。
+    await (_localDb.update(
+      _localDb.tasks,
+    )..where((t) => t.id.equals(id))).write(
+      db.TasksCompanion(
+        isCompleted: Value(newCompleted),
+        completedAt: Value(newCompleted ? now : null),
+        updatedAt: Value(now),
+        syncPending: Value(shouldSync),
+      ),
     );
 
-    return updateTask(toggled);
+    final toggled = current.copyWith(
+      isCompleted: newCompleted,
+      completedAt: newCompleted ? now : null,
+      updatedAt: now,
+      syncPending: shouldSync,
+    );
+
+    if (shouldSync) {
+      unawaited(_syncTaskToCloud(toggled));
+    }
+    return toggled;
   }
 
   @override
@@ -247,7 +269,8 @@ class SyncTaskRepository implements TaskRepository {
 
   @override
   Stream<List<domain.Task>> watchTasks() {
-    // 立即返回本地流（毫秒级）
+    // 立即返回本地流（毫秒级）。远端刷新由应用级单例驱动（首次订阅 +
+    // 连接恢复 + 用户变更），不再每次订阅触发。
     final localStream =
         (_localDb.select(_localDb.tasks)..orderBy([
               (t) => OrderingTerm(expression: t.isCompleted),
@@ -258,9 +281,25 @@ class SyncTaskRepository implements TaskRepository {
             .watch()
             .map((rows) => rows.map(_mapTask).toList());
 
-    _scheduleRefreshFromRemote();
+    _ensureRefreshScheduled();
 
     return localStream;
+  }
+
+  bool _refreshScheduled = false;
+
+  /// 应用级单例刷新：仅首次订阅触发一次 debounce 排程；后续由
+  /// [requestRefresh]（连接恢复 / 用户变更）显式驱动。
+  void _ensureRefreshScheduled() {
+    if (_refreshScheduled) return;
+    _refreshScheduled = true;
+    _scheduleRefreshFromRemote();
+  }
+
+  /// 外部触发一次远端刷新（连接恢复、用户变更、下拉刷新）。
+  @override
+  void requestRefresh() {
+    _scheduleRefreshFromRemote();
   }
 
   void _scheduleRefreshFromRemote() {

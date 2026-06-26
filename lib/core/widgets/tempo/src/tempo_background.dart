@@ -54,19 +54,29 @@ class _TempoBackgroundState extends ConsumerState<TempoBackground> {
     return Stack(
       fit: StackFit.expand,
       children: [
+        // 背景层（图片 + 遮罩）整体隔离为独立合成层，滚动 child 不触发背景 raster。
         Positioned.fill(
           child: RepaintBoundary(
-            child: Image(
-              image: imageProvider,
-              fit: BoxFit.cover,
-              gaplessPlayback: true,
-              filterQuality: FilterQuality.low,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Positioned.fill(
+                  child: Image(
+                    image: imageProvider,
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    filterQuality: FilterQuality.low,
+                  ),
+                ),
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: tokens.bg.withValues(
+                      alpha: tokens.backgroundOverlayOpacity,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ),
-        Positioned.fill(
-          child: ColoredBox(
-            color: tokens.bg.withValues(alpha: tokens.backgroundOverlayOpacity),
           ),
         ),
         widget.child,

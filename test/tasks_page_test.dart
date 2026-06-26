@@ -1,17 +1,24 @@
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tempo/core/constants/app_constants.dart';
+import 'package:tempo/core/providers/database_provider.dart';
+import 'package:tempo/core/router/shell_scaffold.dart';
 import 'package:tempo/core/theme/app_theme.dart';
 import 'package:tempo/core/theme/theme_presets.dart';
+import 'package:tempo/core/widgets/tempo/tempo.dart';
+import 'package:tempo/database/database.dart' hide Task;
 import 'package:tempo/app_providers.dart';
 import 'package:tempo/core/router/app_router.dart';
 import 'package:tempo/features/tasks/data/notification_service.dart';
 import 'package:tempo/features/tasks/data/voice_task_parse_result.dart';
 import 'package:tempo/features/tasks/domain/task.dart';
+import 'package:tempo/features/tasks/presentation/task_detail_page.dart';
 import 'package:tempo/features/tasks/presentation/tasks_page.dart';
 
 import 'test_fakes.dart';
@@ -222,6 +229,85 @@ void main() {
 
     expect(find.text('去吃KFC'), findsOneWidget);
     await _settleAnimations(tester);
+    await repository.dispose();
+  });
+
+  testWidgets('task detail route instantly covers task list', (tester) async {
+    final repository = FakeTaskRepository();
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+
+    await repository.createTask(title: '列表不应透出');
+    await repository.createTask(title: '详情任务');
+
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final router = GoRouter(
+      initialLocation: AppConstants.routeTasks,
+      routes: [
+        ShellRoute(
+          builder: (context, state, child) => ShellScaffold(child: child),
+          routes: [
+            GoRoute(
+              path: AppConstants.routeTasks,
+              pageBuilder: (context, state) =>
+                  const NoTransitionPage(child: TasksPage()),
+            ),
+          ],
+        ),
+        GoRoute(
+          path: AppConstants.routeTaskDetail,
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return CustomTransitionPage<void>(
+              transitionDuration: Duration.zero,
+              reverseTransitionDuration: Duration.zero,
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) => child,
+              child: TaskDetailPage(taskId: id),
+            );
+          },
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          taskRepositoryProvider.overrideWithValue(repository),
+          databaseProvider.overrideWithValue(db),
+          streamingVoiceSessionProvider.overrideWithValue(
+            FakeStreamingVoiceSession(),
+          ),
+          textParseServiceProvider.overrideWithValue(FakeTextParseService()),
+          notificationServiceProvider.overrideWithValue(
+            _NoopNotificationService(),
+          ),
+        ],
+        child: MaterialApp.router(
+          theme: TempoThemePresets.minimalWhite.toThemeData(),
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(TempoTabBar), findsOneWidget);
+    expect(find.text('详情任务'), findsOneWidget);
+    expect(find.text('列表不应透出'), findsOneWidget);
+
+    await tester.tap(find.text('详情任务'));
+    await tester.pump();
+
+    expect(find.text('列表不应透出'), findsNothing);
+    expect(find.byType(TempoTabBar), findsNothing);
+    expect(find.text('无附加任务描述。点击可输入备注…'), findsOneWidget);
+
     await repository.dispose();
   });
 }

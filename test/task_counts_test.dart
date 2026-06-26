@@ -18,6 +18,15 @@ void main() {
           updatedAt: now,
         ),
         Task(
+          id: '4',
+          listId: 'inbox',
+          title: 'Pending this week',
+          dueDate: now.add(const Duration(days: 3)),
+          tag: AppConstants.tagLife,
+          createdAt: now,
+          updatedAt: now,
+        ),
+        Task(
           id: '2',
           listId: 'inbox',
           title: 'Overdue',
@@ -37,11 +46,17 @@ void main() {
       ];
 
       final counts = TaskCounts.from(tasks, now: now);
-      expect(counts.total, 3);
-      expect(counts.pending, 2);
+      expect(counts.total, 4);
+      expect(counts.pending, 3);
+      expect(counts.todayDue, 1);
       expect(counts.overdue, 1);
+      expect(counts.weekDue, 2);
+      expect(counts.completed, 1);
       expect(counts.work, 1);
-      expect(counts.life, 1);
+      expect(counts.life, 2);
+      expect(counts.untagged, 1);
+      expect(counts.activeCategories.all, 3);
+      expect(counts.activeCategories.untagged, 1);
     });
 
     test('empty list returns zero counts', () {

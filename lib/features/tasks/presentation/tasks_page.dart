@@ -1,6 +1,6 @@
 // ============================================================
 // TasksPage — 任务列表页(Stripe 派 1:1 还原 prototype TasksView.tsx)
-// 顶部 StatusBar + H1 + Bento 4 卡过滤 + 工作/生活 segmented + 列表
+// 顶部 StatusBar + H1 + 紧凑范围过滤 + 列表
 // + 浮动 Mic/Plus 双按钮
 // 业务逻辑完全保留:语音录音/解析、草稿卡、撤回 Snackbar、Repository
 // ============================================================
@@ -14,7 +14,6 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app_providers.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/theme/tempo_theme_extension.dart';
@@ -25,9 +24,7 @@ import 'widgets/quick_create_sheet.dart';
 import 'widgets/task_tile.dart';
 import 'widgets/voice_overlay.dart';
 
-enum _TimeFilter { today, week, overdue, all }
-
-enum _CategoryFilter { all, work, life }
+enum _TaskScope { pending, overdue, week, all }
 
 class TasksPage extends ConsumerStatefulWidget {
   const TasksPage({super.key});
@@ -42,8 +39,7 @@ class _TasksPageState extends ConsumerState<TasksPage>
   bool _showQuickCreate = false;
   Task? _lastDeletedTask;
 
-  _TimeFilter _timeFilter = _TimeFilter.today;
-  _CategoryFilter _categoryFilter = _CategoryFilter.all;
+  _TaskScope _scope = _TaskScope.pending;
   bool _showSearch = false;
   String _debouncedSearchQuery = '';
   Timer? _searchDebounce;
@@ -86,22 +82,15 @@ class _TasksPageState extends ConsumerState<TasksPage>
                       SliverToBoxAdapter(child: _buildHeader()),
                       SliverToBoxAdapter(child: _buildSearchBar()),
                       SliverToBoxAdapter(
-                        child: _BentoStatsSection(
-                          timeFilter: _timeFilter,
-                          onTimeFilterChanged: (filter) =>
-                              setState(() => _timeFilter = filter),
-                        ),
-                      ),
-                      SliverToBoxAdapter(
-                        child: _CategoryFilterSection(
-                          categoryFilter: _categoryFilter,
-                          onCategoryFilterChanged: (filter) =>
-                              setState(() => _categoryFilter = filter),
+                        child: _TaskScopeSection(
+                          scope: _scope,
+                          searchQuery: _debouncedSearchQuery,
+                          onScopeChanged: (scope) =>
+                              setState(() => _scope = scope),
                         ),
                       ),
                       _TaskListSection(
-                        timeFilter: _timeFilter,
-                        categoryFilter: _categoryFilter,
+                        scope: _scope,
                         searchQuery: _debouncedSearchQuery,
                         onTap: _navigateToDetail,
                         onToggle: _toggleTask,
@@ -338,68 +327,62 @@ class _TaskListGroups {
   const _TaskListGroups({required this.active, required this.completed});
 }
 
-/// filter family 的 key：time / category / search 三元组。
-/// enum + String 都有值语义，record 自动获得 == / hashCode。
-typedef _FilterKey = ({
-  _TimeFilter time,
-  _CategoryFilter category,
-  String search,
-});
+class _TaskScopeCounts {
+  final int pending;
+  final int overdue;
+  final int week;
+  final int all;
 
-/// 派生 provider：把 _filterTaskGroups 从 build 内重算提到 provider 层。
+  const _TaskScopeCounts({
+    required this.pending,
+    required this.overdue,
+    required this.week,
+    required this.all,
+  });
+}
+
+class _TaskFilterSnapshot {
+  final _TaskScopeCounts scopeCounts;
+  final _TaskListGroups groups;
+
+  const _TaskFilterSnapshot({required this.scopeCounts, required this.groups});
+}
+
+/// filter family 的 key：scope / search 二元组。
+/// enum + String 都有值语义，record 自动获得 == / hashCode。
+typedef _FilterKey = ({_TaskScope scope, String search});
+
+/// 派生 provider：把过滤和计数从 build 内重算提到 provider 层。
 /// 仅在 taskListProvider 数据或 filter 输入变化时重算，避免无关 rebuild 重算。
-final _filteredTaskGroupsProvider =
-    Provider.family<_TaskListGroups, _FilterKey>((ref, key) {
+final _taskFilterSnapshotProvider =
+    Provider.family<_TaskFilterSnapshot, _FilterKey>((ref, key) {
       final allTasks =
           ref.watch(taskListProvider).valueOrNull ?? const <Task>[];
-      return _filterTaskGroups(
+      return _buildTaskFilterSnapshot(
         allTasks: allTasks,
-        timeFilter: key.time,
-        categoryFilter: key.category,
+        scope: key.scope,
         searchQuery: key.search,
       );
     });
 
-_TaskListGroups _filterTaskGroups({
+_TaskFilterSnapshot _buildTaskFilterSnapshot({
   required List<Task> allTasks,
-  required _TimeFilter timeFilter,
-  required _CategoryFilter categoryFilter,
+  required _TaskScope scope,
   required String searchQuery,
 }) {
+  final searched = <Task>[];
   final active = <Task>[];
   final completed = <Task>[];
   final now = DateTime.now();
   final q = searchQuery.trim().toLowerCase();
 
   for (final task in allTasks) {
-    if (q.isNotEmpty &&
-        !task.title.toLowerCase().contains(q) &&
-        !(task.description?.toLowerCase().contains(q) ?? false)) {
+    if (!_matchesSearch(task, q)) {
       continue;
     }
+    searched.add(task);
 
-    final due = task.dueDate;
-    final matchesTime = switch (timeFilter) {
-      _TimeFilter.today => !task.isCompleted,
-      _TimeFilter.week => due != null && isDueInWeekRange(due, now),
-      _TimeFilter.overdue =>
-        due != null &&
-            isTaskOverdue(
-              dueDate: due,
-              isAllDay: task.isAllDay,
-              isCompleted: task.isCompleted,
-              now: now,
-            ),
-      _TimeFilter.all => true,
-    };
-    if (!matchesTime) continue;
-
-    final matchesCategory = switch (categoryFilter) {
-      _CategoryFilter.all => true,
-      _CategoryFilter.work => task.tag == AppConstants.tagWork,
-      _CategoryFilter.life => task.tag == AppConstants.tagLife,
-    };
-    if (!matchesCategory) continue;
+    if (!_matchesScope(task, scope, now)) continue;
 
     if (task.isCompleted) {
       completed.add(task);
@@ -408,69 +391,124 @@ _TaskListGroups _filterTaskGroups({
     }
   }
 
-  return _TaskListGroups(active: active, completed: completed);
+  return _TaskFilterSnapshot(
+    scopeCounts: _countScopes(searched, now),
+    groups: _TaskListGroups(active: active, completed: completed),
+  );
 }
 
-class _BentoStatsSection extends ConsumerWidget {
-  final _TimeFilter timeFilter;
-  final ValueChanged<_TimeFilter> onTimeFilterChanged;
+bool _matchesSearch(Task task, String q) {
+  if (q.isEmpty) return true;
+  return task.title.toLowerCase().contains(q) ||
+      (task.description?.toLowerCase().contains(q) ?? false);
+}
 
-  const _BentoStatsSection({
-    required this.timeFilter,
-    required this.onTimeFilterChanged,
+bool _matchesScope(Task task, _TaskScope scope, DateTime now) {
+  final due = task.dueDate;
+  return switch (scope) {
+    _TaskScope.pending => !task.isCompleted,
+    _TaskScope.overdue =>
+      due != null &&
+          isTaskOverdue(
+            dueDate: due,
+            isAllDay: task.isAllDay,
+            isCompleted: task.isCompleted,
+            now: now,
+          ),
+    _TaskScope.week =>
+      !task.isCompleted && due != null && isDueInWeekRange(due, now),
+    _TaskScope.all => true,
+  };
+}
+
+_TaskScopeCounts _countScopes(List<Task> tasks, DateTime now) {
+  var pending = 0;
+  var overdue = 0;
+  var week = 0;
+  for (final task in tasks) {
+    if (!task.isCompleted) pending++;
+    final due = task.dueDate;
+    if (due != null &&
+        isTaskOverdue(
+          dueDate: due,
+          isAllDay: task.isAllDay,
+          isCompleted: task.isCompleted,
+          now: now,
+        )) {
+      overdue++;
+    }
+    if (!task.isCompleted && due != null && isDueInWeekRange(due, now)) {
+      week++;
+    }
+  }
+  return _TaskScopeCounts(
+    pending: pending,
+    overdue: overdue,
+    week: week,
+    all: tasks.length,
+  );
+}
+
+class _TaskScopeSection extends ConsumerWidget {
+  final _TaskScope scope;
+  final String searchQuery;
+  final ValueChanged<_TaskScope> onScopeChanged;
+
+  const _TaskScopeSection({
+    required this.scope,
+    required this.searchQuery,
+    required this.onScopeChanged,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final counts = ref.watch(taskCountsProvider);
-
+    final snapshot = ref.watch(
+      _taskFilterSnapshotProvider((scope: scope, search: searchQuery)),
+    );
+    final counts = snapshot.scopeCounts;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
       child: TempoGlassSurface(
-        padding: const EdgeInsets.all(12),
-        child: GridView.count(
-          crossAxisCount: 2,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 1.7,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(8),
+        child: Row(
           children: [
-            _BentoCard(
-              label: '今日待办',
-              value: '${counts.pending}',
-              unit: '项未完成',
-              selected: timeFilter == _TimeFilter.today,
-              dotColor: AppTheme.priorityP2,
-              onTap: () => onTimeFilterChanged(_TimeFilter.today),
+            Expanded(
+              child: _FilterPill(
+                label: '待处理',
+                count: counts.pending,
+                selected: scope == _TaskScope.pending,
+                onTap: () => onScopeChanged(_TaskScope.pending),
+              ),
             ),
-            _BentoCard(
-              label: '已过期',
-              value: '${counts.overdue}',
-              unit: '项超期',
-              selected: timeFilter == _TimeFilter.overdue,
-              dotColor: counts.overdue > 0
-                  ? AppTheme.priorityP0
-                  : context.tokens.fgMuted,
-              dotPulse: counts.overdue > 0,
-              errorTone: counts.overdue > 0,
-              onTap: () => onTimeFilterChanged(_TimeFilter.overdue),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _FilterPill(
+                label: '逾期',
+                count: counts.overdue,
+                selected: scope == _TaskScope.overdue,
+                tone: counts.overdue > 0
+                    ? _FilterPillTone.danger
+                    : _FilterPillTone.neutral,
+                onTap: () => onScopeChanged(_TaskScope.overdue),
+              ),
             ),
-            _BentoCard(
-              label: '本周安排',
-              value: '${counts.weekCount}',
-              unit: '项总代办',
-              selected: timeFilter == _TimeFilter.week,
-              dotColor: context.tokens.fgFaint,
-              onTap: () => onTimeFilterChanged(_TimeFilter.week),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _FilterPill(
+                label: '本周',
+                count: counts.week,
+                selected: scope == _TaskScope.week,
+                onTap: () => onScopeChanged(_TaskScope.week),
+              ),
             ),
-            _BentoCard(
-              label: '全部任务',
-              value: '${counts.total}',
-              unit: '项总代办',
-              selected: timeFilter == _TimeFilter.all,
-              dotColor: AppTheme.success,
-              onTap: () => onTimeFilterChanged(_TimeFilter.all),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _FilterPill(
+                label: '全部',
+                count: counts.all,
+                selected: scope == _TaskScope.all,
+                onTap: () => onScopeChanged(_TaskScope.all),
+              ),
             ),
           ],
         ),
@@ -479,92 +517,88 @@ class _BentoStatsSection extends ConsumerWidget {
   }
 }
 
-class _CategoryFilterSection extends ConsumerWidget {
-  final _CategoryFilter categoryFilter;
-  final ValueChanged<_CategoryFilter> onCategoryFilterChanged;
+enum _FilterPillTone { neutral, danger }
 
-  const _CategoryFilterSection({
-    required this.categoryFilter,
-    required this.onCategoryFilterChanged,
+class _FilterPill extends StatelessWidget {
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+  final _FilterPillTone tone;
+
+  const _FilterPill({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+    this.tone = _FilterPillTone.neutral,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final t = context.tokens;
-    final counts = ref.watch(taskCountsProvider);
+    final danger = tone == _FilterPillTone.danger;
+    final bg = selected
+        ? (danger ? AppTheme.priorityP0Bg : t.fg)
+        : (danger ? AppTheme.priorityP0Bg : t.bgMuted);
+    final fg = selected
+        ? (danger ? AppTheme.priorityP0 : t.bg)
+        : (danger ? AppTheme.priorityP0 : t.fgSecondary);
+    final border = selected
+        ? (danger ? AppTheme.priorityP0Border : t.fg)
+        : (danger ? AppTheme.priorityP0Border : t.borderStrong);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-      child: SegmentedButton<_CategoryFilter>(
-        segments: [
-          ButtonSegment(
-            value: _CategoryFilter.all,
-            label: _segmentLabel(context, '全部', counts.total),
-          ),
-          ButtonSegment(
-            value: _CategoryFilter.work,
-            label: _segmentLabel(context, '工作', counts.work),
-          ),
-          ButtonSegment(
-            value: _CategoryFilter.life,
-            label: _segmentLabel(context, '生活', counts.life),
-          ),
-        ],
-        selected: {categoryFilter},
-        onSelectionChanged: (s) => onCategoryFilterChanged(s.first),
-        style: SegmentedButton.styleFrom(
-          backgroundColor: t.bgMuted,
-          selectedBackgroundColor: t.bg,
-          selectedForegroundColor: t.fg,
-          foregroundColor: t.fgSecondary,
-          side: BorderSide(color: t.borderStrong, width: 0.5),
-          shape: RoundedRectangleBorder(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+        child: AnimatedContainer(
+          duration: AppTheme.durationFast,
+          curve: AppTheme.curveOrganic,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: bg,
             borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+            border: Border.all(color: border, width: 0.7),
           ),
-          visualDensity: VisualDensity.compact,
-          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: t.sansSemibold(size: 12, color: fg, letterSpacing: 0),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '$count',
+                style: t.mono(
+                  size: 10,
+                  weight: FontWeight.w700,
+                  color: fg.withValues(alpha: selected ? 0.78 : 0.65),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-Widget _segmentLabel(BuildContext context, String label, int count) {
-  final t = context.tokens;
-  return Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(
-        label,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-      ),
-      const SizedBox(width: 6),
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        decoration: BoxDecoration(
-          color: t.fg.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          '$count',
-          style: t.mono(size: 9, weight: FontWeight.w600, color: t.fgMuted),
-        ),
-      ),
-    ],
-  );
-}
-
 class _TaskListSection extends ConsumerWidget {
-  final _TimeFilter timeFilter;
-  final _CategoryFilter categoryFilter;
+  final _TaskScope scope;
   final String searchQuery;
   final void Function(Task) onTap;
   final Future<void> Function(Task) onToggle;
   final Future<void> Function(Task) onDelete;
 
   const _TaskListSection({
-    required this.timeFilter,
-    required this.categoryFilter,
+    required this.scope,
     required this.searchQuery,
     required this.onTap,
     required this.onToggle,
@@ -574,14 +608,11 @@ class _TaskListSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = context.tokens;
-    // filter 重算移入 _filteredTaskGroupsProvider，build 内不再遍历全量任务。
-    final groups = ref.watch(
-      _filteredTaskGroupsProvider((
-        time: timeFilter,
-        category: categoryFilter,
-        search: searchQuery,
-      )),
+    // filter 重算移入 _taskFilterSnapshotProvider，build 内不再遍历全量任务。
+    final snapshot = ref.watch(
+      _taskFilterSnapshotProvider((scope: scope, search: searchQuery)),
     );
+    final groups = snapshot.groups;
     final async = ref.watch(taskListProvider);
 
     // 首帧 loading：taskListProvider 尚无数据时显示加载态。
@@ -681,210 +712,6 @@ class _TaskListSection extends ConsumerWidget {
 }
 
 // ══════════════ 子组件 ══════════════
-
-class _BentoCard extends ConsumerStatefulWidget {
-  final String label;
-  final String value;
-  final String unit;
-  final bool selected;
-  final bool errorTone;
-  final bool dotPulse;
-  final Color dotColor;
-  final VoidCallback onTap;
-
-  const _BentoCard({
-    required this.label,
-    required this.value,
-    required this.unit,
-    required this.selected,
-    required this.dotColor,
-    required this.onTap,
-    this.errorTone = false,
-    this.dotPulse = false,
-  });
-
-  @override
-  ConsumerState<_BentoCard> createState() => _BentoCardState();
-}
-
-class _BentoCardState extends ConsumerState<_BentoCard>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulseController;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    );
-    _maybeStartPulse();
-  }
-
-  @override
-  void didUpdateWidget(_BentoCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (_shouldPulse() && !_pulseController.isAnimating) {
-      _pulseController.repeat(reverse: true);
-    } else if (!_shouldPulse() && _pulseController.isAnimating) {
-      _pulseController.stop();
-      _pulseController.value = 0;
-    }
-  }
-
-  /// 仅在 dotPulse 且 selected 时 tick：减少常驻 ticker，激进减负。
-  bool _shouldPulse() => widget.dotPulse && widget.selected;
-
-  void _maybeStartPulse() {
-    if (_shouldPulse()) {
-      _pulseController.repeat(reverse: true);
-    }
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    final hasGlass = ref.watch(hasCustomBackgroundProvider);
-    final Color fill;
-    if (widget.selected) {
-      fill = widget.errorTone
-          ? const Color(0xFF450A0A)
-          : (hasGlass ? t.fg.withValues(alpha: 0.85) : t.fg);
-    } else if (widget.errorTone) {
-      fill = hasGlass
-          ? const Color(0xFFFEF2F2).withValues(alpha: 0.72)
-          : const Color(0xFFFEF2F2);
-    } else if (hasGlass) {
-      fill = t.taskCardBackground;
-    } else {
-      fill = t.bg;
-    }
-    final fg = widget.selected
-        ? (widget.errorTone ? const Color(0xFFFEE2E2) : t.bg)
-        : (widget.errorTone ? const Color(0xFFB91C1C) : t.fg);
-    final subtle = widget.selected
-        ? (widget.errorTone ? const Color(0xFFFCA5A5) : t.fgMuted)
-        : t.fgMuted;
-    final border = widget.selected
-        ? fill
-        : (widget.errorTone ? const Color(0xFFFECACA) : t.borderStrong);
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: widget.onTap,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        child: AnimatedScale(
-          scale: widget.selected ? 1.0 : 0.98,
-          duration: AppTheme.durationMedium,
-          curve: AppTheme.curveOrganic,
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: fill,
-              borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-              border: Border.all(color: border, width: 0.8),
-              boxShadow: !widget.selected
-                  ? [
-                      BoxShadow(
-                        color: t.fg.withValues(alpha: 0.04),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      widget.label.toUpperCase(),
-                      style: AppTheme.mono(
-                        size: 9,
-                        weight: FontWeight.w700,
-                        color: subtle,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                    _buildDot(),
-                  ],
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      widget.value,
-                      style: AppTheme.mono(
-                        size: 22,
-                        weight: FontWeight.w700,
-                        color: fg,
-                        letterSpacing: -0.6,
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 3),
-                      child: Text(
-                        widget.unit,
-                        style: AppTheme.mono(
-                          size: 9,
-                          weight: FontWeight.w700,
-                          color: subtle,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDot() {
-    if (!_shouldPulse()) {
-      return Container(
-        width: 6,
-        height: 6,
-        decoration: BoxDecoration(
-          color: widget.dotColor,
-          shape: BoxShape.circle,
-        ),
-      );
-    }
-
-    return AnimatedBuilder(
-      animation: _pulseController,
-      builder: (context, child) {
-        final t = _pulseController.value;
-        return Transform.scale(
-          scale: 1.0 + t * 0.35,
-          child: Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: widget.dotColor.withValues(alpha: 0.55 + t * 0.45),
-              shape: BoxShape.circle,
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
 
 class _FloatingActions extends StatelessWidget {
   final VoidCallback onVoice;

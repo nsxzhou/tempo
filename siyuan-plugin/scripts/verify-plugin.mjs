@@ -50,8 +50,41 @@ function taskFromSupabaseJson(json) {
     title: json.title,
     priority: priorityFromValue(json.priority ?? 0),
     tag: json.tag ?? null,
+    dueDate: json.due_date ? new Date(json.due_date) : null,
+    isAllDay: json.is_all_day ?? false,
     isCompleted: json.is_completed ?? false,
   };
+}
+
+function matchesScope(task, scope, now) {
+  switch (scope) {
+    case 'pending':
+      return !task.isCompleted;
+    case 'overdue':
+      return (
+        task.dueDate &&
+        isTaskOverdue({
+          dueDate: task.dueDate,
+          isAllDay: task.isAllDay,
+          isCompleted: task.isCompleted,
+          now,
+        })
+      );
+    case 'week':
+      return (
+        !task.isCompleted &&
+        task.dueDate &&
+        isDueInWeekRange(task.dueDate, now)
+      );
+    case 'all':
+      return true;
+    default:
+      throw new Error(`Unknown scope: ${scope}`);
+  }
+}
+
+function filterByScope(tasks, scope, now) {
+  return tasks.filter((task) => matchesScope(task, scope, now));
 }
 
 {
@@ -93,6 +126,43 @@ function isDueOnDate(dueDate, date) {
   assert.equal(task.title, '测试任务');
   assert.equal(task.priority, 2);
   assert.equal(task.tag, 'work');
+}
+
+{
+  const now = new Date(2026, 5, 22, 10, 0, 0);
+  const tasks = [
+    taskFromSupabaseJson({
+      id: 'task-active',
+      title: '未完成',
+      is_completed: false,
+      due_date: '2026-06-22T15:00:00.000Z',
+    }),
+    taskFromSupabaseJson({
+      id: 'task-done',
+      title: '已完成',
+      is_completed: true,
+      due_date: '2026-06-22T15:00:00.000Z',
+    }),
+    taskFromSupabaseJson({
+      id: 'task-overdue',
+      title: '逾期',
+      is_completed: false,
+      due_date: '2026-06-20T12:00:00.000Z',
+    }),
+  ];
+
+  assert.deepEqual(
+    filterByScope(tasks, 'pending', now).map((task) => task.id),
+    ['task-active', 'task-overdue']
+  );
+  assert.deepEqual(
+    filterByScope(tasks, 'all', now).map((task) => task.id),
+    ['task-active', 'task-done', 'task-overdue']
+  );
+  assert.deepEqual(
+    filterByScope(tasks, 'overdue', now).map((task) => task.id),
+    ['task-overdue']
+  );
 }
 
 console.log('verify-plugin: all checks passed');

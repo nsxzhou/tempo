@@ -7,12 +7,15 @@ import {
   PostgrestError,
   SupabaseClient,
 } from '@supabase/supabase-js';
-import { loadAuth, saveAuth, StoredAuth } from './storage';
+import { clearAuth, loadAuth, saveAuth, StoredAuth } from './storage';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from './config';
 
 /** 当前 Supabase 客户端 */
 let client: SupabaseClient | null = null;
 let currentAuth: StoredAuth | null = null;
+let refreshInFlight: Promise<boolean> | null = null;
+
+const REFRESH_SKEW_MS = 60_000;
 
 function isAuthError(error: PostgrestError | null): boolean {
   if (!error) return false;
@@ -57,10 +60,57 @@ export function getClient(): SupabaseClient | null {
 export function resetClient(): void {
   client = null;
   currentAuth = null;
+  refreshInFlight = null;
+}
+
+function expiresAtFromSession(session: { expires_at?: number; expires_in?: number }): number {
+  if (typeof session.expires_at === 'number' && session.expires_at > 0) {
+    return session.expires_at * 1000;
+  }
+  const expiresIn = typeof session.expires_in === 'number' ? session.expires_in : 3600;
+  return Date.now() + expiresIn * 1000;
+}
+
+function shouldRefresh(auth: StoredAuth): boolean {
+  if (!auth.expires_at) return true;
+  return auth.expires_at - Date.now() <= REFRESH_SKEW_MS;
+}
+
+function isInvalidRefreshToken(status: number, body: string): boolean {
+  if (![400, 401, 403].includes(status)) return false;
+  const text = body.toLowerCase();
+  return (
+    text.includes('refresh') ||
+    text.includes('invalid') ||
+    text.includes('expired') ||
+    text.includes('not found')
+  );
+}
+
+/** 请求前确保 access_token 未临近过期。 */
+export async function ensureFreshSession(): Promise<boolean> {
+  if (!currentAuth) {
+    const auth = loadAuth();
+    if (!auth) return false;
+    currentAuth = auth;
+    initClient(auth);
+  }
+
+  if (!shouldRefresh(currentAuth)) return true;
+  return refreshSession();
 }
 
 /** 刷新 session（access_token 过期时） */
 export async function refreshSession(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = refreshSessionOnce().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
+async function refreshSessionOnce(): Promise<boolean> {
   if (!currentAuth) {
     const auth = loadAuth();
     if (!auth) return false;
@@ -82,7 +132,14 @@ export async function refreshSession(): Promise<boolean> {
       }
     );
 
-    if (!response.ok) return false;
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      if (isInvalidRefreshToken(response.status, body)) {
+        clearAuth();
+        resetClient();
+      }
+      return false;
+    }
 
     const session = await response.json();
     const newAuth: StoredAuth = {
@@ -90,6 +147,7 @@ export async function refreshSession(): Promise<boolean> {
       refresh_token: session.refresh_token,
       user_email: currentAuth.user_email,
       user_id: currentAuth.user_id,
+      expires_at: expiresAtFromSession(session),
       stored_at: Date.now(),
     };
 
@@ -105,6 +163,7 @@ export async function refreshSession(): Promise<boolean> {
 export async function withAuthRetry<T>(
   action: () => Promise<{ data: T | null; error: PostgrestError | null }>
 ): Promise<T> {
+  await ensureFreshSession();
   let result = await action();
 
   if (result.error && isAuthError(result.error)) {
@@ -129,6 +188,7 @@ export async function withAuthRetry<T>(
 export async function withAuthRetryVoid(
   action: () => Promise<{ error: PostgrestError | null }>
 ): Promise<void> {
+  await ensureFreshSession();
   let result = await action();
 
   if (result.error && isAuthError(result.error)) {

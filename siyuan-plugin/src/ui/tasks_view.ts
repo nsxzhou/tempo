@@ -1,13 +1,10 @@
 import { Task } from '../models/task';
 import { formatHeaderDate } from '../utils/date_filter';
 import {
-  CategoryFilter,
+  TaskScope,
   TaskStore,
-  TimeFilter,
 } from '../data/task_store';
 import type { TaskFormInput } from '../data/task_repository';
-import { createBentoCard } from './components/bento_card';
-import { createSegmentedControl } from './components/seg_control';
 import { createTaskRow } from './components/task_row';
 import { openSettingsDialog } from './dialogs/settings';
 import { openTaskFormDialog } from './dialogs/task_form';
@@ -57,8 +54,7 @@ export function mountTasksView(
     }
 
     scroll.appendChild(buildHeader(store, options.onUnbind));
-    scroll.appendChild(buildBento(store));
-    scroll.appendChild(buildSegmented(store));
+    scroll.appendChild(buildScopeControl(store));
     scroll.appendChild(buildTaskList(store));
   };
 
@@ -119,85 +115,59 @@ function buildHeader(store: TaskStore, onUnbind: () => void): HTMLElement {
   return header;
 }
 
-function buildBento(store: TaskStore): HTMLElement {
-  const stats = store.getStats();
-  const wrap = document.createElement('div');
-  wrap.className = 'tempo-bento-grid';
-
-  const cards: Array<{
-    filter: TimeFilter;
-    label: string;
-    value: string;
-    unit: string;
-    dotColor: string;
-    dotPulse?: boolean;
-    errorTone?: boolean;
-  }> = [
-    {
-      filter: 'today',
-      label: '今日待办',
-      value: `${stats.pending}`,
-      unit: '项未完成',
-      dotColor: 'var(--tempo-p2)',
-    },
-    {
-      filter: 'overdue',
-      label: '已过期',
-      value: `${stats.overdue}`,
-      unit: '项超期',
-      dotColor: stats.overdue > 0 ? 'var(--tempo-p0)' : 'var(--tempo-fg-muted)',
-      dotPulse: stats.overdue > 0,
-      errorTone: stats.overdue > 0,
-    },
-    {
-      filter: 'week',
-      label: '本周安排',
-      value: `${stats.weekCount}`,
-      unit: '项总代办',
-      dotColor: 'var(--tempo-fg-faint)',
-    },
-    {
-      filter: 'all',
-      label: '全部任务',
-      value: `${stats.total}`,
-      unit: '项总代办',
-      dotColor: 'var(--tempo-success)',
-    },
-  ];
-
-  for (const card of cards) {
-    wrap.appendChild(
-      createBentoCard({
-        label: card.label,
-        value: card.value,
-        unit: card.unit,
-        selected: store.timeFilter === card.filter,
-        dotColor: card.dotColor,
-        dotPulse: card.dotPulse,
-        errorTone: card.errorTone,
-        onTap: () => store.setTimeFilter(card.filter),
-      })
-    );
-  }
-
-  return wrap;
-}
-
-function buildSegmented(store: TaskStore): HTMLElement {
+function buildScopeControl(store: TaskStore): HTMLElement {
   const stats = store.getStats();
   const wrap = document.createElement('div');
   wrap.className = 'tempo-section-pad';
-  wrap.appendChild(
-    createSegmentedControl<CategoryFilter>({
-      value: store.categoryFilter,
-      items: [
-        { value: 'all', label: '全部', count: stats.total },
-        { value: 'work', label: '工作', count: stats.work },
-        { value: 'life', label: '生活', count: stats.life },
-      ],
-      onChange: (value) => store.setCategoryFilter(value),
-    })
-  );
+
+  const cards: Array<{
+    scope: TaskScope;
+    label: string;
+    count: number;
+    danger?: boolean;
+  }> = [
+    {
+      scope: 'pending',
+      label: '待处理',
+      count: stats.pending,
+    },
+    {
+      scope: 'overdue',
+      label: '逾期',
+      count: stats.overdue,
+      danger: stats.overdue > 0,
+    },
+    {
+      scope: 'week',
+      label: '本周',
+      count: stats.week,
+    },
+    {
+      scope: 'all',
+      label: '全部',
+      count: stats.all,
+    },
+  ];
+
+  const bar = document.createElement('div');
+  bar.className = 'tempo-scope-bar';
+
+  for (const card of cards) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = [
+      'tempo-scope-pill',
+      store.scope === card.scope ? 'is-active' : '',
+      card.danger ? 'is-danger' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    button.innerHTML = `<span>${card.label}</span><strong>${card.count}</strong>`;
+    button.addEventListener('click', () => store.setScope(card.scope));
+    bar.appendChild(button);
+  }
+
+  wrap.appendChild(bar);
   return wrap;
 }
 

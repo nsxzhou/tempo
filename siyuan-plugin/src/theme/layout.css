@@ -155,6 +155,68 @@
   padding: 0 24px 16px;
 }
 
+.tempo-scope-bar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px;
+  border: 0.8px solid var(--tempo-border-strong);
+  border-radius: var(--tempo-radius-lg);
+  background: var(--tempo-bg-muted);
+}
+
+.tempo-scope-pill {
+  min-width: 0;
+  border: 0.8px solid var(--tempo-border-strong);
+  border-radius: var(--tempo-radius-md);
+  background: var(--tempo-bg);
+  color: var(--tempo-fg-secondary);
+  padding: 8px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  font-family: var(--tempo-font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  transition:
+    background var(--tempo-duration-fast) ease,
+    color var(--tempo-duration-fast) ease,
+    border-color var(--tempo-duration-fast) ease;
+}
+
+.tempo-scope-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tempo-scope-pill strong {
+  font-family: var(--tempo-font-mono);
+  font-size: 10px;
+  color: currentColor;
+  opacity: 0.68;
+}
+
+.tempo-scope-pill.is-active {
+  background: var(--tempo-fg);
+  border-color: var(--tempo-fg);
+  color: var(--tempo-bg);
+}
+
+.tempo-scope-pill.is-danger {
+  background: var(--tempo-p0-bg);
+  border-color: var(--tempo-p0-border);
+  color: var(--tempo-p0);
+}
+
+.tempo-scope-pill.is-danger.is-active {
+  background: var(--tempo-p0);
+  border-color: var(--tempo-p0);
+  color: #fff;
+}
+
 .tempo-section-header {
   margin: 0 0 10px;
   font-size: 11px;

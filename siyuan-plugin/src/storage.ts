@@ -11,6 +11,8 @@ export interface StoredAuth {
   refresh_token: string;
   user_email: string;
   user_id: string;
+  /** Epoch milliseconds when the access token expires. Missing legacy values are treated as stale. */
+  expires_at?: number;
   stored_at: number;
 }
 

@@ -1,4 +1,3 @@
-import { TAG_LIFE, TAG_WORK } from '../constants';
 import { Task } from '../models/task';
 import { isDueInWeekRange, isTaskOverdue } from '../utils/date_filter';
 import {
@@ -12,8 +11,7 @@ import {
   type UpdateTaskInput,
 } from './task_repository';
 
-export type TimeFilter = 'today' | 'week' | 'overdue' | 'all';
-export type CategoryFilter = 'all' | 'work' | 'life';
+export type TaskScope = 'pending' | 'overdue' | 'week' | 'all';
 
 type Listener = () => void;
 
@@ -23,8 +21,7 @@ export class TaskStore {
   private loading = false;
   private error: string | null = null;
 
-  timeFilter: TimeFilter = 'today';
-  categoryFilter: CategoryFilter = 'all';
+  scope: TaskScope = 'pending';
 
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
@@ -49,13 +46,8 @@ export class TaskStore {
     return this.error;
   }
 
-  setTimeFilter(filter: TimeFilter): void {
-    this.timeFilter = filter;
-    this.notify();
-  }
-
-  setCategoryFilter(filter: CategoryFilter): void {
-    this.categoryFilter = filter;
+  setScope(scope: TaskScope): void {
+    this.scope = scope;
     this.notify();
   }
 
@@ -86,13 +78,16 @@ export class TaskStore {
     let tasks = [...this.tasks];
     const now = new Date();
 
-    switch (this.timeFilter) {
-      case 'today':
+    switch (this.scope) {
+      case 'pending':
         tasks = tasks.filter((task) => !task.isCompleted);
         break;
       case 'week':
         tasks = tasks.filter(
-          (task) => task.dueDate && isDueInWeekRange(task.dueDate, now)
+          (task) =>
+            !task.isCompleted &&
+            task.dueDate &&
+            isDueInWeekRange(task.dueDate, now)
         );
         break;
       case 'overdue':
@@ -111,12 +106,6 @@ export class TaskStore {
         break;
     }
 
-    if (this.categoryFilter === 'work') {
-      tasks = tasks.filter((task) => task.tag === TAG_WORK);
-    } else if (this.categoryFilter === 'life') {
-      tasks = tasks.filter((task) => task.tag === TAG_LIFE);
-    }
-
     const active = tasks.filter((task) => !task.isCompleted);
     const completed = tasks.filter((task) => task.isCompleted);
     return { active, completed };
@@ -125,10 +114,8 @@ export class TaskStore {
   getStats(): {
     pending: number;
     overdue: number;
-    weekCount: number;
-    total: number;
-    work: number;
-    life: number;
+    week: number;
+    all: number;
   } {
     const now = new Date();
     const pending = this.tasks.filter((task) => !task.isCompleted).length;
@@ -143,18 +130,17 @@ export class TaskStore {
         })
     ).length;
     const weekCount = this.tasks.filter(
-      (task) => task.dueDate && isDueInWeekRange(task.dueDate, now)
+      (task) =>
+        !task.isCompleted &&
+        task.dueDate &&
+        isDueInWeekRange(task.dueDate, now)
     ).length;
-    const work = this.tasks.filter((task) => task.tag === TAG_WORK).length;
-    const life = this.tasks.filter((task) => task.tag === TAG_LIFE).length;
 
     return {
       pending,
       overdue,
-      weekCount,
-      total: this.tasks.length,
-      work,
-      life,
+      week: weekCount,
+      all: this.tasks.length,
     };
   }
 

@@ -52,6 +52,7 @@ export async function pairWithCode(code: string): Promise<StoredAuth> {
     refresh_token: data.refresh_token,
     user_email: data.user_email,
     user_id: data.user_id,
+    expires_at: Date.now() + data.expires_in * 1000,
     stored_at: Date.now(),
   };
 

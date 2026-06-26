@@ -35,6 +35,8 @@ void main() {
     expect(find.text('星空'), findsOneWidget);
     expect(find.text('THEME · 主题'), findsOneWidget);
     expect(find.text('组件配色'), findsOneWidget);
+    expect(find.text('任务卡片背景'), findsOneWidget);
+    expect(find.text('顶栏背景'), findsNothing);
   });
 
   testWidgets('ThemeSettingsSection theme tap updates selection', (

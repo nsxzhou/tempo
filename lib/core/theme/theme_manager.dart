@@ -14,14 +14,17 @@ import 'theme_presets.dart';
 /// 单套主题下的组件色 override。
 class ThemeComponentColors {
   final Color? taskCardColor;
-  final Color? headerColor;
 
-  const ThemeComponentColors({this.taskCardColor, this.headerColor});
+  const ThemeComponentColors({this.taskCardColor});
 
-  ThemeComponentColors copyWith({Color? taskCardColor, Color? headerColor}) {
+  ThemeComponentColors copyWith({
+    Color? taskCardColor,
+    bool clearTaskCardColor = false,
+  }) {
     return ThemeComponentColors(
-      taskCardColor: taskCardColor ?? this.taskCardColor,
-      headerColor: headerColor ?? this.headerColor,
+      taskCardColor: clearTaskCardColor
+          ? null
+          : (taskCardColor ?? this.taskCardColor),
     );
   }
 }
@@ -79,9 +82,6 @@ class ThemeManager extends StateNotifier<ThemeCustomizationState> {
     final taskCard = prefs.getInt(
       '${AppConstants.prefTaskCardColorPrefix}${themeId.name}',
     );
-    final header = prefs.getInt(
-      '${AppConstants.prefHeaderColorPrefix}${themeId.name}',
-    );
 
     state = ThemeCustomizationState(
       themeId: themeId,
@@ -89,7 +89,6 @@ class ThemeManager extends StateNotifier<ThemeCustomizationState> {
       backgroundImageValid: _backgroundImageExists(bgPath),
       componentColors: ThemeComponentColors(
         taskCardColor: taskCard != null ? Color(taskCard) : null,
-        headerColor: header != null ? Color(header) : null,
       ),
     );
   }
@@ -101,15 +100,11 @@ class ThemeManager extends StateNotifier<ThemeCustomizationState> {
     final taskCard = prefs.getInt(
       '${AppConstants.prefTaskCardColorPrefix}${id.name}',
     );
-    final header = prefs.getInt(
-      '${AppConstants.prefHeaderColorPrefix}${id.name}',
-    );
 
     state = state.copyWith(
       themeId: id,
       componentColors: ThemeComponentColors(
         taskCardColor: taskCard != null ? Color(taskCard) : null,
-        headerColor: header != null ? Color(header) : null,
       ),
     );
   }
@@ -158,15 +153,10 @@ class ThemeManager extends StateNotifier<ThemeCustomizationState> {
     await _persistComponentColor(
       key: '${AppConstants.prefTaskCardColorPrefix}${state.themeId.name}',
       color: color,
-      update: (colors) => colors.copyWith(taskCardColor: color),
-    );
-  }
-
-  Future<void> setHeaderColor(Color? color) async {
-    await _persistComponentColor(
-      key: '${AppConstants.prefHeaderColorPrefix}${state.themeId.name}',
-      color: color,
-      update: (colors) => colors.copyWith(headerColor: color),
+      update: (colors) => colors.copyWith(
+        taskCardColor: color,
+        clearTaskCardColor: color == null,
+      ),
     );
   }
 
@@ -174,9 +164,6 @@ class ThemeManager extends StateNotifier<ThemeCustomizationState> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(
       '${AppConstants.prefTaskCardColorPrefix}${state.themeId.name}',
-    );
-    await prefs.remove(
-      '${AppConstants.prefHeaderColorPrefix}${state.themeId.name}',
     );
     state = state.copyWith(componentColors: const ThemeComponentColors());
   }
@@ -204,7 +191,6 @@ final themeManagerProvider =
 const _customBackgroundOverlayOpacity = 0.18;
 const _customBackgroundCustomCardAlpha = 0.76;
 const _customBackgroundBorderAlpha = 0.62;
-const _customBackgroundHeaderAlpha = 0.24;
 
 final activeTempoTokensProvider = Provider<TempoTokens>((ref) {
   final customization = ref.watch(themeManagerProvider);
@@ -300,18 +286,4 @@ final scaffoldBackgroundProvider = Provider<Color>((ref) {
 
 final taskCardBackgroundProvider = Provider<Color>((ref) {
   return ref.watch(activeTempoTokensProvider).taskCardBackground;
-});
-
-final headerBackgroundProvider = Provider<Color>((ref) {
-  final customization = ref.watch(themeManagerProvider);
-  final tokens = ref.watch(activeTempoTokensProvider);
-  final hasBg = ref.watch(hasCustomBackgroundProvider);
-  final custom = customization.componentColors.headerColor;
-  if (custom != null) {
-    return hasBg ? custom.withValues(alpha: 0.42) : custom;
-  }
-  if (hasBg) {
-    return tokens.bg.withValues(alpha: _customBackgroundHeaderAlpha);
-  }
-  return tokens.bg;
 });

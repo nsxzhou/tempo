@@ -100,8 +100,6 @@ class AppConstants {
   static const String prefThemeId = 'theme_id';
   static const String prefBackgroundImagePath = 'background_image_path';
   static const String prefTaskCardColorPrefix = 'task_card_color_';
-  static const String prefHeaderColorPrefix = 'header_color_';
-
   // ── 配对码 ──
   static const int pairingCodeLength = 6;
   static const Duration pairingCodeExpiry = Duration(minutes: 5);

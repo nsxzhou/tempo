@@ -99,48 +99,55 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   Widget build(BuildContext context) {
     final scaffoldBg = ref.watch(scaffoldBackgroundProvider);
     if (_isLoading) {
-      return Scaffold(
-        backgroundColor: scaffoldBg,
-        appBar: AppBar(),
-        body: const Center(child: CircularProgressIndicator()),
+      return TempoBackground(
+        child: Scaffold(
+          backgroundColor: scaffoldBg,
+          appBar: AppBar(
+            backgroundColor: scaffoldBg,
+            surfaceTintColor: Colors.transparent,
+          ),
+          body: const Center(child: CircularProgressIndicator()),
+        ),
       );
     }
 
     final task = _task!;
-    return Scaffold(
-      backgroundColor: scaffoldBg,
-      body: Column(
-        children: [
-          _TopBar(
-            onBack: () => context.pop(),
-            onEdit: _openEditSheet,
-            onMore: _showMoreMenu,
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.only(bottom: 100),
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildTitleBlock(task),
-                  const SizedBox(height: 16),
-                  _buildProperties(task),
-                  const SizedBox(height: 16),
-                  _buildDescription(task),
-                  if (task.siyuanBlockId != null) ...[
+    return TempoBackground(
+      child: Scaffold(
+        backgroundColor: scaffoldBg,
+        body: Column(
+          children: [
+            _TopBar(
+              onBack: () => context.pop(),
+              onEdit: _openEditSheet,
+              onMore: _showMoreMenu,
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.only(bottom: 100),
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildTitleBlock(task),
                     const SizedBox(height: 16),
-                    _buildSiyuanCard(task),
+                    _buildProperties(task),
+                    const SizedBox(height: 16),
+                    _buildDescription(task),
+                    if (task.siyuanBlockId != null) ...[
+                      const SizedBox(height: 16),
+                      _buildSiyuanCard(task),
+                    ],
+                    const SizedBox(height: 16),
+                    _buildReadOnlyInfo(task),
+                    const SizedBox(height: 24),
+                    _buildCompleteButton(task),
                   ],
-                  const SizedBox(height: 16),
-                  _buildReadOnlyInfo(task),
-                  const SizedBox(height: 24),
-                  _buildCompleteButton(task),
-                ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

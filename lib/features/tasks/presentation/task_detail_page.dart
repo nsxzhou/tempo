@@ -11,7 +11,6 @@
 // ============================================================
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,6 +29,7 @@ import '../../../core/widgets/tempo/tempo.dart';
 import '../data/task_background_repository.dart';
 import '../domain/task.dart';
 import 'widgets/quick_create_sheet.dart';
+import 'widgets/task_background_image.dart';
 
 class TaskDetailPage extends ConsumerStatefulWidget {
   final String taskId;
@@ -231,32 +231,13 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
           child: Stack(
             children: [
               Positioned.fill(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final dpr = MediaQuery.devicePixelRatioOf(context);
-                    final cacheWidth = (constraints.maxWidth * dpr * 1.2)
-                        .round()
-                        .clamp(1, 1800)
-                        .toInt();
-                    final cacheHeight = (180 * dpr)
-                        .round()
-                        .clamp(1, 720)
-                        .toInt();
-                    return Image.file(
-                      File(imagePath),
-                      fit: BoxFit.cover,
-                      cacheWidth: cacheWidth,
-                      cacheHeight: cacheHeight,
-                      gaplessPlayback: true,
-                      filterQuality: FilterQuality.medium,
-                      errorBuilder: (_, _, _) =>
-                          ColoredBox(color: t.taskCardBackground),
-                    );
-                  },
+                child: TaskBackgroundImage(
+                  path: imagePath,
+                  errorColor: t.taskCardBackground,
                 ),
               ),
               Positioned.fill(
-                child: ColoredBox(color: t.bg.withValues(alpha: 0.58)),
+                child: ColoredBox(color: t.bg.withValues(alpha: 0.32)),
               ),
               Positioned.fill(
                 child: DecoratedBox(

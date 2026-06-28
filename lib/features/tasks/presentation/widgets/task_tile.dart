@@ -5,8 +5,6 @@
 // 删除：左滑 + 淡出
 // ============================================================
 
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 
@@ -15,6 +13,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/tempo_theme_extension.dart';
 import '../../../../core/widgets/tempo/tempo.dart';
 import '../../domain/task.dart';
+import 'task_background_image.dart';
 
 class TaskTile extends StatefulWidget {
   final Task task;
@@ -113,73 +112,58 @@ class _TaskTileState extends State<TaskTile> {
     final tokens = context.tokens;
     final borderRadius = BorderRadius.circular(AppTheme.radiusMd);
     final borderColor = completed ? tokens.borderSubtle : tokens.borderStrong;
-    final overlayAlpha = completed ? 0.72 : 0.50;
-    final gradientAlpha = completed ? 0.10 : 0.16;
+    final overlayAlpha = completed ? 0.58 : 0.24;
+    final gradientAlpha = completed ? 0.06 : 0.05;
 
     return RepaintBoundary(
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: borderRadius,
-          boxShadow: completed ? null : AppTheme.shadowSm,
-        ),
-        foregroundDecoration: BoxDecoration(
-          borderRadius: borderRadius,
-          border: Border.all(color: borderColor, width: 0.8),
-        ),
-        child: ClipRRect(
-          borderRadius: borderRadius,
-          clipBehavior: Clip.antiAlias,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Positioned.fill(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final dpr = MediaQuery.devicePixelRatioOf(context);
-                    final cacheWidth = (constraints.maxWidth * dpr)
-                        .round()
-                        .clamp(1, 1600)
-                        .toInt();
-                    final cacheHeight = (_tileHeight * dpr)
-                        .round()
-                        .clamp(1, 240)
-                        .toInt();
-                    return Image.file(
-                      File(imagePath),
-                      fit: BoxFit.cover,
-                      cacheWidth: cacheWidth,
-                      cacheHeight: cacheHeight,
-                      gaplessPlayback: true,
-                      filterQuality: FilterQuality.medium,
-                      errorBuilder: (_, _, _) =>
-                          ColoredBox(color: tokens.taskCardBackground),
-                    );
-                  },
+      child: SizedBox(
+        height: _tileHeight,
+        width: double.infinity,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: borderRadius,
+            boxShadow: completed ? null : AppTheme.shadowSm,
+          ),
+          foregroundDecoration: BoxDecoration(
+            borderRadius: borderRadius,
+            border: Border.all(color: borderColor, width: 0.8),
+          ),
+          child: ClipRRect(
+            borderRadius: borderRadius,
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Positioned.fill(
+                  child: TaskBackgroundImage(
+                    path: imagePath,
+                    errorColor: tokens.taskCardBackground,
+                  ),
                 ),
-              ),
-              Positioned.fill(
-                child: ColoredBox(
-                  color: tokens.bg.withValues(alpha: overlayAlpha),
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: tokens.bg.withValues(alpha: overlayAlpha),
+                  ),
                 ),
-              ),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        tokens.fg.withValues(alpha: gradientAlpha),
-                        tokens.bg.withValues(alpha: 0),
-                        tokens.bg.withValues(alpha: gradientAlpha),
-                      ],
-                      stops: const [0, 0.52, 1],
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          tokens.fg.withValues(alpha: gradientAlpha),
+                          tokens.bg.withValues(alpha: 0),
+                          tokens.bg.withValues(alpha: gradientAlpha),
+                        ],
+                        stops: const [0, 0.52, 1],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              child,
-            ],
+                child,
+              ],
+            ),
           ),
         ),
       ),

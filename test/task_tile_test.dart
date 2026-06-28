@@ -250,6 +250,41 @@ void main() {
     expect(find.byType(BackdropFilter), findsNothing);
   });
 
+  testWidgets('background task tile in SliverList keeps finite height', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.all(20),
+                sliver: SliverList.separated(
+                  itemCount: 2,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (_, index) => TaskTile(
+                    key: ValueKey('sliver-$index'),
+                    task: _task(title: '列表项$index'),
+                    showDelete: true,
+                    onDelete: () {},
+                    backgroundImagePath: _writeTinyPng(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final box = tester.renderObject<RenderBox>(find.byType(TaskTile).first);
+    expect(box.size.height.isFinite, isTrue);
+    expect(box.size.height, _TaskTileHeightMatcher());
+    expect(find.text('列表项0'), findsOneWidget);
+  });
+
   testWidgets('completed task keeps weakened background image layer', (
     tester,
   ) async {
@@ -267,4 +302,20 @@ void main() {
     expect(find.text('牛奶'), findsOneWidget);
     expect(find.byType(BackdropFilter), findsNothing);
   });
+}
+
+class _TaskTileHeightMatcher extends Matcher {
+  @override
+  bool matches(dynamic item, Map matchState) {
+    if (item is! double) return false;
+    final ok = item == 52;
+    if (!ok) {
+      matchState['actual'] = item;
+    }
+    return ok;
+  }
+
+  @override
+  Description describe(Description description) =>
+      description.add('has TaskTile height 52');
 }

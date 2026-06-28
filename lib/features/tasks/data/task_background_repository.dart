@@ -40,8 +40,8 @@ abstract class TaskBackgroundRepository {
 }
 
 class LocalTaskBackgroundRepository implements TaskBackgroundRepository {
-  static const int _maxImageDimension = 1600;
-  static const int _imageQuality = 88;
+  static const int _maxImageDimension = 2560;
+  static const int _imageQuality = 95;
 
   final db.AppDatabase _db;
   final ImagePicker _picker;

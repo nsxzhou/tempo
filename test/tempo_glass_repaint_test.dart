@@ -24,6 +24,10 @@ void main() {
       ProviderScope(
         overrides: [
           taskRepositoryProvider.overrideWithValue(repository),
+          taskBackgroundRepositoryProvider.overrideWithValue(
+            FakeTaskBackgroundRepository(),
+          ),
+          taskBackgroundMapProvider.overrideWith((ref) => const {}),
           hasCustomBackgroundProvider.overrideWithValue(true),
         ],
         child: MaterialApp(

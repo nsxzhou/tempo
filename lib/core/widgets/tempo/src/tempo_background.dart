@@ -24,8 +24,14 @@ class _TempoBackgroundState extends ConsumerState<TempoBackground> {
   ImageProvider _resolveImageProvider(String imagePath) {
     final size = MediaQuery.sizeOf(context);
     final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
-    final cacheWidth = (size.width * devicePixelRatio).round();
-    final cacheHeight = (size.height * devicePixelRatio).round();
+    final cacheWidth = (size.width * devicePixelRatio * 1.35)
+        .round()
+        .clamp(1, 2400)
+        .toInt();
+    final cacheHeight = (size.height * devicePixelRatio * 1.35)
+        .round()
+        .clamp(1, 3200)
+        .toInt();
     final provider = _imageCache.providerFor(
       path: imagePath,
       cacheWidth: cacheWidth,
@@ -71,7 +77,7 @@ class _TempoBackgroundState extends ConsumerState<TempoBackground> {
                     image: imageProvider,
                     fit: BoxFit.cover,
                     gaplessPlayback: true,
-                    filterQuality: FilterQuality.low,
+                    filterQuality: FilterQuality.medium,
                   ),
                 ),
                 Positioned.fill(
@@ -101,10 +107,10 @@ Widget buildTempoBackgroundReadabilityOverlay(TempoTokens tokens) {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            tokens.bg.withValues(alpha: 0.30),
-            tokens.bg.withValues(alpha: 0.06),
-            tokens.bg.withValues(alpha: 0.08),
-            tokens.bg.withValues(alpha: 0.34),
+            tokens.bg.withValues(alpha: 0.16),
+            tokens.bg.withValues(alpha: 0.02),
+            tokens.bg.withValues(alpha: 0.03),
+            tokens.bg.withValues(alpha: 0.20),
           ],
           stops: const [0, 0.28, 0.66, 1],
         ),

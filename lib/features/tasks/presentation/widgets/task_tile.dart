@@ -5,6 +5,8 @@
 // 删除：左滑 + 淡出
 // ============================================================
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 
@@ -20,6 +22,7 @@ class TaskTile extends StatefulWidget {
   final VoidCallback? onToggleComplete;
   final VoidCallback? onDelete;
   final bool showDelete;
+  final String? backgroundImagePath;
 
   const TaskTile({
     super.key,
@@ -28,6 +31,7 @@ class TaskTile extends StatefulWidget {
     this.onToggleComplete,
     this.onDelete,
     this.showDelete = false,
+    this.backgroundImagePath,
   });
 
   @override
@@ -80,6 +84,15 @@ class _TaskTileState extends State<TaskTile> {
   }
 
   Widget _wrapGlassShell({required bool completed, required Widget child}) {
+    final backgroundPath = widget.backgroundImagePath;
+    if (backgroundPath != null) {
+      return _wrapImageShell(
+        completed: completed,
+        imagePath: backgroundPath,
+        child: child,
+      );
+    }
+
     final tokens = context.tokens;
     final cardColor = tokens.taskCardBackground;
     return TempoGlassSurface(
@@ -89,6 +102,87 @@ class _TaskTileState extends State<TaskTile> {
       borderColor: completed ? tokens.borderSubtle : tokens.borderStrong,
       showShadow: !completed,
       child: child,
+    );
+  }
+
+  Widget _wrapImageShell({
+    required bool completed,
+    required String imagePath,
+    required Widget child,
+  }) {
+    final tokens = context.tokens;
+    final borderRadius = BorderRadius.circular(AppTheme.radiusMd);
+    final borderColor = completed ? tokens.borderSubtle : tokens.borderStrong;
+    final overlayAlpha = completed ? 0.72 : 0.50;
+    final gradientAlpha = completed ? 0.10 : 0.16;
+
+    return RepaintBoundary(
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: borderRadius,
+          boxShadow: completed ? null : AppTheme.shadowSm,
+        ),
+        foregroundDecoration: BoxDecoration(
+          borderRadius: borderRadius,
+          border: Border.all(color: borderColor, width: 0.8),
+        ),
+        child: ClipRRect(
+          borderRadius: borderRadius,
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Positioned.fill(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final dpr = MediaQuery.devicePixelRatioOf(context);
+                    final cacheWidth = (constraints.maxWidth * dpr)
+                        .round()
+                        .clamp(1, 1600)
+                        .toInt();
+                    final cacheHeight = (_tileHeight * dpr)
+                        .round()
+                        .clamp(1, 240)
+                        .toInt();
+                    return Image.file(
+                      File(imagePath),
+                      fit: BoxFit.cover,
+                      cacheWidth: cacheWidth,
+                      cacheHeight: cacheHeight,
+                      gaplessPlayback: true,
+                      filterQuality: FilterQuality.medium,
+                      errorBuilder: (_, _, _) =>
+                          ColoredBox(color: tokens.taskCardBackground),
+                    );
+                  },
+                ),
+              ),
+              Positioned.fill(
+                child: ColoredBox(
+                  color: tokens.bg.withValues(alpha: overlayAlpha),
+                ),
+              ),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        tokens.fg.withValues(alpha: gradientAlpha),
+                        tokens.bg.withValues(alpha: 0),
+                        tokens.bg.withValues(alpha: gradientAlpha),
+                      ],
+                      stops: const [0, 0.52, 1],
+                    ),
+                  ),
+                ),
+              ),
+              child,
+            ],
+          ),
+        ),
+      ),
     );
   }
 

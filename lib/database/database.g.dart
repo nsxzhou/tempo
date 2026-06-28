@@ -1341,16 +1341,350 @@ class TasksCompanion extends UpdateCompanion<Task> {
   }
 }
 
+class $TaskBackgroundsTable extends TaskBackgrounds
+    with TableInfo<$TaskBackgroundsTable, TaskBackground> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TaskBackgroundsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _taskIdMeta = const VerificationMeta('taskId');
+  @override
+  late final GeneratedColumn<String> taskId = GeneratedColumn<String>(
+    'task_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES tasks (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _imagePathMeta = const VerificationMeta(
+    'imagePath',
+  );
+  @override
+  late final GeneratedColumn<String> imagePath = GeneratedColumn<String>(
+    'image_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    taskId,
+    imagePath,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'task_backgrounds';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TaskBackground> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('task_id')) {
+      context.handle(
+        _taskIdMeta,
+        taskId.isAcceptableOrUnknown(data['task_id']!, _taskIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_taskIdMeta);
+    }
+    if (data.containsKey('image_path')) {
+      context.handle(
+        _imagePathMeta,
+        imagePath.isAcceptableOrUnknown(data['image_path']!, _imagePathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_imagePathMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {taskId};
+  @override
+  TaskBackground map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TaskBackground(
+      taskId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}task_id'],
+      )!,
+      imagePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}image_path'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $TaskBackgroundsTable createAlias(String alias) {
+    return $TaskBackgroundsTable(attachedDatabase, alias);
+  }
+}
+
+class TaskBackground extends DataClass implements Insertable<TaskBackground> {
+  final String taskId;
+  final String imagePath;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const TaskBackground({
+    required this.taskId,
+    required this.imagePath,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['task_id'] = Variable<String>(taskId);
+    map['image_path'] = Variable<String>(imagePath);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  TaskBackgroundsCompanion toCompanion(bool nullToAbsent) {
+    return TaskBackgroundsCompanion(
+      taskId: Value(taskId),
+      imagePath: Value(imagePath),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory TaskBackground.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TaskBackground(
+      taskId: serializer.fromJson<String>(json['taskId']),
+      imagePath: serializer.fromJson<String>(json['imagePath']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'taskId': serializer.toJson<String>(taskId),
+      'imagePath': serializer.toJson<String>(imagePath),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  TaskBackground copyWith({
+    String? taskId,
+    String? imagePath,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => TaskBackground(
+    taskId: taskId ?? this.taskId,
+    imagePath: imagePath ?? this.imagePath,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  TaskBackground copyWithCompanion(TaskBackgroundsCompanion data) {
+    return TaskBackground(
+      taskId: data.taskId.present ? data.taskId.value : this.taskId,
+      imagePath: data.imagePath.present ? data.imagePath.value : this.imagePath,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TaskBackground(')
+          ..write('taskId: $taskId, ')
+          ..write('imagePath: $imagePath, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(taskId, imagePath, createdAt, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TaskBackground &&
+          other.taskId == this.taskId &&
+          other.imagePath == this.imagePath &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class TaskBackgroundsCompanion extends UpdateCompanion<TaskBackground> {
+  final Value<String> taskId;
+  final Value<String> imagePath;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const TaskBackgroundsCompanion({
+    this.taskId = const Value.absent(),
+    this.imagePath = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TaskBackgroundsCompanion.insert({
+    required String taskId,
+    required String imagePath,
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : taskId = Value(taskId),
+       imagePath = Value(imagePath);
+  static Insertable<TaskBackground> custom({
+    Expression<String>? taskId,
+    Expression<String>? imagePath,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (taskId != null) 'task_id': taskId,
+      if (imagePath != null) 'image_path': imagePath,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TaskBackgroundsCompanion copyWith({
+    Value<String>? taskId,
+    Value<String>? imagePath,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return TaskBackgroundsCompanion(
+      taskId: taskId ?? this.taskId,
+      imagePath: imagePath ?? this.imagePath,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (taskId.present) {
+      map['task_id'] = Variable<String>(taskId.value);
+    }
+    if (imagePath.present) {
+      map['image_path'] = Variable<String>(imagePath.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TaskBackgroundsCompanion(')
+          ..write('taskId: $taskId, ')
+          ..write('imagePath: $imagePath, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $TaskListsTable taskLists = $TaskListsTable(this);
   late final $TasksTable tasks = $TasksTable(this);
+  late final $TaskBackgroundsTable taskBackgrounds = $TaskBackgroundsTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [taskLists, tasks];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+    taskLists,
+    tasks,
+    taskBackgrounds,
+  ];
+  @override
+  StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'tasks',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('task_backgrounds', kind: UpdateKind.delete)],
+    ),
+  ]);
 }
 
 typedef $$TaskListsTableCreateCompanionBuilder =
@@ -1729,6 +2063,26 @@ final class $$TasksTableReferences
       manager.$state.copyWith(prefetchedData: [item]),
     );
   }
+
+  static MultiTypedResultKey<$TaskBackgroundsTable, List<TaskBackground>>
+  _taskBackgroundsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.taskBackgrounds,
+    aliasName: $_aliasNameGenerator(db.tasks.id, db.taskBackgrounds.taskId),
+  );
+
+  $$TaskBackgroundsTableProcessedTableManager get taskBackgroundsRefs {
+    final manager = $$TaskBackgroundsTableTableManager(
+      $_db,
+      $_db.taskBackgrounds,
+    ).filter((f) => f.taskId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _taskBackgroundsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$TasksTableFilterComposer extends Composer<_$AppDatabase, $TasksTable> {
@@ -1835,6 +2189,31 @@ class $$TasksTableFilterComposer extends Composer<_$AppDatabase, $TasksTable> {
           ),
     );
     return composer;
+  }
+
+  Expression<bool> taskBackgroundsRefs(
+    Expression<bool> Function($$TaskBackgroundsTableFilterComposer f) f,
+  ) {
+    final $$TaskBackgroundsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.taskBackgrounds,
+      getReferencedColumn: (t) => t.taskId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TaskBackgroundsTableFilterComposer(
+            $db: $db,
+            $table: $db.taskBackgrounds,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
   }
 }
 
@@ -2034,6 +2413,31 @@ class $$TasksTableAnnotationComposer
     );
     return composer;
   }
+
+  Expression<T> taskBackgroundsRefs<T extends Object>(
+    Expression<T> Function($$TaskBackgroundsTableAnnotationComposer a) f,
+  ) {
+    final $$TaskBackgroundsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.taskBackgrounds,
+      getReferencedColumn: (t) => t.taskId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TaskBackgroundsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.taskBackgrounds,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$TasksTableTableManager
@@ -2049,7 +2453,7 @@ class $$TasksTableTableManager
           $$TasksTableUpdateCompanionBuilder,
           (Task, $$TasksTableReferences),
           Task,
-          PrefetchHooks Function({bool listId})
+          PrefetchHooks Function({bool listId, bool taskBackgroundsRefs})
         > {
   $$TasksTableTableManager(_$AppDatabase db, $TasksTable table)
     : super(
@@ -2144,7 +2548,338 @@ class $$TasksTableTableManager
                     (e.readTable(table), $$TasksTableReferences(db, table, e)),
               )
               .toList(),
-          prefetchHooksCallback: ({listId = false}) {
+          prefetchHooksCallback:
+              ({listId = false, taskBackgroundsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (taskBackgroundsRefs) db.taskBackgrounds,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (listId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.listId,
+                                    referencedTable: $$TasksTableReferences
+                                        ._listIdTable(db),
+                                    referencedColumn: $$TasksTableReferences
+                                        ._listIdTable(db)
+                                        .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (taskBackgroundsRefs)
+                        await $_getPrefetchedData<
+                          Task,
+                          $TasksTable,
+                          TaskBackground
+                        >(
+                          currentTable: table,
+                          referencedTable: $$TasksTableReferences
+                              ._taskBackgroundsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$TasksTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).taskBackgroundsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.taskId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$TasksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TasksTable,
+      Task,
+      $$TasksTableFilterComposer,
+      $$TasksTableOrderingComposer,
+      $$TasksTableAnnotationComposer,
+      $$TasksTableCreateCompanionBuilder,
+      $$TasksTableUpdateCompanionBuilder,
+      (Task, $$TasksTableReferences),
+      Task,
+      PrefetchHooks Function({bool listId, bool taskBackgroundsRefs})
+    >;
+typedef $$TaskBackgroundsTableCreateCompanionBuilder =
+    TaskBackgroundsCompanion Function({
+      required String taskId,
+      required String imagePath,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$TaskBackgroundsTableUpdateCompanionBuilder =
+    TaskBackgroundsCompanion Function({
+      Value<String> taskId,
+      Value<String> imagePath,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+final class $$TaskBackgroundsTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $TaskBackgroundsTable, TaskBackground> {
+  $$TaskBackgroundsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $TasksTable _taskIdTable(_$AppDatabase db) => db.tasks.createAlias(
+    $_aliasNameGenerator(db.taskBackgrounds.taskId, db.tasks.id),
+  );
+
+  $$TasksTableProcessedTableManager get taskId {
+    final $_column = $_itemColumn<String>('task_id')!;
+
+    final manager = $$TasksTableTableManager(
+      $_db,
+      $_db.tasks,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_taskIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$TaskBackgroundsTableFilterComposer
+    extends Composer<_$AppDatabase, $TaskBackgroundsTable> {
+  $$TaskBackgroundsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get imagePath => $composableBuilder(
+    column: $table.imagePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$TasksTableFilterComposer get taskId {
+    final $$TasksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.taskId,
+      referencedTable: $db.tasks,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TasksTableFilterComposer(
+            $db: $db,
+            $table: $db.tasks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TaskBackgroundsTableOrderingComposer
+    extends Composer<_$AppDatabase, $TaskBackgroundsTable> {
+  $$TaskBackgroundsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get imagePath => $composableBuilder(
+    column: $table.imagePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$TasksTableOrderingComposer get taskId {
+    final $$TasksTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.taskId,
+      referencedTable: $db.tasks,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TasksTableOrderingComposer(
+            $db: $db,
+            $table: $db.tasks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TaskBackgroundsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TaskBackgroundsTable> {
+  $$TaskBackgroundsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get imagePath =>
+      $composableBuilder(column: $table.imagePath, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$TasksTableAnnotationComposer get taskId {
+    final $$TasksTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.taskId,
+      referencedTable: $db.tasks,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TasksTableAnnotationComposer(
+            $db: $db,
+            $table: $db.tasks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TaskBackgroundsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TaskBackgroundsTable,
+          TaskBackground,
+          $$TaskBackgroundsTableFilterComposer,
+          $$TaskBackgroundsTableOrderingComposer,
+          $$TaskBackgroundsTableAnnotationComposer,
+          $$TaskBackgroundsTableCreateCompanionBuilder,
+          $$TaskBackgroundsTableUpdateCompanionBuilder,
+          (TaskBackground, $$TaskBackgroundsTableReferences),
+          TaskBackground,
+          PrefetchHooks Function({bool taskId})
+        > {
+  $$TaskBackgroundsTableTableManager(
+    _$AppDatabase db,
+    $TaskBackgroundsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TaskBackgroundsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TaskBackgroundsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TaskBackgroundsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> taskId = const Value.absent(),
+                Value<String> imagePath = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TaskBackgroundsCompanion(
+                taskId: taskId,
+                imagePath: imagePath,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String taskId,
+                required String imagePath,
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TaskBackgroundsCompanion.insert(
+                taskId: taskId,
+                imagePath: imagePath,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$TaskBackgroundsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({taskId = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [],
@@ -2164,16 +2899,18 @@ class $$TasksTableTableManager
                       dynamic
                     >
                   >(state) {
-                    if (listId) {
+                    if (taskId) {
                       state =
                           state.withJoin(
                                 currentTable: table,
-                                currentColumn: table.listId,
-                                referencedTable: $$TasksTableReferences
-                                    ._listIdTable(db),
-                                referencedColumn: $$TasksTableReferences
-                                    ._listIdTable(db)
-                                    .id,
+                                currentColumn: table.taskId,
+                                referencedTable:
+                                    $$TaskBackgroundsTableReferences
+                                        ._taskIdTable(db),
+                                referencedColumn:
+                                    $$TaskBackgroundsTableReferences
+                                        ._taskIdTable(db)
+                                        .id,
                               )
                               as T;
                     }
@@ -2189,19 +2926,19 @@ class $$TasksTableTableManager
       );
 }
 
-typedef $$TasksTableProcessedTableManager =
+typedef $$TaskBackgroundsTableProcessedTableManager =
     ProcessedTableManager<
       _$AppDatabase,
-      $TasksTable,
-      Task,
-      $$TasksTableFilterComposer,
-      $$TasksTableOrderingComposer,
-      $$TasksTableAnnotationComposer,
-      $$TasksTableCreateCompanionBuilder,
-      $$TasksTableUpdateCompanionBuilder,
-      (Task, $$TasksTableReferences),
-      Task,
-      PrefetchHooks Function({bool listId})
+      $TaskBackgroundsTable,
+      TaskBackground,
+      $$TaskBackgroundsTableFilterComposer,
+      $$TaskBackgroundsTableOrderingComposer,
+      $$TaskBackgroundsTableAnnotationComposer,
+      $$TaskBackgroundsTableCreateCompanionBuilder,
+      $$TaskBackgroundsTableUpdateCompanionBuilder,
+      (TaskBackground, $$TaskBackgroundsTableReferences),
+      TaskBackground,
+      PrefetchHooks Function({bool taskId})
     >;
 
 class $AppDatabaseManager {
@@ -2211,4 +2948,6 @@ class $AppDatabaseManager {
       $$TaskListsTableTableManager(_db, _db.taskLists);
   $$TasksTableTableManager get tasks =>
       $$TasksTableTableManager(_db, _db.tasks);
+  $$TaskBackgroundsTableTableManager get taskBackgrounds =>
+      $$TaskBackgroundsTableTableManager(_db, _db.taskBackgrounds);
 }

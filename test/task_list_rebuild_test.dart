@@ -25,7 +25,13 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [taskRepositoryProvider.overrideWithValue(repository)],
+        overrides: [
+          taskRepositoryProvider.overrideWithValue(repository),
+          taskBackgroundRepositoryProvider.overrideWithValue(
+            FakeTaskBackgroundRepository(),
+          ),
+          taskBackgroundMapProvider.overrideWith((ref) => const {}),
+        ],
         child: MaterialApp(
           theme: TempoThemePresets.minimalWhite.toThemeData(),
           home: const TasksPage(),

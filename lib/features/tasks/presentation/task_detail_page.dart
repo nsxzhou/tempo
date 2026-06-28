@@ -11,6 +11,7 @@
 // ============================================================
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,6 +27,7 @@ import '../../../core/theme/theme_manager.dart';
 import '../../../core/theme/tempo_theme_extension.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/tempo/tempo.dart';
+import '../data/task_background_repository.dart';
 import '../domain/task.dart';
 import 'widgets/quick_create_sheet.dart';
 
@@ -99,111 +101,189 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   Widget build(BuildContext context) {
     final scaffoldBg = ref.watch(scaffoldBackgroundProvider);
     if (_isLoading) {
-      return TempoBackground(
-        child: Scaffold(
+      return Scaffold(
+        backgroundColor: scaffoldBg,
+        appBar: AppBar(
           backgroundColor: scaffoldBg,
-          appBar: AppBar(
-            backgroundColor: scaffoldBg,
-            surfaceTintColor: Colors.transparent,
-          ),
-          body: const Center(child: CircularProgressIndicator()),
+          surfaceTintColor: Colors.transparent,
         ),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     final task = _task!;
-    return TempoBackground(
-      child: Scaffold(
-        backgroundColor: scaffoldBg,
-        body: Column(
-          children: [
-            _TopBar(
-              onBack: () => context.pop(),
-              onEdit: _openEditSheet,
-              onMore: _showMoreMenu,
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.only(bottom: 100),
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildTitleBlock(task),
+    final background = ref
+        .watch(taskBackgroundByTaskIdProvider(task.id))
+        .valueOrNull;
+    return Scaffold(
+      backgroundColor: scaffoldBg,
+      body: Column(
+        children: [
+          _TopBar(
+            onBack: () => context.pop(),
+            onEdit: _openEditSheet,
+            onMore: _showMoreMenu,
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(bottom: 100),
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildTitleBlock(task, background),
+                  const SizedBox(height: 16),
+                  _buildProperties(task),
+                  const SizedBox(height: 16),
+                  _buildDescription(task),
+                  if (task.siyuanBlockId != null) ...[
                     const SizedBox(height: 16),
-                    _buildProperties(task),
-                    const SizedBox(height: 16),
-                    _buildDescription(task),
-                    if (task.siyuanBlockId != null) ...[
-                      const SizedBox(height: 16),
-                      _buildSiyuanCard(task),
-                    ],
-                    const SizedBox(height: 16),
-                    _buildReadOnlyInfo(task),
-                    const SizedBox(height: 24),
-                    _buildCompleteButton(task),
+                    _buildSiyuanCard(task),
                   ],
-                ),
+                  const SizedBox(height: 16),
+                  _buildReadOnlyInfo(task),
+                  const SizedBox(height: 24),
+                  _buildCompleteButton(task),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   // ══════════════ UI 部分 ══════════════
 
-  Widget _buildTitleBlock(Task task) {
+  Widget _buildTitleBlock(Task task, TaskBackground? background) {
     final t = context.tokens;
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            if (task.priority != TaskPriority.none)
+              TempoPillBadge(
+                label: 'P${task.priority.value - 1} 级别',
+                kind: switch (task.priority) {
+                  TaskPriority.p0 => TempoBadgeKind.p0,
+                  TaskPriority.p1 => TempoBadgeKind.p1,
+                  TaskPriority.p2 => TempoBadgeKind.p2,
+                  TaskPriority.p3 => TempoBadgeKind.p3,
+                  _ => TempoBadgeKind.neutral,
+                },
+                fontSize: 10,
+              ),
+            if (task.tag == AppConstants.tagWork)
+              const TempoPillBadge(
+                label: '@工作',
+                kind: TempoBadgeKind.tag,
+                uppercase: false,
+                fontSize: 10,
+              )
+            else if (task.tag == AppConstants.tagLife)
+              const TempoPillBadge(
+                label: '@生活',
+                kind: TempoBadgeKind.tag,
+                uppercase: false,
+                fontSize: 10,
+              ),
+            if (task.creationSource != 'text')
+              TempoPillBadge(
+                label: '#${_sourceTag(task.creationSource)}',
+                kind: TempoBadgeKind.neutral,
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          task.title,
+          style: t.italicSerif(size: 32, height: 1.1, letterSpacing: -0.8),
+        ),
+      ],
+    );
+
+    final imagePath = background?.imagePath;
+    if (imagePath == null) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+        child: content,
+      );
+    }
+
+    final borderRadius = BorderRadius.circular(AppTheme.radiusMd);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: borderRadius,
+          boxShadow: AppTheme.shadowSm,
+        ),
+        foregroundDecoration: BoxDecoration(
+          borderRadius: borderRadius,
+          border: Border.all(color: t.borderStrong, width: 0.8),
+        ),
+        child: ClipRRect(
+          borderRadius: borderRadius,
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
             children: [
-              if (task.priority != TaskPriority.none)
-                TempoPillBadge(
-                  label: 'P${task.priority.value - 1} 级别',
-                  kind: switch (task.priority) {
-                    TaskPriority.p0 => TempoBadgeKind.p0,
-                    TaskPriority.p1 => TempoBadgeKind.p1,
-                    TaskPriority.p2 => TempoBadgeKind.p2,
-                    TaskPriority.p3 => TempoBadgeKind.p3,
-                    _ => TempoBadgeKind.neutral,
+              Positioned.fill(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final dpr = MediaQuery.devicePixelRatioOf(context);
+                    final cacheWidth = (constraints.maxWidth * dpr * 1.2)
+                        .round()
+                        .clamp(1, 1800)
+                        .toInt();
+                    final cacheHeight = (180 * dpr)
+                        .round()
+                        .clamp(1, 720)
+                        .toInt();
+                    return Image.file(
+                      File(imagePath),
+                      fit: BoxFit.cover,
+                      cacheWidth: cacheWidth,
+                      cacheHeight: cacheHeight,
+                      gaplessPlayback: true,
+                      filterQuality: FilterQuality.medium,
+                      errorBuilder: (_, _, _) =>
+                          ColoredBox(color: t.taskCardBackground),
+                    );
                   },
-                  fontSize: 10,
                 ),
-              if (task.tag == AppConstants.tagWork)
-                const TempoPillBadge(
-                  label: '@工作',
-                  kind: TempoBadgeKind.tag,
-                  uppercase: false,
-                  fontSize: 10,
-                )
-              else if (task.tag == AppConstants.tagLife)
-                const TempoPillBadge(
-                  label: '@生活',
-                  kind: TempoBadgeKind.tag,
-                  uppercase: false,
-                  fontSize: 10,
+              ),
+              Positioned.fill(
+                child: ColoredBox(color: t.bg.withValues(alpha: 0.58)),
+              ),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        t.bg.withValues(alpha: 0.20),
+                        t.bg.withValues(alpha: 0.02),
+                        t.fg.withValues(alpha: 0.08),
+                      ],
+                      stops: const [0, 0.54, 1],
+                    ),
+                  ),
                 ),
-              if (task.creationSource != 'text')
-                TempoPillBadge(
-                  label: '#${_sourceTag(task.creationSource)}',
-                  kind: TempoBadgeKind.neutral,
+              ),
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 156),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+                  child: content,
                 ),
+              ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            task.title,
-            style: t.italicSerif(size: 32, height: 1.1, letterSpacing: -0.8),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -578,6 +658,11 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   Future<void> _showMoreMenu() async {
     final task = _task;
     if (task == null) return;
+    final existingBackground = await ref
+        .read(taskBackgroundRepositoryProvider)
+        .getBackground(task.id);
+    if (!mounted) return;
+    final hasBackground = existingBackground != null;
 
     final action = await showModalBottomSheet<String>(
       context: context,
@@ -591,6 +676,17 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            ListTile(
+              leading: const Icon(LucideIcons.image),
+              title: const Text('更换背景'),
+              onTap: () => Navigator.of(context).pop('background'),
+            ),
+            if (hasBackground)
+              ListTile(
+                leading: const Icon(LucideIcons.ban),
+                title: const Text('清除背景'),
+                onTap: () => Navigator.of(context).pop('clear_background'),
+              ),
             ListTile(
               leading: const Icon(
                 LucideIcons.trash_2,
@@ -608,8 +704,39 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
       ),
     );
 
-    if (!mounted || action != 'delete') return;
-    await _confirmDelete(task);
+    if (!mounted || action == null) return;
+    switch (action) {
+      case 'background':
+        await _changeBackground(task);
+      case 'clear_background':
+        await _clearBackground(task);
+      case 'delete':
+        await _confirmDelete(task);
+    }
+  }
+
+  Future<void> _changeBackground(Task task) async {
+    try {
+      final background = await ref
+          .read(taskBackgroundRepositoryProvider)
+          .pickBackgroundImage(task.id);
+      if (!mounted || background == null) return;
+      TempoSnackbar.show(context, message: '背景已更新');
+    } catch (e) {
+      if (!mounted) return;
+      TempoSnackbar.show(context, message: '背景更新失败:$e');
+    }
+  }
+
+  Future<void> _clearBackground(Task task) async {
+    try {
+      await ref.read(taskBackgroundRepositoryProvider).clearBackground(task.id);
+      if (!mounted) return;
+      TempoSnackbar.show(context, message: '背景已清除');
+    } catch (e) {
+      if (!mounted) return;
+      TempoSnackbar.show(context, message: '背景清除失败:$e');
+    }
   }
 
   Future<void> _confirmDelete(Task task) async {
@@ -630,6 +757,10 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     _lastDeletedTask = task;
     final navigatorKey = ref.read(appNavigatorKeyProvider);
     try {
+      await ref
+          .read(taskBackgroundRepositoryProvider)
+          .clearBackground(task.id)
+          .catchError((_) {});
       await ref.read(taskRepositoryProvider).deleteTask(task.id);
       if (!mounted) return;
       context.pop();

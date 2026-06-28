@@ -58,7 +58,7 @@ void main() {
     expect(gradient.begin, Alignment.topCenter);
     expect(gradient.end, Alignment.bottomCenter);
     expect(gradient.stops, const [0, 0.28, 0.66, 1]);
-    expect(gradient.colors.first, tokens.bg.withValues(alpha: 0.30));
-    expect(gradient.colors.last, tokens.bg.withValues(alpha: 0.34));
+    expect(gradient.colors.first, tokens.bg.withValues(alpha: 0.16));
+    expect(gradient.colors.last, tokens.bg.withValues(alpha: 0.20));
   });
 }

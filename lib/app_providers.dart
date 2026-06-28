@@ -16,6 +16,7 @@ import 'features/settings/data/feedback_service.dart';
 import 'features/settings/data/siyuan_pairing_service.dart';
 import 'features/tasks/data/notification_service.dart';
 import 'features/tasks/data/sync_service.dart';
+import 'features/tasks/data/task_background_repository.dart';
 import 'features/tasks/data/task_repository.dart';
 import 'core/router/app_router.dart';
 import 'features/tasks/data/streaming_voice_session.dart';
@@ -145,6 +146,30 @@ final taskMapProvider = Provider<Map<String, Task>>((ref) {
 final taskByIdProvider = Provider.family<Task?, String>((ref, id) {
   return ref.watch(taskMapProvider)[id];
 });
+
+// ── Local Task Backgrounds ──
+
+final taskBackgroundRepositoryProvider = Provider<TaskBackgroundRepository>((
+  ref,
+) {
+  return LocalTaskBackgroundRepository(db: ref.watch(databaseProvider));
+});
+
+final taskBackgroundListProvider = StreamProvider<List<TaskBackground>>((ref) {
+  return ref.watch(taskBackgroundRepositoryProvider).watchBackgrounds();
+}, name: 'taskBackgroundListProvider');
+
+final taskBackgroundMapProvider = Provider<Map<String, TaskBackground>>((ref) {
+  final backgrounds = ref.watch(taskBackgroundListProvider).valueOrNull ?? [];
+  return {for (final background in backgrounds) background.taskId: background};
+});
+
+final taskBackgroundByTaskIdProvider =
+    StreamProvider.family<TaskBackground?, String>((ref, taskId) {
+      return ref
+          .watch(taskBackgroundRepositoryProvider)
+          .watchBackground(taskId);
+    }, name: 'taskBackgroundByTaskIdProvider');
 
 /// 统计页快照（内存聚合，移出 build）。
 final statsSnapshotProvider = Provider.family<StatsSnapshot, int>((ref, days) {

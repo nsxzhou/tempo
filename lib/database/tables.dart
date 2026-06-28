@@ -46,3 +46,17 @@ class Tasks extends Table {
   @override
   Set<Column> get primaryKey => {id};
 }
+
+/// 本机待办背景图。
+///
+/// v1 只保存本机文件路径，不参与 Supabase 同步。
+class TaskBackgrounds extends Table {
+  TextColumn get taskId =>
+      text().references(Tasks, #id, onDelete: KeyAction.cascade)();
+  TextColumn get imagePath => text()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {taskId};
+}

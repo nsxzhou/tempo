@@ -276,6 +276,10 @@ class _TasksPageState extends ConsumerState<TasksPage>
   Future<void> _deleteTask(Task task) async {
     _lastDeletedTask = task;
     try {
+      await ref
+          .read(taskBackgroundRepositoryProvider)
+          .clearBackground(task.id)
+          .catchError((_) {});
       await ref.read(taskRepositoryProvider).deleteTask(task.id);
       unawaited(
         ref.read(notificationServiceProvider).cancelTaskReminders(task.id),
@@ -612,6 +616,7 @@ class _TaskListSection extends ConsumerWidget {
     );
     final groups = snapshot.groups;
     final async = ref.watch(taskListProvider);
+    final backgrounds = ref.watch(taskBackgroundMapProvider);
 
     // 首帧 loading：taskListProvider 尚无数据时显示加载态。
     if (!async.hasValue && !async.hasError) {
@@ -669,6 +674,7 @@ class _TaskListSection extends ConsumerWidget {
                     onToggleComplete: () => onToggle(task),
                     showDelete: true,
                     onDelete: () => onDelete(task),
+                    backgroundImagePath: backgrounds[task.id]?.imagePath,
                   ),
                 );
               },
@@ -698,6 +704,7 @@ class _TaskListSection extends ConsumerWidget {
                     onToggleComplete: () => onToggle(task),
                     showDelete: true,
                     onDelete: () => onDelete(task),
+                    backgroundImagePath: backgrounds[task.id]?.imagePath,
                   ),
                 );
               },

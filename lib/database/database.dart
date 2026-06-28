@@ -13,7 +13,7 @@ part 'database.g.dart';
 ///
 /// 使用 Drift (SQLite) 作为本地缓存层。
 /// 数据以 Supabase 为准，本地数据库提供毫秒级读取体验。
-@DriftDatabase(tables: [TaskLists, Tasks])
+@DriftDatabase(tables: [TaskLists, Tasks, TaskBackgrounds])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
@@ -21,7 +21,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration {
@@ -66,6 +66,9 @@ class AppDatabase extends _$AppDatabase {
               'CREATE INDEX IF NOT EXISTS idx_tasks_list_id ON tasks (list_id)',
             ),
           );
+        }
+        if (from < 6) {
+          await m.createTable(taskBackgrounds);
         }
       },
     );

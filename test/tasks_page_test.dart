@@ -205,6 +205,10 @@ void main() {
             notificationServiceProvider.overrideWithValue(
               _NoopNotificationService(),
             ),
+            taskBackgroundRepositoryProvider.overrideWithValue(
+              FakeTaskBackgroundRepository(),
+            ),
+            taskBackgroundMapProvider.overrideWith((ref) => const {}),
           ],
           child: MaterialApp(
             theme: TempoThemePresets.minimalWhite.toThemeData(),
@@ -253,6 +257,10 @@ void main() {
           notificationServiceProvider.overrideWithValue(
             _NoopNotificationService(),
           ),
+          taskBackgroundRepositoryProvider.overrideWithValue(
+            FakeTaskBackgroundRepository(),
+          ),
+          taskBackgroundMapProvider.overrideWith((ref) => const {}),
         ],
         child: MaterialApp(
           theme: TempoThemePresets.minimalWhite.toThemeData(),
@@ -330,6 +338,13 @@ void main() {
           notificationServiceProvider.overrideWithValue(
             _NoopNotificationService(),
           ),
+          taskBackgroundRepositoryProvider.overrideWithValue(
+            FakeTaskBackgroundRepository(),
+          ),
+          taskBackgroundByTaskIdProvider.overrideWith(
+            (ref, taskId) => Stream.value(null),
+          ),
+          taskBackgroundMapProvider.overrideWith((ref) => const {}),
         ],
         child: MaterialApp.router(
           theme: TempoThemePresets.minimalWhite.toThemeData(),
@@ -381,6 +396,10 @@ Future<void> _pumpTasksPage(
           _NoopNotificationService(),
         ),
         appNavigatorKeyProvider.overrideWithValue(navigatorKey),
+        taskBackgroundRepositoryProvider.overrideWithValue(
+          FakeTaskBackgroundRepository(),
+        ),
+        taskBackgroundMapProvider.overrideWith((ref) => const {}),
       ],
       child: MaterialApp(
         navigatorKey: navigatorKey,

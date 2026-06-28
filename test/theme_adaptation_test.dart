@@ -141,7 +141,7 @@ void main() {
 
       expect(container.read(themeManagerProvider).backgroundImageValid, isTrue);
       final tokens = container.read(activeTempoTokensProvider);
-      expect(tokens.backgroundOverlayOpacity, 0.18);
+      expect(tokens.backgroundOverlayOpacity, 0.08);
       expect(
         tokens.taskCardBackground,
         TempoThemePresets.minimalWhite.bg.withValues(alpha: 0.78),

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:tempo/core/constants/app_constants.dart';
 import 'package:tempo/features/tasks/data/streaming_voice_session.dart';
+import 'package:tempo/features/tasks/data/task_background_repository.dart';
 import 'package:tempo/features/tasks/data/task_repository.dart';
 import 'package:tempo/features/tasks/data/text_parse_service.dart';
 import 'package:tempo/features/tasks/data/voice_recorder.dart';
@@ -135,6 +136,31 @@ class FakeTaskRepository implements TaskRepository {
       _controller.add(List.unmodifiable(tasks));
     }
   }
+}
+
+class FakeTaskBackgroundRepository implements TaskBackgroundRepository {
+  @override
+  Stream<List<TaskBackground>> watchBackgrounds() => const Stream.empty();
+
+  @override
+  Stream<TaskBackground?> watchBackground(String taskId) => Stream.value(null);
+
+  @override
+  Future<TaskBackground?> getBackground(String taskId) async => null;
+
+  @override
+  Future<TaskBackground?> pickBackgroundImage(String taskId) async => null;
+
+  @override
+  Future<TaskBackground> setBackgroundFromFile({
+    required String taskId,
+    required String sourcePath,
+  }) {
+    throw UnsupportedError('Fake does not create task backgrounds');
+  }
+
+  @override
+  Future<void> clearBackground(String taskId) async {}
 }
 
 class FakeVoiceRecorder implements VoiceRecorder {

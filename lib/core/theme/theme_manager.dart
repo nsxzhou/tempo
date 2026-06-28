@@ -188,9 +188,9 @@ final themeManagerProvider =
       return ThemeManager();
     });
 
-const _customBackgroundOverlayOpacity = 0.18;
-const _customBackgroundCustomCardAlpha = 0.76;
-const _customBackgroundBorderAlpha = 0.62;
+const _customBackgroundOverlayOpacity = 0.08;
+const _customBackgroundCustomCardAlpha = 0.84;
+const _customBackgroundBorderAlpha = 0.56;
 
 final activeTempoTokensProvider = Provider<TempoTokens>((ref) {
   final customization = ref.watch(themeManagerProvider);

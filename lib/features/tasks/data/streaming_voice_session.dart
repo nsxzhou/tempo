@@ -166,8 +166,6 @@ class LiveStreamingVoiceSession implements StreamingVoiceSession {
     await _asrSub?.cancel();
     _asrSub = null;
     _audioBuffer.clear();
-    _asrPrepared = false;
-    _prepareFuture = null;
 
     return transcript;
   }
@@ -176,6 +174,8 @@ class LiveStreamingVoiceSession implements StreamingVoiceSession {
   Future<void> disposeSession() async {
     if (_recording) return;
     await cancel();
+    _asrPrepared = false;
+    _prepareFuture = null;
   }
 
   @override

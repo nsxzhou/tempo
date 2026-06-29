@@ -119,6 +119,8 @@ abstract class VolcengineStreamingAsr {
 
   Future<String> finish();
 
+  Future<void> resetForNextUtterance();
+
   Future<void> cancel();
 }
 
@@ -228,12 +230,12 @@ class VolcengineStreamingAsrService implements VolcengineStreamingAsr {
     try {
       await _finishCompleter!.future.timeout(_asrFinishTimeout);
     } on TimeoutException {
-      // Fall through to cleanup and validate transcript below.
+      // Fall through to reset and validate transcript below.
     }
 
-    await _cleanup();
-
-    if (_currentTranscript.trim().isEmpty) {
+    final transcript = _currentTranscript;
+    if (transcript.trim().isEmpty) {
+      await _cleanup();
       if (_relayErrorMessage != null) {
         throw VolcengineStreamingAsrException(_relayErrorMessage!);
       }
@@ -242,7 +244,9 @@ class VolcengineStreamingAsrService implements VolcengineStreamingAsr {
       }
       throw const VolcengineStreamingAsrException('语音识别结果为空，请重试。');
     }
-    return _currentTranscript;
+
+    await _softReset();
+    return transcript;
   }
 
   String _formatRelayUpstreamError(String message) {
@@ -251,6 +255,12 @@ class VolcengineStreamingAsrService implements VolcengineStreamingAsr {
           '且 VOLCENGINE_ASR_API_KEY 对应资源 volc.seedasr.sauc.duration';
     }
     return 'ASR 中继异常：$message';
+  }
+
+  @override
+  Future<void> resetForNextUtterance() async {
+    if (!_started) return;
+    await _softReset();
   }
 
   @override
@@ -310,6 +320,31 @@ class VolcengineStreamingAsrService implements VolcengineStreamingAsr {
     if (!_transcriptController.isClosed) {
       _transcriptController.add(text);
     }
+  }
+
+  Future<void> _softReset() async {
+    _currentTranscript = '';
+    _receivedAnyPacket = false;
+    _finishCompleter = null;
+    _relayErrorMessage = null;
+    _seq = 1;
+
+    if (_session?.mock == true) {
+      return;
+    }
+
+    if (_channel == null) {
+      _started = false;
+      return;
+    }
+
+    final configFrame = buildFullClientRequestFrame(
+      buildDefaultAsrRequestPayload(),
+      sequence: _seq,
+    );
+    _seq++;
+    _channel!.sink.add(configFrame);
+    _started = true;
   }
 
   Future<void> _cleanup() async {

@@ -14,8 +14,11 @@ import '../../../../core/theme/tempo_theme_extension.dart';
 import '../../../../core/motion/tempo_sheet.dart';
 import '../../../../core/widgets/tempo/tempo.dart';
 import '../../data/task_creation_orchestrator.dart';
+import '../../data/text_parse_service.dart';
 import '../../data/voice_task_parse_result.dart';
+import '../../domain/recurrence_models.dart';
 import '../../domain/task.dart';
+import 'repeat_picker.dart';
 
 /// 日期快捷选项
 enum _QuickDate {
@@ -116,6 +119,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
 
   final _titleController = TextEditingController();
   final _titleFocus = FocusNode();
+  late final TextParseService _textParseService;
 
   bool _expanded = false;
   _QuickDate? _selectedDate;
@@ -127,6 +131,11 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
   bool _tagTouched = false;
   bool _dateTouched = false;
   bool _priorityTouched = false;
+  bool _repeatEnabled = false;
+  RecurrenceConfig _recurrenceConfig = const RecurrenceConfig(
+    interval: 1,
+    unit: RecurrenceUnit.day,
+  );
 
   bool _isSubmitting = false;
 
@@ -144,6 +153,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
   @override
   void initState() {
     super.initState();
+    _textParseService = ref.read(textParseServiceProvider);
     final initialTask = widget.initialTask;
     final voiceDraft = widget.voiceDraft;
     if (initialTask != null) {
@@ -168,7 +178,14 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
       _expanded =
           initialTask.dueDate != null ||
           initialTask.priority != TaskPriority.none ||
-          initialTask.tag != null;
+          initialTask.tag != null ||
+          initialTask.isRecurring;
+      if (initialTask.isRecurring) {
+        _repeatEnabled = true;
+        _recurrenceConfig =
+            RecurrenceConfig.fromRRule(initialTask.recurrenceRule) ??
+            const RecurrenceConfig(interval: 1, unit: RecurrenceUnit.day);
+      }
     } else if (voiceDraft != null) {
       _titleController.text = voiceDraft.title;
       if (voiceDraft.dueDate != null) {
@@ -202,14 +219,29 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
 
   void _onTitleChanged() {
     setState(() {});
+    _preparseTitleIfAllowed();
   }
 
   @override
   void dispose() {
     _titleController.removeListener(_onTitleChanged);
+    _textParseService.cancelPendingParse();
     _titleController.dispose();
     _titleFocus.dispose();
     super.dispose();
+  }
+
+  void _preparseTitleIfAllowed() {
+    if (_isEditMode || widget.isVoicePrefillMode || _skipParse) {
+      _textParseService.cancelPendingParse();
+      return;
+    }
+    _textParseService.parseTextDebounced(_titleController.text);
+  }
+
+  void _cancelPreparseForManualOverride() {
+    if (_isEditMode || widget.isVoicePrefillMode) return;
+    _textParseService.cancelPendingParse();
   }
 
   /// 获取选中的日期部分（不含时间）
@@ -307,6 +339,13 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
               priority: _selectedPriority,
               tag: _selectedTag,
               skipParse: _skipParse,
+              recurrenceRule: _repeatEnabled && _recurrenceConfig.hasRecurrence
+                  ? _recurrenceConfig.toRRule()
+                  : null,
+              recurrenceEnd: _repeatEnabled ? _recurrenceConfig.endDate : null,
+              recurrenceCount: _repeatEnabled
+                  ? _recurrenceConfig.occurrenceCount
+                  : null,
             ),
           ),
     );
@@ -396,6 +435,8 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
                             _buildTagSection(),
                             const SizedBox(height: 14),
                             _buildPrioritySection(),
+                            const SizedBox(height: 14),
+                            _buildRepeatSection(),
                           ],
                         )
                       : const SizedBox.shrink(),
@@ -476,7 +517,8 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
           ),
           if (_effectiveDueDate != null ||
               _selectedPriority != TaskPriority.none ||
-              _selectedTag != null) ...[
+              _selectedTag != null ||
+              _repeatEnabled) ...[
             const SizedBox(width: 6),
             Container(
               width: 5,
@@ -486,6 +528,36 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildRepeatSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('重复'),
+            value: _repeatEnabled,
+            onChanged: (v) => setState(() {
+              _repeatEnabled = v;
+              if (v && !_recurrenceConfig.hasRecurrence) {
+                _recurrenceConfig = const RecurrenceConfig(
+                  interval: 1,
+                  unit: RecurrenceUnit.day,
+                );
+              }
+            }),
+          ),
+        ),
+        if (_repeatEnabled)
+          RepeatPicker(
+            config: _recurrenceConfig,
+            onChanged: (c) => setState(() => _recurrenceConfig = c),
+          ),
+      ],
     );
   }
 
@@ -533,6 +605,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
             _dateTouched = true;
           }
         });
+        _cancelPreparseForManualOverride();
       },
       child: Container(
         height: 32,
@@ -611,6 +684,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
         _selectedDate = null;
         _dateTouched = true;
       });
+      _cancelPreparseForManualOverride();
     }
   }
 
@@ -719,6 +793,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
         _selectedTime ??= const TimeOfDay(hour: 9, minute: 0);
         _dateTouched = true;
       });
+      _cancelPreparseForManualOverride();
     }
     await _pickTime();
   }
@@ -734,6 +809,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
         _isAllDay = false;
         _dateTouched = true;
       });
+      _cancelPreparseForManualOverride();
     }
   }
 
@@ -743,6 +819,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
       _selectedTime = null;
       _dateTouched = true;
     });
+    _cancelPreparseForManualOverride();
   }
 
   // ══════════════ 分类 pills ══════════════
@@ -786,6 +863,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
             _selectedTag = value;
           }
         });
+        _cancelPreparseForManualOverride();
       },
       child: Container(
         height: 32,
@@ -862,6 +940,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
             _selectedPriority = p;
           }
         });
+        _cancelPreparseForManualOverride();
       },
       child: Container(
         height: 32,

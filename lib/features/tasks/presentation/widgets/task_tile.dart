@@ -12,6 +12,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/tempo_theme_extension.dart';
 import '../../../../core/widgets/tempo/tempo.dart';
+import '../../data/task_ai_enhancement_state.dart';
 import '../../domain/task.dart';
 import 'task_background_image.dart';
 
@@ -22,6 +23,9 @@ class TaskTile extends StatefulWidget {
   final VoidCallback? onDelete;
   final bool showDelete;
   final String? backgroundImagePath;
+  final TaskAiEnhancementStatus? aiEnhancementStatus;
+  final int? streakCount;
+  final bool showRecurring;
 
   const TaskTile({
     super.key,
@@ -31,6 +35,9 @@ class TaskTile extends StatefulWidget {
     this.onDelete,
     this.showDelete = false,
     this.backgroundImagePath,
+    this.aiEnhancementStatus,
+    this.streakCount,
+    this.showRecurring = false,
   });
 
   @override
@@ -204,6 +211,7 @@ class _TaskTileState extends State<TaskTile> {
     final t = context.tokens;
     final category = _categoryLabel;
     final completed = _localCompleted;
+    final enhancementBadge = _buildEnhancementBadge();
 
     return Row(
       children: [
@@ -247,7 +255,38 @@ class _TaskTileState extends State<TaskTile> {
                         ),
                       ),
                     ),
-                    if (category != null)
+                    if (widget.showRecurring) ...[
+                      const SizedBox(width: 6),
+                      Icon(Icons.repeat, size: 14, color: t.fgMuted),
+                    ],
+                    if (widget.streakCount != null &&
+                        widget.streakCount! > 0) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: t.fg.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${widget.streakCount}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: t.fg,
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (enhancementBadge != null) ...[
+                      const SizedBox(width: 8),
+                      enhancementBadge,
+                    ],
+                    if (category != null) ...[
+                      if (enhancementBadge != null) const SizedBox(width: 8),
                       Text(
                         category,
                         maxLines: 1,
@@ -260,6 +299,7 @@ class _TaskTileState extends State<TaskTile> {
                           height: 1.2,
                         ),
                       ),
+                    ],
                   ],
                 ),
               ),
@@ -267,6 +307,48 @@ class _TaskTileState extends State<TaskTile> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget? _buildEnhancementBadge() {
+    final status = widget.aiEnhancementStatus;
+    if (status == null || status == TaskAiEnhancementStatus.succeeded) {
+      return null;
+    }
+
+    final t = context.tokens;
+    final failed = status == TaskAiEnhancementStatus.failed;
+    final color = failed ? AppTheme.priorityP0 : t.fgMuted;
+    final bg = failed ? AppTheme.priorityP0Bg : t.bgMuted;
+    final border = failed ? AppTheme.priorityP0Border : t.borderStrong;
+    return Container(
+      height: 22,
+      padding: const EdgeInsets.symmetric(horizontal: 7),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+        border: Border.all(color: border, width: 0.7),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            failed ? LucideIcons.circle_alert : LucideIcons.sparkles,
+            size: 11,
+            color: color,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            failed ? 'AI失败' : 'AI补全中',
+            style: t.mono(
+              size: 9,
+              weight: FontWeight.w700,
+              color: color,
+              letterSpacing: 0,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

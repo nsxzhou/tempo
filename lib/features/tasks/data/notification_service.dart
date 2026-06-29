@@ -1,7 +1,6 @@
 // ============================================================
 // NotificationService — 本地待办提醒调度
-// 创建/更新任务时调度提醒；完成/删除时取消通知
-// 通知 ID 映射: taskId.hashCode
+// 单次任务：1 条通知；重复任务：预调度未来 N 次 occurrence
 // ============================================================
 
 import 'dart:async';
@@ -14,35 +13,40 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../../core/constants/app_constants.dart';
+import '../domain/recurrence_engine.dart';
+import '../domain/recurrence_models.dart';
 import '../domain/task.dart';
 
-/// 计算待办提醒的本地时刻（dueDate 日历日 08:00）。
-DateTime todoReminderDateTime(DateTime dueDate) {
-  return DateTime(dueDate.year, dueDate.month, dueDate.day, 8);
+/// 计算待办提醒时刻：全天 → 08:00；否则用 due 实际时分
+DateTime todoReminderDateTime(Task task, [DateTime? occurrenceDue]) {
+  final due = occurrenceDue ?? task.dueDate;
+  if (due == null) return DateTime.now();
+  if (task.isAllDay) {
+    return DateTime(due.year, due.month, due.day, 8);
+  }
+  return due;
 }
 
-/// 本地通知服务。
-///
-/// 使用 flutter_local_notifications 为有日期的待办调度提醒。
-/// 每个任务 1 条通知：对应日历日当天 08:00。
-///
-/// 通知 ID 映射：taskId.hashCode
 class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin;
+  final RecurrenceEngine _engine;
   bool _initialized = false;
   static SharedPreferences? _prefsCache;
+
+  static const _recurringHorizon = 14;
 
   static Future<SharedPreferences> _prefs() async {
     return _prefsCache ??= await SharedPreferences.getInstance();
   }
 
-  /// 通知点击回调（由 App 设置，用于导航到详情页）。
   void Function(String taskId)? onNotificationTap;
 
-  NotificationService({FlutterLocalNotificationsPlugin? plugin})
-    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+  NotificationService({
+    FlutterLocalNotificationsPlugin? plugin,
+    RecurrenceEngine? engine,
+  }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin(),
+       _engine = engine ?? const RecurrenceEngine();
 
-  /// 初始化通知插件和 timezone。
   Future<void> init() async {
     if (_initialized) return;
 
@@ -73,7 +77,6 @@ class NotificationService {
     _initialized = true;
   }
 
-  /// 请求通知权限（iOS 需要显式请求，Android 13+ 也需要）。
   Future<bool> requestPermissions() async {
     if (!_initialized) await init();
 
@@ -100,13 +103,11 @@ class NotificationService {
     return iosResult ?? true;
   }
 
-  /// 读取用户是否开启待办提醒。
   Future<bool> isRemindersEnabled() async {
     final prefs = await _prefs();
     return prefs.getBool(AppConstants.prefNotificationEnabled) ?? true;
   }
 
-  /// 更新提醒开关；关闭时取消全部已调度通知。
   Future<void> setRemindersEnabled(bool enabled) async {
     final prefs = await _prefs();
     await prefs.setBool(AppConstants.prefNotificationEnabled, enabled);
@@ -123,67 +124,118 @@ class NotificationService {
     }
   }
 
-  /// 为所有符合条件的任务重新调度提醒（开启开关后调用）。
   Future<void> rescheduleAllTasks(Iterable<Task> tasks) async {
     if (!await isRemindersEnabled()) return;
-    const batchSize = 10;
-    final list = tasks.toList();
-    for (var i = 0; i < list.length; i += batchSize) {
-      final end = (i + batchSize < list.length) ? i + batchSize : list.length;
-      for (var j = i; j < end; j++) {
-        unawaited(scheduleTaskReminder(list[j]));
-      }
-      if (end < list.length) {
-        await Future<void>.delayed(Duration.zero);
-      }
+    for (final task in tasks) {
+      unawaited(scheduleTaskReminder(task));
     }
   }
 
-  /// 为任务调度待办提醒（对应日历日 08:00）。
-  ///
-  /// 仅当 task.dueDate != null && !isCompleted && 提醒时刻 > now 时调度。
-  /// 通知调度为 best-effort：失败时不抛出，避免任务已创建却报失败。
   Future<void> scheduleTaskReminder(Task task) async {
+    if (task.isRecurring) {
+      await scheduleRecurringReminders(task);
+      return;
+    }
+    await _scheduleSingle(task, task.dueDate, task.id);
+  }
+
+  Future<void> scheduleRecurringReminders(
+    Task task, {
+    List<TaskCompletion> completions = const [],
+    List<RecurrenceException> exceptions = const [],
+  }) async {
     try {
       if (!_initialized) await init();
-
       if (!await isRemindersEnabled()) return;
+      if (!task.isRecurring) return;
 
       await cancelTaskReminders(task.id);
 
-      if (task.dueDate == null || task.isCompleted) return;
-
       final now = DateTime.now();
-      final reminderAt = todoReminderDateTime(task.dueDate!);
-
-      if (!reminderAt.isAfter(now)) return;
-
-      await _zonedSchedule(
-        id: _notificationId(task.id),
-        title: '待办提醒',
-        body: task.title,
-        scheduledTime: reminderAt,
-        payload: task.id,
+      final occs = _engine.expandOccurrences(
+        task,
+        from: now,
+        to: now.add(const Duration(days: 60)),
+        completions: completions,
+        exceptions: exceptions,
+        now: now,
       );
+
+      var scheduled = 0;
+      for (final occ in occs) {
+        if (occ.state != OccurrenceState.pending) continue;
+        if (scheduled >= _recurringHorizon) break;
+        await _scheduleSingle(
+          task,
+          occ.effectiveDue,
+          task.id,
+          occurrenceDate: occ.occurrenceDate,
+        );
+        scheduled++;
+      }
     } catch (e, stack) {
       _debugPrintNotificationFailure(
-        'scheduleTaskReminder failed for ${task.id}',
+        'scheduleRecurringReminders failed for ${task.id}',
         e,
         stack,
       );
     }
   }
 
-  /// 取消任务的待办提醒。
-  Future<void> cancelTaskReminders(String taskId) async {
-    await _plugin.cancel(_notificationId(taskId));
-    // 兼容旧版双通知 ID，避免升级后残留到期提醒。
-    await _plugin.cancel(_notificationId(taskId) + 1);
+  Future<void> cancelOccurrenceReminder(
+    String taskId,
+    DateTime occurrenceDate,
+  ) async {
+    await _plugin.cancel(_occurrenceNotificationId(taskId, occurrenceDate));
   }
 
-  /// 取消所有通知。
+  Future<void> cancelTaskReminders(String taskId) async {
+    await _plugin.cancel(_notificationId(taskId));
+    await _plugin.cancel(_notificationId(taskId) + 1);
+    // 取消预调度的 occurrence 通知（id 基于日期 hash）
+    for (var i = 0; i < 30; i++) {
+      final day = DateTime.now().add(Duration(days: i));
+      await _plugin.cancel(_occurrenceNotificationId(taskId, day));
+    }
+  }
+
   Future<void> cancelAll() async {
     await _plugin.cancelAll();
+  }
+
+  Future<void> _scheduleSingle(
+    Task task,
+    DateTime? due,
+    String payloadTaskId, {
+    DateTime? occurrenceDate,
+  }) async {
+    try {
+      if (!_initialized) await init();
+      if (!await isRemindersEnabled()) return;
+      if (due == null) return;
+
+      final now = DateTime.now();
+      final reminderAt = todoReminderDateTime(task, due);
+      if (!reminderAt.isAfter(now)) return;
+
+      final id = occurrenceDate != null
+          ? _occurrenceNotificationId(payloadTaskId, occurrenceDate)
+          : _notificationId(payloadTaskId);
+
+      await _zonedSchedule(
+        id: id,
+        title: '待办提醒',
+        body: task.title,
+        scheduledTime: reminderAt,
+        payload: payloadTaskId,
+      );
+    } catch (e, stack) {
+      _debugPrintNotificationFailure(
+        'schedule reminder failed for $payloadTaskId',
+        e,
+        stack,
+      );
+    }
   }
 
   void _debugPrintNotificationFailure(
@@ -197,8 +249,6 @@ class NotificationService {
     debugPrint('[Tempo] $operation: $error');
     debugPrintStack(stackTrace: stack);
   }
-
-  // ── 内部方法 ──
 
   Future<void> _createAndroidChannel() async {
     const channel = AndroidNotificationChannel(
@@ -271,4 +321,9 @@ class NotificationService {
   }
 
   int _notificationId(String taskId) => taskId.hashCode;
+
+  int _occurrenceNotificationId(String taskId, DateTime occurrenceDate) {
+    final day = RecurrenceEngine.calendarDay(occurrenceDate);
+    return Object.hash(taskId, day.year, day.month, day.day);
+  }
 }

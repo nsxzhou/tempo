@@ -2,11 +2,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
+import 'package:drift/drift.dart' hide isNotNull;
 import 'package:drift/native.dart';
 import 'package:tempo/database/database.dart';
 
 void main() {
-  test('migrates from schema v5 to v6 and creates task_backgrounds', () async {
+  test('migrates from schema v6 to v7 and adds recurrence tables', () async {
     final file = File(
       '${Directory.systemTemp.path}/tempo_v5_${DateTime.now().microsecondsSinceEpoch}.db',
     );
@@ -24,7 +25,7 @@ void main() {
     final versionRow = await db
         .customSelect('PRAGMA user_version')
         .getSingle();
-    expect(versionRow.read<int>('user_version'), 6);
+    expect(versionRow.read<int>('user_version'), 7);
 
     await db
         .into(db.taskLists)
@@ -38,8 +39,27 @@ void main() {
     await db
         .into(db.tasks)
         .insert(
-          TasksCompanion.insert(id: 'task-1', listId: 'list-1', title: 'Task'),
+          TasksCompanion.insert(
+            id: 'task-1',
+            listId: 'list-1',
+            title: 'Task',
+            recurrenceRule: const Value('FREQ=DAILY;INTERVAL=1'),
+          ),
         );
+
+    await db
+        .into(db.taskCompletions)
+        .insert(
+          TaskCompletionsCompanion.insert(
+            taskId: 'task-1',
+            occurrenceDate: DateTime(2026, 6, 1),
+          ),
+        );
+
+    final completion = await (db.select(
+      db.taskCompletions,
+    )..where((row) => row.taskId.equals('task-1'))).getSingleOrNull();
+    expect(completion, isNotNull);
 
     final dir = Directory.systemTemp.createTempSync('tempo_bg_migrate_');
     final imagePath = File('${dir.path}/bg.jpg')..writeAsStringSync('bg');
@@ -101,8 +121,15 @@ void _createV5Schema(String path) {
       CREATE INDEX IF NOT EXISTS idx_tasks_is_completed ON tasks (is_completed);
       CREATE INDEX IF NOT EXISTS idx_tasks_completed_at ON tasks (completed_at);
       CREATE INDEX IF NOT EXISTS idx_tasks_list_id ON tasks (list_id);
+
+      CREATE TABLE task_backgrounds (
+        task_id TEXT NOT NULL PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+        image_path TEXT NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)),
+        updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER))
+      );
     ''');
-    db.execute('PRAGMA user_version = 5');
+    db.execute('PRAGMA user_version = 6');
   } finally {
     db.dispose();
   }

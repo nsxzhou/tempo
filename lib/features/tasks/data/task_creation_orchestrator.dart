@@ -52,6 +52,12 @@ typedef TaskCreationSnackbar =
 
 typedef VoiceDraftConfirmCallback = void Function(VoiceTaskParseResult draft);
 
+enum VoicePipelinePhase { transcribing, parsing }
+
+typedef VoicePipelinePhaseCallback = void Function(VoicePipelinePhase phase);
+
+typedef VoicePipelineCompleteCallback = void Function();
+
 /// 后台执行任务解析、创建与提醒调度，并通过 Snackbar 反馈结果。
 class TaskCreationOrchestrator {
   final TaskRepository _repository;
@@ -82,42 +88,29 @@ class TaskCreationOrchestrator {
     return _runVoiceCreate(result);
   }
 
-  /// 语音停止后的后台流水线：ASR 收尾 → LLM 解析 → 自动创建或草稿确认。
+  /// 语音停止后的流水线：ASR 定稿 → LLM 解析 → 自动创建或草稿确认。
   Future<void> enqueueVoicePipeline({
     required StreamingVoiceSession session,
     required VoiceDraftConfirmCallback onNeedDraftConfirm,
+    VoicePipelinePhaseCallback? onPhaseChanged,
+    VoicePipelineCompleteCallback? onComplete,
   }) {
     return _runVoicePipeline(
       session: session,
       onNeedDraftConfirm: onNeedDraftConfirm,
+      onPhaseChanged: onPhaseChanged,
+      onComplete: onComplete,
     );
   }
 
   Future<void> _runVoicePipeline({
     required StreamingVoiceSession session,
     required VoiceDraftConfirmCallback onNeedDraftConfirm,
+    VoicePipelinePhaseCallback? onPhaseChanged,
+    VoicePipelineCompleteCallback? onComplete,
   }) async {
-    final liveTranscript = session.currentTranscript.trim();
-    if (liveTranscript.isNotEmpty) {
-      try {
-        final task = await _createInitialVoiceTask(liveTranscript);
-        _markEnhancementPending(task.id);
-        _showSuccess(task, voice: true);
-        unawaited(
-          _finishVoiceAndEnhanceTask(
-            session: session,
-            task: task,
-            fallbackTranscript: liveTranscript,
-          ),
-        );
-      } catch (e) {
-        _showFailure(e);
-      }
-      return;
-    }
-
     try {
-      _showSnackbar(message: '正在识别语音…');
+      onPhaseChanged?.call(VoicePipelinePhase.transcribing);
       final transcript = await session.stopAndGetTranscript();
       final trimmed = transcript.trim();
       if (trimmed.isEmpty) {
@@ -125,32 +118,39 @@ class TaskCreationOrchestrator {
         return;
       }
 
-      final cached = _parseService.cachedResultFor(trimmed);
-      if (cached != null) {
-        final normalized = cached.rawTranscript.trim().isEmpty
-            ? cached.copyWith(rawTranscript: trimmed)
-            : cached;
-        if (normalized.canAutoCreate) {
-          await _runVoiceCreate(normalized);
-          return;
-        }
+      onPhaseChanged?.call(VoicePipelinePhase.parsing);
+      final parsed = await _parseService.parseTextImmediate(trimmed);
+
+      if (parsed != null && parsed.canAutoCreate) {
+        final normalized = parsed.rawTranscript.trim().isEmpty
+            ? parsed.copyWith(rawTranscript: trimmed)
+            : parsed;
+        await _runVoiceCreate(normalized);
+        return;
+      }
+
+      if (parsed != null) {
+        final normalized = parsed.rawTranscript.trim().isEmpty
+            ? parsed.copyWith(rawTranscript: trimmed)
+            : parsed;
         onNeedDraftConfirm(normalized);
         return;
       }
 
-      final task = await _createInitialVoiceTask(trimmed);
-      _markEnhancementPending(task.id);
-      _showSuccess(task, voice: true);
-      unawaited(
-        _enhanceTaskFromText(
-          task: task,
-          text: trimmed,
-          voice: true,
-          requireHighConfidence: true,
+      onNeedDraftConfirm(
+        VoiceTaskParseResult(
+          title: trimmed,
+          description: null,
+          dueDate: null,
+          priority: TaskPriority.none,
+          confidence: 0,
+          rawTranscript: trimmed,
         ),
       );
     } catch (e) {
       _showFailure(e);
+    } finally {
+      onComplete?.call();
     }
   }
 
@@ -233,41 +233,6 @@ class TaskCreationOrchestrator {
       _showSuccess(task, voice: true);
     } catch (e) {
       _showFailure(e);
-    }
-  }
-
-  Future<Task> _createInitialVoiceTask(String transcript) async {
-    final trimmed = transcript.trim();
-    if (trimmed.isEmpty) {
-      throw const StreamingVoiceException('语音识别结果为空，请重试。');
-    }
-    final task = await _repository.createTask(
-      title: trimmed,
-      description: '识别内容: $trimmed',
-      creationSource: AppConstants.sourceVoice,
-    );
-    await _notificationService.scheduleTaskReminder(task);
-    return task;
-  }
-
-  Future<void> _finishVoiceAndEnhanceTask({
-    required StreamingVoiceSession session,
-    required Task task,
-    required String fallbackTranscript,
-  }) async {
-    try {
-      final finalTranscript = (await session.stopAndGetTranscript()).trim();
-      final text = finalTranscript.isNotEmpty
-          ? finalTranscript
-          : fallbackTranscript;
-      await _enhanceTaskFromText(
-        task: task,
-        text: text,
-        voice: true,
-        requireHighConfidence: true,
-      );
-    } catch (_) {
-      _markEnhancementFailed(task.id);
     }
   }
 

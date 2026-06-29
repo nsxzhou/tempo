@@ -22,8 +22,13 @@ abstract class StreamingVoiceSession {
 
   bool get isRecording;
 
+  bool get isPrepared;
+
   /// 预热 ASR（打开语音层时调用）。
   Future<void> prepare();
+
+  /// 预检麦克风权限（Tasks 页进入时调用）。
+  Future<bool> ensureMicPermission();
 
   /// 开始录音（点麦克风；乐观 UI 后调用）。
   Future<void> startRecording();
@@ -65,6 +70,12 @@ class LiveStreamingVoiceSession implements StreamingVoiceSession {
 
   @override
   bool get isRecording => _recording;
+
+  @override
+  bool get isPrepared => _asrPrepared;
+
+  @override
+  Future<bool> ensureMicPermission() => _recorder.hasPermission();
 
   @override
   Future<void> prepare() {

@@ -15,16 +15,20 @@ import 'features/auth/data/auth_service.dart';
 import 'features/settings/data/feedback_service.dart';
 import 'features/settings/data/siyuan_pairing_service.dart';
 import 'features/tasks/data/notification_service.dart';
+import 'features/tasks/data/recurrence_repository.dart';
 import 'features/tasks/data/sync_service.dart';
 import 'features/tasks/data/task_background_repository.dart';
 import 'features/tasks/data/task_repository.dart';
 import 'core/router/app_router.dart';
 import 'features/tasks/data/streaming_voice_session.dart';
+import 'features/tasks/data/task_ai_enhancement_state.dart';
 import 'features/tasks/data/task_creation_orchestrator.dart';
 import 'features/tasks/data/text_parse_service.dart';
 import 'features/tasks/data/voice_recorder.dart';
 import 'features/tasks/data/volcengine_streaming_asr.dart';
+import 'features/tasks/domain/recurrence_models.dart';
 import 'features/tasks/domain/task.dart';
+import 'features/tasks/domain/task_list_builder.dart';
 import 'features/stats/data/stats_repository.dart';
 import 'features/stats/domain/stats_models.dart';
 import 'features/tasks/domain/task_counts.dart';
@@ -98,6 +102,15 @@ final defaultListIdProvider = FutureProvider<String>((ref) async {
   return AppConstants.defaultListId;
 });
 
+final recurrenceRepositoryProvider = Provider<RecurrenceRepository>((ref) {
+  return RecurrenceRepository(
+    localDb: ref.watch(databaseProvider),
+    supabase: ref.watch(supabaseProvider),
+    userId: ref.watch(currentUserIdProvider),
+    connectivity: ref.watch(connectivityProvider),
+  );
+});
+
 final taskRepositoryProvider = Provider<TaskRepository>((ref) {
   final db = ref.watch(databaseProvider);
   final supabase = ref.watch(supabaseProvider);
@@ -106,6 +119,7 @@ final taskRepositoryProvider = Provider<TaskRepository>((ref) {
   final listId =
       ref.watch(defaultListIdProvider).valueOrNull ??
       AppConstants.defaultListId;
+  final recurrenceRepo = ref.watch(recurrenceRepositoryProvider);
 
   final repository = SyncTaskRepository(
     localDb: db,
@@ -113,6 +127,20 @@ final taskRepositoryProvider = Provider<TaskRepository>((ref) {
     userId: userId,
     listId: listId,
     connectivity: connectivity,
+    occurrenceToggle: (taskId, occurrenceDate, complete) async {
+      if (complete) {
+        await recurrenceRepo.completeOccurrence(
+          taskId: taskId,
+          occurrenceDate: occurrenceDate,
+        );
+      } else {
+        await recurrenceRepo.uncompleteOccurrence(
+          taskId: taskId,
+          occurrenceDate: occurrenceDate,
+        );
+      }
+    },
+    recurrenceRefresh: recurrenceRepo.refreshFromRemote,
   );
 
   // 应用级单例刷新触发：连接恢复 + 用户变更。
@@ -130,6 +158,43 @@ final taskRepositoryProvider = Provider<TaskRepository>((ref) {
 
   return repository;
 });
+
+final taskCompletionsProvider = StreamProvider<List<TaskCompletion>>((ref) {
+  return ref.watch(recurrenceRepositoryProvider).watchCompletions();
+}, name: 'taskCompletionsProvider');
+
+final taskRecurrenceExceptionsProvider =
+    StreamProvider<List<RecurrenceException>>((ref) {
+      return ref.watch(recurrenceRepositoryProvider).watchExceptions();
+    }, name: 'taskRecurrenceExceptionsProvider');
+
+const _taskListBuilder = TaskListBuilder();
+
+final taskStreakMapProvider = Provider<Map<String, StreakInfo>>((ref) {
+  final tasks = ref.watch(taskListProvider).valueOrNull ?? [];
+  final completions = ref.watch(taskCompletionsProvider).valueOrNull ?? [];
+  final exceptions =
+      ref.watch(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
+  return _taskListBuilder.buildStreakMap(
+    tasks: tasks,
+    completions: completions,
+    exceptions: exceptions,
+  );
+}, name: 'taskStreakMapProvider');
+
+/// 列表展示用 Task（重复任务展开为下一次 occurrence）
+final displayTaskListProvider = Provider<List<Task>>((ref) {
+  final tasks = ref.watch(taskListProvider).valueOrNull ?? [];
+  final completions = ref.watch(taskCompletionsProvider).valueOrNull ?? [];
+  final exceptions =
+      ref.watch(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
+  final views = _taskListBuilder.buildListViews(
+    tasks: tasks,
+    completions: completions,
+    exceptions: exceptions,
+  );
+  return views.map((v) => v.displayTask).toList();
+}, name: 'displayTaskListProvider');
 
 final taskListProvider = StreamProvider<List<Task>>((ref) {
   final repository = ref.watch(taskRepositoryProvider);
@@ -184,28 +249,61 @@ final taskCountsProvider = Provider<TaskCounts>((ref) {
   return TaskCounts.from(tasks);
 });
 
-/// 按 dueDate 日历日索引（月视图 O(42) 查表）。
-final calendarTaskIndexProvider = Provider<Map<DateTime, List<Task>>>((ref) {
-  final tasks = ref.watch(taskListProvider).valueOrNull ?? [];
-  final index = <DateTime, List<Task>>{};
-  for (final task in tasks) {
-    final due = task.dueDate;
-    if (due == null) continue;
-    final day = DateTime(due.year, due.month, due.day);
-    index.putIfAbsent(day, () => []).add(task);
-  }
-  return index;
-}, name: 'calendarTaskIndexProvider');
+final taskAiEnhancementStateProvider =
+    StateNotifierProvider<
+      TaskAiEnhancementController,
+      Map<String, TaskAiEnhancementStatus>
+    >((ref) => TaskAiEnhancementController());
 
-/// 选中日任务列表。
-final selectedDayTasksProvider = Provider.family<List<Task>, DateTime>((
+/// 按日历日索引（含重复任务虚拟展开）
+final calendarTaskIndexProvider =
+    Provider<Map<DateTime, List<CalendarTaskEntry>>>((ref) {
+      final tasks = ref.watch(taskListProvider).valueOrNull ?? [];
+      final completions = ref.watch(taskCompletionsProvider).valueOrNull ?? [];
+      final exceptions =
+          ref.watch(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
+      final now = DateTime.now();
+      return _taskListBuilder.buildCalendarIndex(
+        tasks: tasks,
+        centerDate: now,
+        completions: completions,
+        exceptions: exceptions,
+        now: now,
+      );
+    }, name: 'calendarTaskIndexProvider');
+
+/// 日历展示用 Task 索引（兼容现有月/周视图）
+final calendarDisplayTaskIndexProvider = Provider<Map<DateTime, List<Task>>>((
   ref,
-  selectedDate,
 ) {
   final index = ref.watch(calendarTaskIndexProvider);
-  final day = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
-  return index[day] ?? const [];
-});
+  return {
+    for (final entry in index.entries)
+      entry.key: entry.value.map((e) => e.displayTask).toList(),
+  };
+}, name: 'calendarDisplayTaskIndexProvider');
+
+/// 选中日 occurrence 状态（taskId → state）
+final selectedDayOccurrenceStatesProvider =
+    Provider.family<Map<String, OccurrenceState>, DateTime>((
+      ref,
+      selectedDate,
+    ) {
+      final entries = ref.watch(selectedDayTasksProvider(selectedDate));
+      return {for (final e in entries) e.task.id: e.occurrence.state};
+    });
+
+/// 选中日任务列表（含重复展开）
+final selectedDayTasksProvider =
+    Provider.family<List<CalendarTaskEntry>, DateTime>((ref, selectedDate) {
+      final index = ref.watch(calendarTaskIndexProvider);
+      final day = DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+      );
+      return index[day] ?? const [];
+    });
 
 // ── Stats ──
 
@@ -226,8 +324,13 @@ final dailyCompletionsProvider =
 
 final syncServiceProvider = Provider<SyncService>((ref) {
   final repository = ref.watch(taskRepositoryProvider);
+  final recurrenceRepo = ref.watch(recurrenceRepositoryProvider);
   final connectivity = ref.watch(connectivityProvider);
-  return SyncService(repository: repository, connectivity: connectivity);
+  return SyncService(
+    repository: repository,
+    recurrenceRepository: recurrenceRepo,
+    connectivity: connectivity,
+  );
 });
 
 // ── NotificationService ──
@@ -252,6 +355,7 @@ final taskCreationOrchestratorProvider = Provider<TaskCreationOrchestrator>((
     repository: ref.watch(taskRepositoryProvider),
     parseService: ref.watch(textParseServiceProvider),
     notificationService: ref.watch(notificationServiceProvider),
+    aiEnhancementTracker: ref.read(taskAiEnhancementStateProvider.notifier),
     showSnackbar: createGlobalSnackbar(
       navigatorKey: ref.watch(appNavigatorKeyProvider),
     ),

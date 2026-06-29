@@ -31,6 +31,10 @@ abstract class TaskRepository {
     domain.TaskPriority priority = domain.TaskPriority.none,
     String creationSource = AppConstants.sourceText,
     String? tag,
+    String? recurrenceRule,
+    DateTime? recurrenceEnd,
+    int? recurrenceCount,
+    int? durationMin,
   });
 
   /// 从语音解析结果创建任务。
@@ -40,7 +44,15 @@ abstract class TaskRepository {
   Future<domain.Task> updateTask(domain.Task task);
 
   /// 切换任务完成状态，自动设置/清除 completedAt。
+  /// 重复任务请使用 [toggleOccurrenceComplete]。
   Future<domain.Task> toggleComplete(String id);
+
+  /// 切换重复任务某次 occurrence 的完成状态。
+  Future<void> toggleOccurrenceComplete(
+    String taskId,
+    DateTime occurrenceDate, {
+    required bool complete,
+  });
 
   /// 删除任务。
   Future<void> deleteTask(String id);
@@ -103,6 +115,9 @@ class SyncTaskRepository implements TaskRepository {
   final Uuid _uuid;
   final Future<domain.Task> Function(domain.Task task, String userId)?
   _remoteTaskUpsert;
+  final Future<void> Function(String taskId, DateTime occurrenceDate, bool complete)?
+  _occurrenceToggle;
+  final Future<void> Function(List<String> taskIds)? _recurrenceRefresh;
   Timer? _refreshDebounce;
   bool _refreshInFlight = false;
 
@@ -115,13 +130,18 @@ class SyncTaskRepository implements TaskRepository {
     Uuid? uuid,
     Future<domain.Task> Function(domain.Task task, String userId)?
     remoteTaskUpsert,
+    Future<void> Function(String taskId, DateTime occurrenceDate, bool complete)?
+    occurrenceToggle,
+    Future<void> Function(List<String> taskIds)? recurrenceRefresh,
   }) : _localDb = localDb,
        _supabase = supabase,
        _userId = userId,
        _listId = listId,
        _connectivity = connectivity,
        _uuid = uuid ?? const Uuid(),
-       _remoteTaskUpsert = remoteTaskUpsert;
+       _remoteTaskUpsert = remoteTaskUpsert,
+       _occurrenceToggle = occurrenceToggle,
+       _recurrenceRefresh = recurrenceRefresh;
 
   // ── 写入路径 ──
 
@@ -134,6 +154,10 @@ class SyncTaskRepository implements TaskRepository {
     domain.TaskPriority priority = domain.TaskPriority.none,
     String creationSource = AppConstants.sourceText,
     String? tag,
+    String? recurrenceRule,
+    DateTime? recurrenceEnd,
+    int? recurrenceCount,
+    int? durationMin,
   }) async {
     final trimmedTitle = title.trim();
     if (trimmedTitle.isEmpty) {
@@ -156,6 +180,10 @@ class SyncTaskRepository implements TaskRepository {
       updatedAt: now,
       creationSource: creationSource,
       tag: tag,
+      recurrenceRule: recurrenceRule,
+      recurrenceEnd: recurrenceEnd,
+      recurrenceCount: recurrenceCount,
+      durationMin: durationMin,
       syncPending: shouldSync,
     );
 
@@ -180,6 +208,10 @@ class SyncTaskRepository implements TaskRepository {
       priority: result.priority,
       creationSource: AppConstants.sourceVoice,
       tag: result.tag,
+      recurrenceRule: result.recurrenceRule,
+      recurrenceEnd: result.recurrenceEnd,
+      recurrenceCount: result.recurrenceCount,
+      durationMin: result.durationMin,
     );
   }
 
@@ -221,17 +253,36 @@ class SyncTaskRepository implements TaskRepository {
       ),
     );
 
-    final toggled = current.copyWith(
-      isCompleted: newCompleted,
-      completedAt: newCompleted ? now : null,
-      updatedAt: now,
-      syncPending: shouldSync,
-    );
+    final toggled = newCompleted
+        ? current.copyWith(
+            isCompleted: true,
+            completedAt: now,
+            updatedAt: now,
+            syncPending: shouldSync,
+          )
+        : current.copyWith(
+            isCompleted: false,
+            clearCompletedAt: true,
+            updatedAt: now,
+            syncPending: shouldSync,
+          );
 
     if (shouldSync) {
       unawaited(_syncTaskToCloud(toggled));
     }
     return toggled;
+  }
+
+  @override
+  Future<void> toggleOccurrenceComplete(
+    String taskId,
+    DateTime occurrenceDate, {
+    required bool complete,
+  }) async {
+    final handler = _occurrenceToggle;
+    if (handler != null) {
+      await handler(taskId, occurrenceDate, complete);
+    }
   }
 
   @override
@@ -392,19 +443,28 @@ class SyncTaskRepository implements TaskRepository {
       )..where((t) => t.syncPending.equals(true))).map((r) => r.id).get();
       final pendingSet = pendingIds.toSet();
 
+      final recurringIds = <String>[];
+
       await _localDb.batch((batch) {
         for (final row in rows as List) {
-          final remote = domain.TaskSupabase.fromSupabaseJson(
-            row as Map<String, dynamic>,
-          );
+          final map = row as Map<String, dynamic>;
+          final remote = domain.TaskSupabase.fromSupabaseJson(map);
           if (pendingSet.contains(remote.id)) continue;
           batch.insert(
             _localDb.tasks,
             _companionFor(remote),
             mode: InsertMode.insertOrReplace,
           );
+          if (map['recurrence_rule'] != null) {
+            recurringIds.add(remote.id);
+          }
         }
       });
+
+      final refreshRecurrence = _recurrenceRefresh;
+      if (refreshRecurrence != null && recurringIds.isNotEmpty) {
+        await refreshRecurrence(recurringIds);
+      }
     } catch (_) {
       // 静默失败，下次重试
     } finally {
@@ -429,6 +489,11 @@ class SyncTaskRepository implements TaskRepository {
       updatedAt: Value(task.updatedAt),
       creationSource: Value(task.creationSource),
       tag: Value(task.tag),
+      recurrenceRule: Value(task.recurrenceRule),
+      recurrenceEnd: Value(task.recurrenceEnd),
+      recurrenceCount: Value(task.recurrenceCount),
+      durationMin: Value(task.durationMin),
+      recurrenceSeriesId: Value(task.recurrenceSeriesId),
       syncPending: Value(task.syncPending),
     );
   }
@@ -458,6 +523,11 @@ class SyncTaskRepository implements TaskRepository {
       updatedAt: row.updatedAt,
       creationSource: row.creationSource,
       tag: row.tag,
+      recurrenceRule: row.recurrenceRule,
+      recurrenceEnd: row.recurrenceEnd,
+      recurrenceCount: row.recurrenceCount,
+      durationMin: row.durationMin,
+      recurrenceSeriesId: row.recurrenceSeriesId,
       syncPending: row.syncPending,
     );
   }

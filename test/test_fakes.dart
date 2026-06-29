@@ -35,6 +35,10 @@ class FakeTaskRepository implements TaskRepository {
     TaskPriority priority = TaskPriority.none,
     String creationSource = AppConstants.sourceText,
     String? tag,
+    String? recurrenceRule,
+    DateTime? recurrenceEnd,
+    int? recurrenceCount,
+    int? durationMin,
   }) async {
     if (createError != null) {
       throw createError!;
@@ -52,6 +56,10 @@ class FakeTaskRepository implements TaskRepository {
       updatedAt: now,
       creationSource: creationSource,
       tag: tag,
+      recurrenceRule: recurrenceRule,
+      recurrenceEnd: recurrenceEnd,
+      recurrenceCount: recurrenceCount,
+      durationMin: durationMin,
     );
     tasks.insert(0, task);
     _emit();
@@ -99,6 +107,13 @@ class FakeTaskRepository implements TaskRepository {
     _emit();
     return toggled;
   }
+
+  @override
+  Future<void> toggleOccurrenceComplete(
+    String taskId,
+    DateTime occurrenceDate, {
+    required bool complete,
+  }) async {}
 
   @override
   Future<void> deleteTask(String id) async {
@@ -304,14 +319,18 @@ class FakeStreamingVoiceSession implements StreamingVoiceSession {
 
 class FakeTextParseService extends TextParseService {
   VoiceTaskParseResult? result;
+  Duration parseDelay;
   int parseCallCount = 0;
 
-  FakeTextParseService({this.result})
+  FakeTextParseService({this.result, this.parseDelay = Duration.zero})
     : super(dio: Dio(), endpoint: 'http://test/parse-task');
 
   @override
   Future<VoiceTaskParseResult?> parseText(String text) async {
     parseCallCount++;
+    if (parseDelay > Duration.zero) {
+      await Future<void>.delayed(parseDelay);
+    }
     return result;
   }
 }

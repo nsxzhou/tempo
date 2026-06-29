@@ -8,8 +8,10 @@ import 'package:tempo/app_providers.dart';
 import 'package:tempo/core/constants/app_constants.dart';
 import 'package:tempo/core/providers/database_provider.dart';
 import 'package:tempo/core/router/app_router.dart';
-import 'package:tempo/database/database.dart' hide Task, TaskBackground;
+import 'package:tempo/database/database.dart'
+    hide Task, TaskBackground, TaskCompletion;
 import 'package:tempo/features/tasks/data/notification_service.dart';
+import 'package:tempo/features/tasks/domain/recurrence_models.dart';
 import 'package:tempo/features/tasks/domain/task.dart';
 import 'package:tempo/core/widgets/tempo/src/tempo_background.dart';
 import 'package:tempo/features/tasks/data/task_background_repository.dart';
@@ -155,9 +157,7 @@ Future<void> _pumpDetailPage(
     appNavigatorKeyProvider.overrideWithValue(navigatorKey),
     taskBackgroundRepositoryProvider.overrideWithValue(backgroundRepository),
     taskBackgroundByTaskIdProvider.overrideWith(
-      (ref, taskId) => Stream.value(
-        taskId == task.id ? background : null,
-      ),
+      (ref, taskId) => Stream.value(taskId == task.id ? background : null),
     ),
   ];
   if (parseService != null) {
@@ -177,7 +177,8 @@ Future<void> _pumpDetailPage(
   await tester.pump(const Duration(milliseconds: 300));
 }
 
-class _ConfigurableTaskBackgroundRepository implements TaskBackgroundRepository {
+class _ConfigurableTaskBackgroundRepository
+    implements TaskBackgroundRepository {
   _ConfigurableTaskBackgroundRepository({this.background});
 
   TaskBackground? background;
@@ -219,7 +220,20 @@ class _NoopNotificationService implements NotificationService {
   Future<void> cancelTaskReminders(String taskId) async {}
 
   @override
+  Future<void> cancelOccurrenceReminder(
+    String taskId,
+    DateTime occurrenceDate,
+  ) async {}
+
+  @override
   Future<void> scheduleTaskReminder(Task task) async {}
+
+  @override
+  Future<void> scheduleRecurringReminders(
+    Task task, {
+    List<TaskCompletion> completions = const [],
+    List<RecurrenceException> exceptions = const [],
+  }) async {}
 
   @override
   Future<bool> requestPermissions() async => true;

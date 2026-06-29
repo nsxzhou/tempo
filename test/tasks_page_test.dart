@@ -12,11 +12,12 @@ import 'package:tempo/core/router/shell_scaffold.dart';
 import 'package:tempo/core/theme/app_theme.dart';
 import 'package:tempo/core/theme/theme_presets.dart';
 import 'package:tempo/core/widgets/tempo/tempo.dart';
-import 'package:tempo/database/database.dart' hide Task;
+import 'package:tempo/database/database.dart' hide Task, TaskCompletion;
 import 'package:tempo/app_providers.dart';
 import 'package:tempo/core/router/app_router.dart';
 import 'package:tempo/features/tasks/data/notification_service.dart';
 import 'package:tempo/features/tasks/data/voice_task_parse_result.dart';
+import 'package:tempo/features/tasks/domain/recurrence_models.dart';
 import 'package:tempo/features/tasks/domain/task.dart';
 import 'package:tempo/features/tasks/presentation/task_detail_page.dart';
 import 'package:tempo/features/tasks/presentation/tasks_page.dart';
@@ -71,7 +72,35 @@ void main() {
     await session.dispose();
   });
 
-  testWidgets('low confidence voice parse opens editable draft', (
+  testWidgets('voice stop creates raw task while AI enhancement is pending', (
+    tester,
+  ) async {
+    final repository = FakeTaskRepository();
+    final session = FakeStreamingVoiceSession();
+    final parseService = FakeTextParseService(
+      result: _voiceResult(),
+      parseDelay: const Duration(seconds: 2),
+    );
+
+    await _pumpTasksPage(
+      tester,
+      repository: repository,
+      session: session,
+      parseService: parseService,
+    );
+
+    await _submitVoice(tester);
+
+    expect(repository.tasks, hasLength(1));
+    expect(repository.tasks.single.title, '明天下午');
+    expect(find.text('AI补全中'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 3));
+    await repository.dispose();
+    await session.dispose();
+  });
+
+  testWidgets('low confidence voice parse keeps raw task with failed badge', (
     tester,
   ) async {
     final repository = FakeTaskRepository();
@@ -95,24 +124,18 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(repository.tasks, isEmpty);
-    expect(find.text('确认语音任务'), findsOneWidget);
-
-    await tester.tap(find.text('创建'));
-    await tester.runAsync(() async {
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    });
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-
     expect(repository.tasks, hasLength(1));
-    expect(repository.tasks.single.title, '提交设计稿');
+    expect(repository.tasks.single.title, '明天下午');
+    expect(repository.tasks.single.creationSource, 'voice');
+    expect(find.text('AI失败'), findsOneWidget);
     await tester.pump(const Duration(seconds: 3));
     await repository.dispose();
     await session.dispose();
   });
 
-  testWidgets('backend error does not create a task', (tester) async {
+  testWidgets('backend error keeps raw voice task with failed badge', (
+    tester,
+  ) async {
     final repository = FakeTaskRepository();
     final session = FakeStreamingVoiceSession();
     final parseService = FakeTextParseService();
@@ -132,8 +155,9 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(repository.tasks, isEmpty);
-    expect(find.textContaining('创建失败'), findsOneWidget);
+    expect(repository.tasks, hasLength(1));
+    expect(repository.tasks.single.title, '明天下午');
+    expect(find.text('AI失败'), findsOneWidget);
     await tester.pump(const Duration(seconds: 3));
     await repository.dispose();
     await session.dispose();
@@ -446,7 +470,20 @@ class _NoopNotificationService implements NotificationService {
   Future<void> cancelTaskReminders(String taskId) async {}
 
   @override
+  Future<void> cancelOccurrenceReminder(
+    String taskId,
+    DateTime occurrenceDate,
+  ) async {}
+
+  @override
   Future<void> scheduleTaskReminder(Task task) async {}
+
+  @override
+  Future<void> scheduleRecurringReminders(
+    Task task, {
+    List<TaskCompletion> completions = const [],
+    List<RecurrenceException> exceptions = const [],
+  }) async {}
 
   @override
   Future<bool> requestPermissions() async => true;

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tempo/features/tasks/domain/recurrence_models.dart';
 import 'package:tempo/features/tasks/domain/task.dart';
 import 'package:tempo/features/tasks/data/notification_service.dart';
 import 'package:tempo/app.dart';
@@ -41,7 +42,20 @@ class _NoopNotificationService implements NotificationService {
   Future<void> cancelTaskReminders(String taskId) async {}
 
   @override
+  Future<void> cancelOccurrenceReminder(
+    String taskId,
+    DateTime occurrenceDate,
+  ) async {}
+
+  @override
   Future<void> scheduleTaskReminder(Task task) async {}
+
+  @override
+  Future<void> scheduleRecurringReminders(
+    Task task, {
+    List<TaskCompletion> completions = const [],
+    List<RecurrenceException> exceptions = const [],
+  }) async {}
 
   @override
   Future<bool> requestPermissions() async => true;

@@ -108,6 +108,8 @@ class AppConstants {
   // ── Supabase 表名 ──
   static const String tableTasks = 'tasks';
   static const String tableTaskLists = 'task_lists';
+  static const String tableTaskCompletions = 'task_completions';
+  static const String tableRecurrenceExceptions = 'task_recurrence_exceptions';
   static const String tableSiyuanPairingCodes = 'siyuan_pairing_codes';
   static const String tableSiyuanBindings = 'siyuan_bindings';
   static const String tableFeedback = 'feedback';

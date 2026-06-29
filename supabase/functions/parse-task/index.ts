@@ -29,6 +29,10 @@ type ParseTaskResponse = {
   confidence: number;
   raw_transcript: string;
   tag: string | null;
+  recurrence_rule: string | null;
+  recurrence_end: string | null;
+  recurrence_count: number | null;
+  duration_min: number | null;
 };
 
 const corsHeaders = {
@@ -342,10 +346,7 @@ async function parseTaskWithDoubao(inputText: string): Promise<ParseTaskResponse
   const apiKey = requiredEnv("DOUBAO_API_KEY");
   const model = requiredEnv("DOUBAO_MODEL");
 
-  const now = new Date();
-  const currentDatetime = now.toISOString();
-  const weekdayLabels = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-  const currentWeekday = weekdayLabels[now.getDay()];
+  const { currentDatetime, currentWeekday } = buildShanghaiTimeContext();
   const systemPrompt = buildSystemPrompt(currentDatetime, currentWeekday);
 
   const response = await fetch(endpoint, {
@@ -379,7 +380,7 @@ async function parseTaskWithDoubao(inputText: string): Promise<ParseTaskResponse
 
 function buildSystemPrompt(currentDatetime: string, currentWeekday: string): string {
   return `Parse Chinese task text into JSON only:
-{"title":"string","description":string|null,"due_date":"ISO8601+08:00"|null,"is_all_day":true|false,"priority":0-4,"confidence":0-1,"raw_transcript":"input","tag":"work"|"life"|null}
+{"title":"string","description":string|null,"due_date":"ISO8601+08:00"|null,"is_all_day":true|false,"priority":0-4,"confidence":0-1,"raw_transcript":"input","tag":"work"|"life"|null,"recurrence_rule":"RRULE string"|null,"recurrence_end":"ISO date"|null,"recurrence_count":int|null,"duration_min":int|null}
 
 Context: now=${currentDatetime}, weekday=${currentWeekday}（今天${currentWeekday}）
 Rules:
@@ -388,9 +389,37 @@ Rules:
 - Explicit time (e.g. "下午3点") → due_date with that time, is_all_day: false
 - No date → due_date: null, is_all_day: false
 - 紧急→1, 高/重要→2, 中→3, 低→4, else 0
-- Title: core action without time/priority words
+- Title: core action without time/priority/recurrence/duration words
 - tag: 会议/文档/出差→work; 买菜/家务/餐饮/娱乐/外出→life; unsure→null
-Example (today Monday): "周四去吃KFC" → due next Thu 00:00+08:00, is_all_day: true, tag: life, title "去吃KFC"`;
+- recurrence_rule: RFC5545 RRULE without "RRULE:" prefix; null if not recurring. Examples: FREQ=DAILY;INTERVAL=1, FREQ=WEEKLY;BYDAY=MO,WE,FR
+- recurrence_end: ISO date (YYYY-MM-DD) when recurrence ends by date; null otherwise
+- recurrence_count: total occurrence count when user says "N次/持续N个月" etc.; null if open-ended or date-based end
+- duration_min: event duration in minutes (e.g. 一小时→60, 半小时→30); null if not mentioned
+- Set only one of recurrence_end or recurrence_count when both could apply; prefer recurrence_end for "持续三个月"
+Example (today Monday): "周四去吃KFC" → due next Thu 00:00+08:00, is_all_day: true, tag: life, title "去吃KFC", recurrence fields null
+Example: "每天八点锻炼一小时持续三个月" → title "锻炼", due_date next day 08:00+08:00, is_all_day: false, recurrence_rule "FREQ=DAILY;INTERVAL=1", recurrence_end ~3 months from now (YYYY-MM-DD), recurrence_count: null, duration_min: 60, tag: life
+Example: "每周一三五跑步" → title "跑步", due_date next Mon 00:00+08:00 or today if Mon, recurrence_rule "FREQ=WEEKLY;BYDAY=MO,WE,FR", recurrence_end: null, recurrence_count: null, duration_min: null, tag: life`;
+}
+
+function buildShanghaiTimeContext(now = new Date()): {
+  currentDatetime: string;
+  currentWeekday: string;
+} {
+  const shanghai = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  const weekdayLabels = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  const pad = (value: number, width = 2) => value.toString().padStart(width, "0");
+  const year = shanghai.getUTCFullYear();
+  const month = pad(shanghai.getUTCMonth() + 1);
+  const day = pad(shanghai.getUTCDate());
+  const hour = pad(shanghai.getUTCHours());
+  const minute = pad(shanghai.getUTCMinutes());
+  const second = pad(shanghai.getUTCSeconds());
+  const millis = pad(shanghai.getUTCMilliseconds(), 3);
+
+  return {
+    currentDatetime: `${year}-${month}-${day}T${hour}:${minute}:${second}.${millis}+08:00`,
+    currentWeekday: weekdayLabels[shanghai.getUTCDay()],
+  };
 }
 
 // ── 工具函数 ──
@@ -412,7 +441,27 @@ function normalizeTaskResponse(
     confidence: Math.max(0, Math.min(1, confidence)),
     raw_transcript: rawTranscript,
     tag: normalizeTag(payload.tag),
+    recurrence_rule: normalizeRecurrenceRule(payload.recurrence_rule),
+    recurrence_end: normalizeRecurrenceEnd(payload.recurrence_end),
+    recurrence_count: nullableIntValue(payload.recurrence_count),
+    duration_min: nullableIntValue(payload.duration_min),
   };
+}
+
+function normalizeRecurrenceRule(value: unknown): string | null {
+  const rule = nullableStringValue(value);
+  if (!rule) return null;
+  const upper = rule.toUpperCase();
+  if (!upper.includes("FREQ=")) return null;
+  return upper;
+}
+
+function normalizeRecurrenceEnd(value: unknown): string | null {
+  const end = nullableStringValue(value);
+  if (!end) return null;
+  const parsed = Date.parse(end);
+  if (Number.isNaN(parsed)) return null;
+  return end;
 }
 
 function normalizeIsAllDay(value: unknown, dueDate: unknown): boolean {
@@ -507,6 +556,21 @@ function numberValue(value: unknown, fallback: number): number {
   return fallback;
 }
 
+function nullableIntValue(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const intValue = Math.trunc(value);
+    return intValue > 0 ? intValue : null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return null;
+    const parsed = Number.parseInt(trimmed, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+  return null;
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
@@ -522,5 +586,9 @@ function mockResponse(): ParseTaskResponse {
     confidence: 0.86,
     raw_transcript: "明天下午三点提交设计稿，优先级高",
     tag: "work",
+    recurrence_rule: null,
+    recurrence_end: null,
+    recurrence_count: null,
+    duration_min: null,
   };
 }

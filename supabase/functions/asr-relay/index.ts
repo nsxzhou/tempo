@@ -228,7 +228,7 @@ function buildUpstreamAuth(): UpstreamAuth {
 
 function keepSocketAlive(socket: WebSocket) {
   const done = new Promise<void>((resolve) => {
-    socket.onclose = () => resolve();
+    socket.addEventListener("close", () => resolve(), { once: true });
   });
   // @ts-ignore Supabase Edge Runtime
   EdgeRuntime.waitUntil(done);

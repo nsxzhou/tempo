@@ -241,6 +241,11 @@ class FakeVolcengineStreamingAsr implements VolcengineStreamingAsr {
   }
 
   @override
+  Future<void> resetForNextUtterance() async {
+    _current = '';
+  }
+
+  @override
   Future<void> cancel() async {}
 
   Future<void> dispose() => _controller.close();
@@ -343,4 +348,20 @@ class FakeTextParseService extends TextParseService {
   @override
   Future<VoiceTaskParseResult?> parseTextImmediate(String text) =>
       parseText(text);
+
+  @override
+  Future<VoiceTaskParseResult?> parseTextSoft(
+    String text, {
+    Duration timeout = TextParseService.softTimeoutDuration,
+  }) async {
+    if (parseDelay > Duration.zero) {
+      try {
+        return await parseText(text).timeout(timeout);
+      } on TimeoutException {
+        unawaited(parseText(text));
+        return null;
+      }
+    }
+    return parseText(text);
+  }
 }

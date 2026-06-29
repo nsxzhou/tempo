@@ -122,7 +122,7 @@ abstract class VolcengineStreamingAsr {
   Future<void> cancel();
 }
 
-const Duration _asrFinishTimeout = Duration(seconds: 3);
+const Duration _asrFinishTimeout = Duration(seconds: 5);
 
 class VolcengineStreamingAsrService implements VolcengineStreamingAsr {
   final AsrSessionClient _sessionClient;

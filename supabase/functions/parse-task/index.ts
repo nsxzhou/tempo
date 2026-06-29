@@ -397,6 +397,8 @@ Rules:
 - duration_min: event duration in minutes (e.g. 一小时→60, 半小时→30); null if not mentioned
 - Set only one of recurrence_end or recurrence_count when both could apply; prefer recurrence_end for "持续三个月"
 Example (today Monday): "周四去吃KFC" → due next Thu 00:00+08:00, is_all_day: true, tag: life, title "去吃KFC", recurrence fields null
+Example: "明天下午三点开会" → title "开会", due_date tomorrow 15:00+08:00, is_all_day: false, priority: 0, confidence: 0.9, tag: work
+Example: "每周一跑步" → title "跑步", due_date next Mon 00:00+08:00, recurrence_rule "FREQ=WEEKLY;BYDAY=MO", tag: life
 Example: "每天八点锻炼一小时持续三个月" → title "锻炼", due_date next day 08:00+08:00, is_all_day: false, recurrence_rule "FREQ=DAILY;INTERVAL=1", recurrence_end ~3 months from now (YYYY-MM-DD), recurrence_count: null, duration_min: 60, tag: life
 Example: "每周一三五跑步" → title "跑步", due_date next Mon 00:00+08:00 or today if Mon, recurrence_rule "FREQ=WEEKLY;BYDAY=MO,WE,FR", recurrence_end: null, recurrence_count: null, duration_min: null, tag: life`;
 }

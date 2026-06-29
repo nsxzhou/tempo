@@ -25,12 +25,12 @@ import '../domain/task_list_builder.dart';
 import '../data/task_creation_orchestrator.dart';
 import 'widgets/quick_create_sheet.dart';
 import 'widgets/task_tile.dart';
-import 'widgets/voice_hold_fab.dart';
+import 'widgets/create_action_fan_fab.dart';
 import 'widgets/voice_overlay.dart';
 
 enum _TaskScope { pending, overdue, week, all }
 
-enum _VoiceCaptureState { inactive, recording, processing }
+enum _VoiceCaptureState { inactive, armed, recording, processing }
 
 class TasksPage extends ConsumerStatefulWidget {
   const TasksPage({super.key});
@@ -42,7 +42,6 @@ class TasksPage extends ConsumerStatefulWidget {
 class _TasksPageState extends ConsumerState<TasksPage>
     with AutomaticKeepAliveClientMixin {
   _VoiceCaptureState _voiceCapture = _VoiceCaptureState.inactive;
-  bool _slideCancel = false;
   String _voiceTranscript = '';
   String? _voiceError;
   VoicePipelinePhase? _pipelinePhase;
@@ -131,41 +130,60 @@ class _TasksPageState extends ConsumerState<TasksPage>
               right: 20,
               bottom: 120,
               child: RepaintBoundary(
-                child: VoiceHoldFabColumn(
-                  onHoldStart: _beginVoiceCapture,
-                  onHoldMove: _updateSlideCancel,
-                  onHoldEnd: _endVoiceCapture,
-                  onAdd: _openQuickCreate,
+                child: CreateActionFanFab(
+                  onTextCreate: _openQuickCreate,
+                  onVoiceInput: _armVoiceCapture,
                 ),
               ),
             ),
           if (_voiceCapture != _VoiceCaptureState.inactive)
             VoiceCaptureOverlay(
-              phase: _voiceCapture == _VoiceCaptureState.recording
-                  ? VoiceCapturePhase.recording
-                  : VoiceCapturePhase.processing,
-              slideCancelActive: _slideCancel,
+              phase: switch (_voiceCapture) {
+                _VoiceCaptureState.armed => VoiceCapturePhase.armed,
+                _VoiceCaptureState.recording => VoiceCapturePhase.recording,
+                _VoiceCaptureState.processing ||
+                _VoiceCaptureState.inactive =>
+                  VoiceCapturePhase.processing,
+              },
               pipelinePhase: _pipelinePhase,
               transcript: _voiceTranscript,
               error: _voiceError,
+              onPrimaryTap: _onVoiceOverlayPrimaryTap,
+              onCancel: _cancelVoiceCapture,
             ),
         ],
       ),
     );
   }
 
-  // ══════════════ 语音长按 ══════════════
+  // ══════════════ 语音创建 ══════════════
 
-  void _beginVoiceCapture() {
+  void _armVoiceCapture() {
     ref.read(shellTabBarVisibleProvider.notifier).state = false;
     setState(() {
-      _voiceCapture = _VoiceCaptureState.recording;
-      _slideCancel = false;
+      _voiceCapture = _VoiceCaptureState.armed;
       _voiceTranscript = '';
       _voiceError = null;
       _pipelinePhase = null;
     });
-    unawaited(_startVoiceRecording());
+  }
+
+  void _onVoiceOverlayPrimaryTap() {
+    switch (_voiceCapture) {
+      case _VoiceCaptureState.armed:
+        unawaited(_startVoiceRecording());
+      case _VoiceCaptureState.recording:
+        _endVoiceCapture();
+      case _VoiceCaptureState.inactive:
+      case _VoiceCaptureState.processing:
+        break;
+    }
+  }
+
+  void _cancelVoiceCapture() {
+    if (_voiceCapture == _VoiceCaptureState.processing) return;
+    unawaited(ref.read(streamingVoiceSessionProvider).cancel());
+    _closeVoiceCapture();
   }
 
   Future<void> _startVoiceRecording() async {
@@ -174,6 +192,8 @@ class _TasksPageState extends ConsumerState<TasksPage>
       if (!session.isPrepared) {
         await session.prepare();
       }
+      if (!mounted || _voiceCapture != _VoiceCaptureState.armed) return;
+      setState(() => _voiceCapture = _VoiceCaptureState.recording);
       await session.startRecording();
       if (!mounted || _voiceCapture != _VoiceCaptureState.recording) return;
 
@@ -193,26 +213,14 @@ class _TasksPageState extends ConsumerState<TasksPage>
     }
   }
 
-  void _updateSlideCancel(double localDy) {
-    final cancel = localDy < -VoiceHoldFabColumn.slideCancelThreshold;
-    if (cancel != _slideCancel && mounted) {
-      setState(() => _slideCancel = cancel);
-    }
-  }
+  void _endVoiceCapture() {
+    if (_voiceCapture != _VoiceCaptureState.recording) return;
 
-  void _endVoiceCapture(bool cancelled) {
     _transcriptSub?.cancel();
     _transcriptSub = null;
 
-    if (cancelled || _voiceCapture != _VoiceCaptureState.recording) {
-      unawaited(ref.read(streamingVoiceSessionProvider).cancel());
-      _closeVoiceCapture();
-      return;
-    }
-
     setState(() {
       _voiceCapture = _VoiceCaptureState.processing;
-      _slideCancel = false;
       _pipelinePhase = VoicePipelinePhase.transcribing;
     });
 
@@ -225,6 +233,7 @@ class _TasksPageState extends ConsumerState<TasksPage>
 
     await orchestrator.enqueueVoicePipeline(
       session: session,
+      partialTranscript: _voiceTranscript,
       onNeedDraftConfirm: (draft) {
         if (!mounted) return;
         unawaited(QuickCreateSheet.showPrefill(context, draft: draft));
@@ -244,7 +253,6 @@ class _TasksPageState extends ConsumerState<TasksPage>
       _voiceTranscript = '';
       _voiceError = null;
       _pipelinePhase = null;
-      _slideCancel = false;
     });
     ref.read(shellTabBarVisibleProvider.notifier).state = true;
     unawaited(ref.read(streamingVoiceSessionProvider).disposeSession());

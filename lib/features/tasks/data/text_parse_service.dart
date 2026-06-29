@@ -15,6 +15,7 @@ import 'voice_task_parse_result.dart';
 /// 将自然语言文本解析为结构化任务字段（标题/日期/优先级/tag）。
 class TextParseService {
   static const Duration debounceDuration = Duration(milliseconds: 500);
+  static const Duration softTimeoutDuration = Duration(seconds: 2);
   static const int minParseLength = 3;
 
   final Dio _dio;
@@ -108,6 +109,25 @@ class TextParseService {
     }
   }
 
+  Future<VoiceTaskParseResult?> parseTextSoft(
+    String text, {
+    Duration timeout = softTimeoutDuration,
+  }) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return null;
+
+    final cached = cachedResultFor(trimmed);
+    if (cached != null) return cached;
+
+    final parseFuture = parseText(trimmed);
+    try {
+      return await parseFuture.timeout(timeout);
+    } on TimeoutException {
+      unawaited(parseFuture.then<void>((_) {}));
+      return null;
+    }
+  }
+
   VoiceTaskParseResult _sanitizeDueDate(VoiceTaskParseResult result) {
     if (result.dueDate != null) {
       final minDate = DateTime.now().subtract(const Duration(days: 1));
@@ -116,10 +136,15 @@ class TextParseService {
           title: result.title,
           description: result.description,
           dueDate: null,
+          isAllDay: result.isAllDay,
           priority: result.priority,
           confidence: result.confidence,
           rawTranscript: result.rawTranscript,
           tag: result.tag,
+          recurrenceRule: result.recurrenceRule,
+          recurrenceEnd: result.recurrenceEnd,
+          recurrenceCount: result.recurrenceCount,
+          durationMin: result.durationMin,
         );
       }
     }

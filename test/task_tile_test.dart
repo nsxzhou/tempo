@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tempo/core/constants/app_constants.dart';
 import 'package:tempo/core/theme/app_theme.dart';
 import 'package:tempo/core/theme/theme_presets.dart';
+import 'package:tempo/features/tasks/data/task_ai_enhancement_state.dart';
 import 'package:tempo/features/tasks/domain/task.dart';
 import 'package:tempo/features/tasks/presentation/widgets/task_tile.dart';
 
@@ -158,6 +159,19 @@ void main() {
     );
 
     expect(find.text('@生活'), findsOneWidget);
+  });
+
+  testWidgets('shows AI enhancement pending badge', (tester) async {
+    await tester.pumpWidget(
+      wrap(
+        TaskTile(
+          task: _task(),
+          aiEnhancementStatus: TaskAiEnhancementStatus.pending,
+        ),
+      ),
+    );
+
+    expect(find.text('AI补全中'), findsOneWidget);
   });
 
   testWidgets('tap on title area triggers onTap', (tester) async {

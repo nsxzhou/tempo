@@ -1,14 +1,15 @@
 import { Task } from '../../models/task';
 import {
   getWeekDates,
-  isDueOnDate,
   isSameDay,
   weekdayLabel,
 } from '../../utils/date_filter';
+import { tasksForDate } from '../../utils/rrule_expand';
 
 export function renderWeekView(options: {
   selectedDate: Date;
   tasks: Task[];
+  completions?: Set<string>;
   onSelectDate: (date: Date) => void;
 }): HTMLElement {
   const wrap = document.createElement('div');
@@ -22,9 +23,8 @@ export function renderWeekView(options: {
   days.forEach((day, index) => {
     const isSelected = isSameDay(day, options.selectedDate);
     const isToday = isSameDay(day, now);
-    const hasTask = options.tasks.some(
-      (task) => task.dueDate && isDueOnDate(task.dueDate, day)
-    );
+    const hasTask =
+      tasksForDate(options.tasks, day, options.completions).length > 0;
 
     const button = document.createElement('button');
     button.type = 'button';

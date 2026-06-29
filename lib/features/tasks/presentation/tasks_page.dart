@@ -22,11 +22,15 @@ import '../../../core/widgets/tempo/tempo.dart';
 import '../domain/recurrence_engine.dart';
 import '../domain/task.dart';
 import '../domain/task_list_builder.dart';
+import '../data/task_creation_orchestrator.dart';
 import 'widgets/quick_create_sheet.dart';
 import 'widgets/task_tile.dart';
+import 'widgets/voice_hold_fab.dart';
 import 'widgets/voice_overlay.dart';
 
 enum _TaskScope { pending, overdue, week, all }
+
+enum _VoiceCaptureState { inactive, recording, processing }
 
 class TasksPage extends ConsumerStatefulWidget {
   const TasksPage({super.key});
@@ -37,7 +41,12 @@ class TasksPage extends ConsumerStatefulWidget {
 
 class _TasksPageState extends ConsumerState<TasksPage>
     with AutomaticKeepAliveClientMixin {
-  bool _showVoiceOverlay = false;
+  _VoiceCaptureState _voiceCapture = _VoiceCaptureState.inactive;
+  bool _slideCancel = false;
+  String _voiceTranscript = '';
+  String? _voiceError;
+  VoicePipelinePhase? _pipelinePhase;
+  StreamSubscription<String>? _transcriptSub;
   bool _showQuickCreate = false;
   Task? _lastDeletedTask;
 
@@ -47,8 +56,19 @@ class _TasksPageState extends ConsumerState<TasksPage>
   Timer? _searchDebounce;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(ref.read(streamingVoiceSessionProvider).prepare());
+      unawaited(ref.read(streamingVoiceSessionProvider).ensureMicPermission());
+    });
+  }
+
+  @override
   void dispose() {
     _searchDebounce?.cancel();
+    _transcriptSub?.cancel();
     super.dispose();
   }
 
@@ -106,34 +126,128 @@ class _TasksPageState extends ConsumerState<TasksPage>
             ),
           ),
           // 浮动按钮（语音/快速创建 overlay 打开时隐藏）
-          if (!_showVoiceOverlay && !_showQuickCreate)
+          if (_voiceCapture == _VoiceCaptureState.inactive && !_showQuickCreate)
             Positioned(
               right: 20,
               bottom: 120,
               child: RepaintBoundary(
-                child: _FloatingActions(
-                  onVoice: () {
-                    ref.read(shellTabBarVisibleProvider.notifier).state = false;
-                    setState(() => _showVoiceOverlay = true);
-                  },
+                child: VoiceHoldFabColumn(
+                  onHoldStart: _beginVoiceCapture,
+                  onHoldMove: _updateSlideCancel,
+                  onHoldEnd: _endVoiceCapture,
                   onAdd: _openQuickCreate,
                 ),
               ),
             ),
-          // 语音录入浮层
-          if (_showVoiceOverlay)
-            VoiceOverlay(
-              onClose: () {
-                setState(() => _showVoiceOverlay = false);
-                ref.read(shellTabBarVisibleProvider.notifier).state = true;
-              },
-              onNeedDraftConfirm: (draft) {
-                unawaited(QuickCreateSheet.showPrefill(context, draft: draft));
-              },
+          if (_voiceCapture != _VoiceCaptureState.inactive)
+            VoiceCaptureOverlay(
+              phase: _voiceCapture == _VoiceCaptureState.recording
+                  ? VoiceCapturePhase.recording
+                  : VoiceCapturePhase.processing,
+              slideCancelActive: _slideCancel,
+              pipelinePhase: _pipelinePhase,
+              transcript: _voiceTranscript,
+              error: _voiceError,
             ),
         ],
       ),
     );
+  }
+
+  // ══════════════ 语音长按 ══════════════
+
+  void _beginVoiceCapture() {
+    ref.read(shellTabBarVisibleProvider.notifier).state = false;
+    setState(() {
+      _voiceCapture = _VoiceCaptureState.recording;
+      _slideCancel = false;
+      _voiceTranscript = '';
+      _voiceError = null;
+      _pipelinePhase = null;
+    });
+    unawaited(_startVoiceRecording());
+  }
+
+  Future<void> _startVoiceRecording() async {
+    final session = ref.read(streamingVoiceSessionProvider);
+    try {
+      if (!session.isPrepared) {
+        await session.prepare();
+      }
+      await session.startRecording();
+      if (!mounted || _voiceCapture != _VoiceCaptureState.recording) return;
+
+      _transcriptSub?.cancel();
+      _transcriptSub = session.transcriptStream.listen((text) {
+        if (!mounted) return;
+        setState(() => _voiceTranscript = text);
+        ref.read(textParseServiceProvider).parseTextDebounced(text);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _voiceError = formatVoiceStartError(e);
+        _voiceCapture = _VoiceCaptureState.inactive;
+      });
+      ref.read(shellTabBarVisibleProvider.notifier).state = true;
+    }
+  }
+
+  void _updateSlideCancel(double localDy) {
+    final cancel = localDy < -VoiceHoldFabColumn.slideCancelThreshold;
+    if (cancel != _slideCancel && mounted) {
+      setState(() => _slideCancel = cancel);
+    }
+  }
+
+  void _endVoiceCapture(bool cancelled) {
+    _transcriptSub?.cancel();
+    _transcriptSub = null;
+
+    if (cancelled || _voiceCapture != _VoiceCaptureState.recording) {
+      unawaited(ref.read(streamingVoiceSessionProvider).cancel());
+      _closeVoiceCapture();
+      return;
+    }
+
+    setState(() {
+      _voiceCapture = _VoiceCaptureState.processing;
+      _slideCancel = false;
+      _pipelinePhase = VoicePipelinePhase.transcribing;
+    });
+
+    unawaited(_runVoicePipeline());
+  }
+
+  Future<void> _runVoicePipeline() async {
+    final session = ref.read(streamingVoiceSessionProvider);
+    final orchestrator = ref.read(taskCreationOrchestratorProvider);
+
+    await orchestrator.enqueueVoicePipeline(
+      session: session,
+      onNeedDraftConfirm: (draft) {
+        if (!mounted) return;
+        unawaited(QuickCreateSheet.showPrefill(context, draft: draft));
+      },
+      onPhaseChanged: (phase) {
+        if (!mounted) return;
+        setState(() => _pipelinePhase = phase);
+      },
+      onComplete: _closeVoiceCapture,
+    );
+  }
+
+  void _closeVoiceCapture() {
+    if (!mounted) return;
+    setState(() {
+      _voiceCapture = _VoiceCaptureState.inactive;
+      _voiceTranscript = '';
+      _voiceError = null;
+      _pipelinePhase = null;
+      _slideCancel = false;
+    });
+    ref.read(shellTabBarVisibleProvider.notifier).state = true;
+    unawaited(ref.read(streamingVoiceSessionProvider).disposeSession());
   }
 
   // ══════════════ UI 部分 ══════════════
@@ -748,63 +862,6 @@ class _TaskListSection extends ConsumerWidget {
           ),
         ],
       ],
-    );
-  }
-}
-
-// ══════════════ 子组件 ══════════════
-
-class _FloatingActions extends StatelessWidget {
-  final VoidCallback onVoice;
-  final VoidCallback onAdd;
-  const _FloatingActions({required this.onVoice, required this.onAdd});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _Fab(
-          key: const ValueKey('voice-fab'),
-          icon: LucideIcons.mic,
-          onTap: onVoice,
-        ),
-        const SizedBox(height: 12),
-        _Fab(icon: LucideIcons.plus, onTap: onAdd, filled: true),
-      ],
-    );
-  }
-}
-
-class _Fab extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool filled;
-  const _Fab({
-    super.key,
-    required this.icon,
-    required this.onTap,
-    this.filled = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    return Material(
-      color: filled ? t.fg : t.bg,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-        side: BorderSide(color: filled ? t.fg : t.borderStrong, width: 0.8),
-      ),
-      elevation: 0,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-        child: SizedBox(
-          width: 48,
-          height: 48,
-          child: Icon(icon, size: 22, color: filled ? t.bg : t.fg),
-        ),
-      ),
     );
   }
 }

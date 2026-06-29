@@ -535,29 +535,65 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Material(
-          color: Colors.transparent,
-          child: SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('重复'),
-            value: _repeatEnabled,
-            onChanged: (v) => setState(() {
-              _repeatEnabled = v;
-              if (v && !_recurrenceConfig.hasRecurrence) {
-                _recurrenceConfig = const RecurrenceConfig(
-                  interval: 1,
-                  unit: RecurrenceUnit.day,
-                );
-              }
-            }),
-          ),
+        Row(
+          children: [
+            Text(
+              '重复',
+              style: AppTheme.mono(
+                size: 10,
+                weight: FontWeight.w700,
+                color: t.fgMuted,
+                letterSpacing: 1.0,
+              ),
+            ),
+            const Spacer(),
+            _buildRepeatTogglePill(),
+          ],
         ),
-        if (_repeatEnabled)
+        if (_repeatEnabled) ...[
+          const SizedBox(height: 8),
           RepeatPicker(
             config: _recurrenceConfig,
             onChanged: (c) => setState(() => _recurrenceConfig = c),
           ),
+        ],
       ],
+    );
+  }
+
+  Widget _buildRepeatTogglePill() {
+    return GestureDetector(
+      onTap: () => setState(() {
+        _repeatEnabled = !_repeatEnabled;
+        if (_repeatEnabled && !_recurrenceConfig.hasRecurrence) {
+          _recurrenceConfig = const RecurrenceConfig(
+            interval: 1,
+            unit: RecurrenceUnit.day,
+          );
+        }
+      }),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: _repeatEnabled ? t.fg : t.bgMuted,
+          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+          border: Border.all(
+            color: _repeatEnabled ? t.fg : t.borderStrong,
+            width: _repeatEnabled ? 1 : 0.8,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          _repeatEnabled ? '开' : '关',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: _repeatEnabled ? t.bg : t.fgSecondary,
+          ),
+        ),
+      ),
     );
   }
 

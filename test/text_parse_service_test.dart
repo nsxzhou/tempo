@@ -246,6 +246,36 @@ void main() {
     });
 
     test(
+      'parseTextImmediate reuses prefix cache from debounced partial',
+      () async {
+        final partialResponse = {
+          'title': '开会',
+          'description': null,
+          'due_date': null,
+          'priority': 0,
+          'confidence': 0.9,
+          'raw_transcript': '明天下午三点开',
+        };
+        _setupDioPost(dio, partialResponse, 200);
+
+        service.parseTextDebounced('明天下午三点开');
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+
+        clearInteractions(dio);
+        final result = await service.parseTextImmediate('明天下午三点开会');
+
+        expect(result?.title, '开会');
+        verifyNever(
+          () => dio.post<Map<String, dynamic>>(
+            any(),
+            data: any(named: 'data'),
+            options: any(named: 'options'),
+          ),
+        );
+      },
+    );
+
+    test(
       'parseTextSoft timeout returns null and late result fills cache',
       () async {
         final responseData = {

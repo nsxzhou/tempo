@@ -188,6 +188,63 @@ void main() {
       expect(service.cachedResultFor('其他'), isNull);
     });
 
+    test('parseTextImmediate cancels debounce and parses once', () async {
+      final responseData = {
+        'title': '开会',
+        'description': null,
+        'due_date': null,
+        'priority': 0,
+        'confidence': 0.9,
+        'raw_transcript': '明天下午三点开会',
+      };
+      _setupDioPost(dio, responseData, 200);
+
+      service.parseTextDebounced('明天下午三点开会');
+      final result = await service.parseTextImmediate('明天下午三点开会');
+
+      expect(result?.title, '开会');
+      verify(
+        () => dio.post<Map<String, dynamic>>(
+          any(),
+          data: any(named: 'data'),
+          options: any(named: 'options'),
+        ),
+      ).called(1);
+    });
+
+    test('LRU cache keeps last five entries', () async {
+      when(
+        () => dio.post<Map<String, dynamic>>(
+          any(),
+          data: any(named: 'data'),
+          options: any(named: 'options'),
+        ),
+      ).thenAnswer((invocation) async {
+        final data =
+            invocation.namedArguments[#data] as Map<String, dynamic>;
+        final text = data['text'] as String;
+        return Response<Map<String, dynamic>>(
+          requestOptions: RequestOptions(path: ''),
+          statusCode: 200,
+          data: {
+            'title': text,
+            'description': null,
+            'due_date': null,
+            'priority': 0,
+            'confidence': 0.9,
+            'raw_transcript': text,
+          },
+        );
+      });
+
+      for (var i = 0; i < 6; i++) {
+        await service.parseText('文本$i');
+      }
+
+      expect(service.cachedResultFor('文本0'), isNull);
+      expect(service.cachedResultFor('文本5')?.title, '文本5');
+    });
+
     test(
       'parseTextSoft timeout returns null and late result fills cache',
       () async {

@@ -27,6 +27,10 @@ void main() {
       ProviderScope(
         overrides: [
           taskRepositoryProvider.overrideWithValue(repository),
+          streamingVoiceSessionProvider.overrideWithValue(
+            FakeStreamingVoiceSession(),
+          ),
+          textParseServiceProvider.overrideWithValue(FakeTextParseService()),
           taskBackgroundRepositoryProvider.overrideWithValue(
             FakeTaskBackgroundRepository(),
           ),

@@ -270,6 +270,12 @@ class FakeStreamingVoiceSession implements StreamingVoiceSession {
   bool get isRecording => recording;
 
   @override
+  bool get isPrepared => prepared;
+
+  @override
+  Future<bool> ensureMicPermission() async => permission;
+
+  @override
   Stream<String> get transcriptStream => _controller.stream;
 
   @override
@@ -333,4 +339,8 @@ class FakeTextParseService extends TextParseService {
     }
     return result;
   }
+
+  @override
+  Future<VoiceTaskParseResult?> parseTextImmediate(String text) =>
+      parseText(text);
 }

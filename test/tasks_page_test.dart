@@ -72,14 +72,14 @@ void main() {
     await session.dispose();
   });
 
-  testWidgets('voice stop creates raw task while AI enhancement is pending', (
+  testWidgets('voice release shows processing before parsed task is created', (
     tester,
   ) async {
     final repository = FakeTaskRepository();
     final session = FakeStreamingVoiceSession();
     final parseService = FakeTextParseService(
       result: _voiceResult(),
-      parseDelay: const Duration(seconds: 2),
+      parseDelay: const Duration(milliseconds: 200),
     );
 
     await _pumpTasksPage(
@@ -89,18 +89,32 @@ void main() {
       parseService: parseService,
     );
 
-    await _submitVoice(tester);
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byIcon(LucideIcons.mic)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.textContaining('松手结束'), findsOneWidget);
+
+    await gesture.up();
+    await tester.pump();
+    expect(repository.tasks, isEmpty);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(repository.tasks, hasLength(1));
-    expect(repository.tasks.single.title, '明天下午');
-    expect(find.text('AI补全中'), findsOneWidget);
-
+    expect(repository.tasks.single.title, '提交设计稿');
     await tester.pump(const Duration(seconds: 3));
     await repository.dispose();
     await session.dispose();
   });
 
-  testWidgets('low confidence voice parse keeps raw task with failed badge', (
+  testWidgets('low confidence voice parse opens draft sheet without creating', (
     tester,
   ) async {
     final repository = FakeTaskRepository();
@@ -122,18 +136,16 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 200));
     });
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 500));
 
-    expect(repository.tasks, hasLength(1));
-    expect(repository.tasks.single.title, '明天下午');
-    expect(repository.tasks.single.creationSource, 'voice');
-    expect(find.text('AI失败'), findsOneWidget);
+    expect(repository.tasks, isEmpty);
+    expect(find.text('拟定待办…'), findsOneWidget);
     await tester.pump(const Duration(seconds: 3));
     await repository.dispose();
     await session.dispose();
   });
 
-  testWidgets('backend error keeps raw voice task with failed badge', (
+  testWidgets('parse failure opens draft sheet with raw transcript', (
     tester,
   ) async {
     final repository = FakeTaskRepository();
@@ -153,11 +165,10 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 200));
     });
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 500));
 
-    expect(repository.tasks, hasLength(1));
-    expect(repository.tasks.single.title, '明天下午');
-    expect(find.text('AI失败'), findsOneWidget);
+    expect(repository.tasks, isEmpty);
+    expect(find.textContaining('明天下午三点提交设计稿'), findsWidgets);
     await tester.pump(const Duration(seconds: 3));
     await repository.dispose();
     await session.dispose();
@@ -436,14 +447,13 @@ Future<void> _pumpTasksPage(
 }
 
 Future<void> _submitVoice(WidgetTester tester) async {
-  await tester.tap(find.byKey(const ValueKey('voice-fab')));
+  final gesture = await tester.startGesture(
+    tester.getCenter(find.byIcon(LucideIcons.mic)),
+  );
   await tester.pump();
-  await tester.pump(const Duration(milliseconds: 300));
-  await tester.tap(find.byKey(const ValueKey('voice-mic')));
-  await tester.pump();
-  await tester.pump();
-  expect(find.textContaining('语音采音中'), findsOneWidget);
-  await tester.tap(find.byKey(const ValueKey('voice-mic')));
+  await tester.pump(const Duration(milliseconds: 50));
+  expect(find.textContaining('松手结束'), findsOneWidget);
+  await gesture.up();
   await tester.runAsync(() async {
     await Future<void>.delayed(const Duration(milliseconds: 500));
   });

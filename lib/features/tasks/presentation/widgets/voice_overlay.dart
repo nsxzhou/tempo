@@ -1,4 +1,4 @@
-// VoiceCaptureOverlay — 极简语音浮岛
+// VoiceCaptureOverlay — 右下锚点语音面板
 // armed → 点击开始 → recording → 点击结束 → processing
 
 import 'package:flutter/material.dart';
@@ -11,6 +11,10 @@ import '../../data/task_creation_orchestrator.dart';
 import '../../data/volcengine_streaming_asr.dart';
 
 enum VoiceCapturePhase { armed, recording, processing }
+
+/// 与 TasksPage FAB 对齐的锚点常量。
+const double kVoiceFabRight = 20;
+const double kVoiceFabBottom = 120;
 
 class VoiceCaptureOverlay extends StatefulWidget {
   final VoiceCapturePhase phase;
@@ -35,12 +39,17 @@ class VoiceCaptureOverlay extends StatefulWidget {
 }
 
 class _VoiceCaptureOverlayState extends State<VoiceCaptureOverlay>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const double _swipeCancelThreshold = 60;
+  static const double _panelWidth = 288;
+  static const double _micSize = 48;
 
   TempoTokens get tokens => context.tokens;
 
   late final AnimationController _breathController;
+  late final AnimationController _entryController;
+  late final Animation<double> _entryScale;
+  late final Animation<double> _barrierOpacity;
   double _dragOffset = 0;
 
   @override
@@ -50,6 +59,21 @@ class _VoiceCaptureOverlayState extends State<VoiceCaptureOverlay>
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     );
+    _entryController = AnimationController(
+      vsync: this,
+      duration: AppTheme.durationMedium,
+    );
+    _entryScale = Tween<double>(begin: 0.92, end: 1).animate(
+      CurvedAnimation(
+        parent: _entryController,
+        curve: AppTheme.curveOrganic,
+      ),
+    );
+    _barrierOpacity = CurvedAnimation(
+      parent: _entryController,
+      curve: const Interval(0, 0.85, curve: Curves.easeOut),
+    );
+    _entryController.forward();
     _syncBreathAnimation();
   }
 
@@ -76,6 +100,7 @@ class _VoiceCaptureOverlayState extends State<VoiceCaptureOverlay>
   @override
   void dispose() {
     _breathController.dispose();
+    _entryController.dispose();
     super.dispose();
   }
 
@@ -102,117 +127,132 @@ class _VoiceCaptureOverlayState extends State<VoiceCaptureOverlay>
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
     final dragCancelActive = _dragOffset > _swipeCancelThreshold;
+    final borderColor = dragCancelActive
+        ? AppTheme.priorityP0Border
+        : tokens.borderStrong;
 
     return Positioned.fill(
       child: Material(
         color: Colors.transparent,
-        child: Container(
-          color: AppTheme.sheetBarrierColor.withValues(alpha: 0.72),
-          alignment: Alignment.bottomCenter,
-          padding: EdgeInsets.fromLTRB(
-            20,
-            0,
-            20,
-            120 + MediaQuery.paddingOf(context).bottom,
-          ),
-          child: GestureDetector(
-            onVerticalDragUpdate: (details) {
-              if (widget.phase == VoiceCapturePhase.processing) return;
-              setState(() {
-                _dragOffset = (_dragOffset + details.delta.dy).clamp(0, 120);
-              });
-              if (_dragOffset > _swipeCancelThreshold) {
-                widget.onCancel();
-                setState(() => _dragOffset = 0);
-              }
-            },
-            onVerticalDragEnd: (_) => setState(() => _dragOffset = 0),
-            child: Transform.translate(
-              offset: Offset(0, _dragOffset * 0.35),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-                decoration: BoxDecoration(
-                  color: tokens.bg,
-                  borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-                  border: Border.all(
-                    color: dragCancelActive
-                        ? AppTheme.priorityP0Border
-                        : tokens.borderStrong,
-                    width: 0.8,
-                  ),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x24000000),
-                      blurRadius: 20,
-                      offset: Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _statusLabel,
-                            style: AppTheme.mono(
-                              size: 10,
-                              weight: FontWeight.w700,
-                              color: tokens.fgMuted,
-                              letterSpacing: 0.6,
-                            ),
+        child: AnimatedBuilder(
+          animation: _barrierOpacity,
+          builder: (context, child) {
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                _GradientBarrier(opacity: _barrierOpacity.value),
+                child!,
+              ],
+            );
+          },
+          child: Align(
+            alignment: Alignment.bottomRight,
+            child: Padding(
+              padding: EdgeInsets.only(
+                right: kVoiceFabRight,
+                bottom: kVoiceFabBottom + bottomInset,
+              ),
+              child: GestureDetector(
+                onVerticalDragUpdate: (details) {
+                  if (widget.phase == VoiceCapturePhase.processing) return;
+                  setState(() {
+                    _dragOffset = (_dragOffset + details.delta.dy).clamp(
+                      0,
+                      120,
+                    );
+                  });
+                  if (_dragOffset > _swipeCancelThreshold) {
+                    widget.onCancel();
+                    setState(() => _dragOffset = 0);
+                  }
+                },
+                onVerticalDragEnd: (_) => setState(() => _dragOffset = 0),
+                child: Transform.translate(
+                  offset: Offset(0, _dragOffset * 0.35),
+                  child: ScaleTransition(
+                    scale: _entryScale,
+                    alignment: Alignment.bottomRight,
+                    child: Container(
+                      width: _panelWidth,
+                      decoration: BoxDecoration(
+                        color: tokens.bg,
+                        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+                        border: Border.all(color: borderColor, width: 0.8),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x24000000),
+                            blurRadius: 24,
+                            offset: Offset(0, 8),
                           ),
-                        ),
-                        if (widget.phase != VoiceCapturePhase.processing)
-                          GestureDetector(
-                            onTap: widget.onCancel,
-                            child: Text(
-                              '取消',
-                              style: tokens.mono(
-                                size: 10,
-                                weight: FontWeight.w700,
-                                color: tokens.fgMuted,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    GestureDetector(
-                      onTap: widget.phase == VoiceCapturePhase.processing
-                          ? null
-                          : widget.onPrimaryTap,
-                      behavior: HitTestBehavior.opaque,
+                        ],
+                      ),
+                      padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _buildIndicator(),
-                          const SizedBox(height: 12),
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 120),
-                            child: Text(
-                              _transcriptText,
-                              key: ValueKey(_transcriptText),
-                              style: TextStyle(
-                                fontSize: 16,
-                                height: 1.45,
-                                fontWeight: FontWeight.w600,
-                                color: tokens.fg,
-                                letterSpacing: -0.3,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _statusLabel,
+                                  style: AppTheme.mono(
+                                    size: 10,
+                                    weight: FontWeight.w700,
+                                    color: tokens.fgMuted,
+                                    letterSpacing: 0.6,
+                                  ),
+                                ),
                               ),
-                              textAlign: TextAlign.center,
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                              if (widget.phase != VoiceCapturePhase.processing)
+                                GestureDetector(
+                                  onTap: widget.onCancel,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(left: 8),
+                                    child: Text(
+                                      '取消',
+                                      style: tokens.mono(
+                                        size: 10,
+                                        weight: FontWeight.w700,
+                                        color: tokens.fgMuted,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Expanded(
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 120),
+                                  child: Text(
+                                    _transcriptText,
+                                    key: ValueKey(_transcriptText),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      height: 1.4,
+                                      fontWeight: FontWeight.w600,
+                                      color: tokens.fg,
+                                      letterSpacing: -0.3,
+                                    ),
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              _buildMicButton(),
+                            ],
                           ),
                         ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -222,38 +262,153 @@ class _VoiceCaptureOverlayState extends State<VoiceCaptureOverlay>
     );
   }
 
-  Widget _buildIndicator() {
+  Widget _buildMicButton() {
+    final enabled = widget.phase != VoiceCapturePhase.processing;
+
+    return GestureDetector(
+      key: const Key('voice_mic_button'),
+      onTap: enabled ? widget.onPrimaryTap : null,
+      child: _buildMicButtonVisual(),
+    );
+  }
+
+  Widget _buildMicButtonVisual() {
     if (widget.phase == VoiceCapturePhase.recording) {
       return AnimatedBuilder(
         animation: _breathController,
-        builder: (context, _) {
+        builder: (context, child) {
           final t = _breathController.value;
-          final scale = 0.85 + t * 0.15;
-          final opacity = 0.5 + t * 0.5;
-          return Opacity(
-            opacity: opacity,
-            child: Transform.scale(
-              scale: scale,
-              child: Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: tokens.fg,
-                  shape: BoxShape.circle,
+          final ringScale = 1 + t * 0.16;
+          final ringOpacity = 0.18 + t * 0.42;
+          return SizedBox(
+            width: _micSize,
+            height: _micSize,
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                Opacity(
+                  opacity: ringOpacity,
+                  child: Transform.scale(
+                    scale: ringScale,
+                    child: Container(
+                      width: _micSize + 8,
+                      height: _micSize + 8,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: tokens.fg, width: 1.5),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                child!,
+              ],
             ),
           );
         },
+        child: _micCore(showBreathDot: true),
       );
     }
 
-    return Icon(
-      LucideIcons.mic,
-      size: 18,
-      color: widget.phase == VoiceCapturePhase.processing
-          ? tokens.fgMuted
-          : tokens.fg,
+    if (widget.phase == VoiceCapturePhase.processing) {
+      return SizedBox(
+        width: _micSize,
+        height: _micSize,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            _micCore(muted: true),
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: tokens.fgMuted,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return _micCore();
+  }
+
+  Widget _micCore({bool muted = false, bool showBreathDot = false}) {
+    return Container(
+      width: _micSize,
+      height: _micSize,
+      decoration: BoxDecoration(
+        color: muted ? tokens.bgMuted : tokens.fg,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        border: Border.all(
+          color: muted ? tokens.borderStrong : tokens.fg,
+          width: 0.8,
+        ),
+        boxShadow: showBreathDot ? AppTheme.shadowSelectedDot : null,
+      ),
+      alignment: Alignment.center,
+      child: showBreathDot
+          ? Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: tokens.bg,
+                shape: BoxShape.circle,
+              ),
+            )
+          : Icon(
+              LucideIcons.mic,
+              size: 22,
+              color: muted ? tokens.fgMuted : tokens.bg,
+            ),
+    );
+  }
+}
+
+/// 渐变暗角遮罩：顶部浅、底部深，右下径向强化焦点。
+class _GradientBarrier extends StatelessWidget {
+  const _GradientBarrier({required this.opacity});
+
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) {
+    if (opacity <= 0) return const SizedBox.shrink();
+
+    return IgnorePointer(
+      child: Opacity(
+        opacity: opacity.clamp(0, 1),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.06),
+                    AppTheme.sheetBarrierColor.withValues(alpha: 0.58),
+                  ],
+                ),
+              ),
+            ),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(0.9, 0.98),
+                  radius: 0.45,
+                  colors: [
+                    AppTheme.sheetBarrierColor.withValues(alpha: 0.28),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

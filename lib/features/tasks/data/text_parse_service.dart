@@ -4,6 +4,7 @@
 // ============================================================
 
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:dio/dio.dart';
 
@@ -17,14 +18,17 @@ class TextParseService {
   static const Duration debounceDuration = Duration(milliseconds: 500);
   static const Duration softTimeoutDuration = Duration(seconds: 2);
   static const int minParseLength = 3;
+  static const int cacheCapacity = 5;
 
   final Dio _dio;
   final String _endpoint;
 
   Timer? _debounceTimer;
-  String? _cachedText;
-  VoiceTaskParseResult? _cachedResult;
+  final LinkedHashMap<String, VoiceTaskParseResult> _cache =
+      LinkedHashMap<String, VoiceTaskParseResult>();
   int _requestGeneration = 0;
+  String? _inFlightText;
+  Future<VoiceTaskParseResult?>? _inFlightFuture;
 
   TextParseService({required Dio dio, required String endpoint})
     : _dio = dio,
@@ -33,8 +37,8 @@ class TextParseService {
   /// 当前缓存的解析结果（文本完全匹配时有效）。
   VoiceTaskParseResult? cachedResultFor(String text) {
     final trimmed = text.trim();
-    if (trimmed.isEmpty || trimmed != _cachedText) return null;
-    return _cachedResult;
+    if (trimmed.isEmpty) return null;
+    return _cache[trimmed];
   }
 
   /// 防抖预解析：输入停顿后后台请求，结果写入缓存。
@@ -46,14 +50,13 @@ class TextParseService {
     _debounceTimer?.cancel();
 
     if (trimmed.length < minParseLength) {
-      _cachedText = trimmed;
-      _cachedResult = null;
       onResult?.call(null);
       return;
     }
 
-    if (trimmed == _cachedText && _cachedResult != null) {
-      onResult?.call(_cachedResult);
+    final cached = cachedResultFor(trimmed);
+    if (cached != null) {
+      onResult?.call(cached);
       return;
     }
 
@@ -71,6 +74,36 @@ class TextParseService {
     _requestGeneration++;
   }
 
+  /// 取消防抖并立即解析（语音停止时使用）。
+  Future<VoiceTaskParseResult?> parseTextImmediate(String text) {
+    cancelPendingParse();
+    return flushParse(text);
+  }
+
+  /// 若有同文本 in-flight 请求则复用，否则立即请求。
+  Future<VoiceTaskParseResult?> flushParse(String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return null;
+
+    final cached = cachedResultFor(trimmed);
+    if (cached != null) return cached;
+
+    if (_inFlightText == trimmed && _inFlightFuture != null) {
+      return _inFlightFuture;
+    }
+
+    _inFlightText = trimmed;
+    _inFlightFuture = parseText(trimmed);
+    try {
+      return await _inFlightFuture;
+    } finally {
+      if (_inFlightText == trimmed) {
+        _inFlightText = null;
+        _inFlightFuture = null;
+      }
+    }
+  }
+
   /// 解析文本，返回结构化结果。
   ///
   /// 网络不可用、超时、或解析失败时返回 null（降级信号）。
@@ -78,9 +111,8 @@ class TextParseService {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return null;
 
-    if (trimmed == _cachedText && _cachedResult != null) {
-      return _cachedResult;
-    }
+    final cached = cachedResultFor(trimmed);
+    if (cached != null) return cached;
 
     try {
       final response = await _dio.post<Map<String, dynamic>>(
@@ -98,9 +130,7 @@ class TextParseService {
 
       final result = VoiceTaskParseResult.fromJson(data);
       final sanitized = _sanitizeDueDate(result);
-
-      _cachedText = trimmed;
-      _cachedResult = sanitized;
+      _rememberCache(trimmed, sanitized);
       return sanitized;
     } on DioException catch (_) {
       return null;
@@ -125,6 +155,16 @@ class TextParseService {
     } on TimeoutException {
       unawaited(parseFuture.then<void>((_) {}));
       return null;
+    }
+  }
+
+  void _rememberCache(String key, VoiceTaskParseResult result) {
+    if (_cache.containsKey(key)) {
+      _cache.remove(key);
+    }
+    _cache[key] = result;
+    while (_cache.length > cacheCapacity) {
+      _cache.remove(_cache.keys.first);
     }
   }
 

@@ -45,6 +45,7 @@ dependencies:
   timezone: ^0.9.4
   fl_chart: ^1.2.0
   image_picker: ^1.2.2
+  rrule: ^0.2.18
 
 dev_dependencies:
   flutter_test:

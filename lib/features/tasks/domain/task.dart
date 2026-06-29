@@ -1,8 +1,3 @@
-import 'package:freezed_annotation/freezed_annotation.dart';
-
-part 'task.freezed.dart';
-part 'task.g.dart';
-
 /// 任务优先级枚举
 enum TaskPriority {
   none(0),
@@ -24,33 +19,232 @@ enum TaskPriority {
 }
 
 /// 任务领域模型
-@freezed
-class Task with _$Task {
-  const factory Task({
-    required String id,
-    required String listId,
-    required String title,
+class Task {
+  const Task({
+    required this.id,
+    required this.listId,
+    required this.title,
+    this.description,
+    this.priority = TaskPriority.none,
+    this.dueDate,
+    this.isAllDay = false,
+    this.isCompleted = false,
+    this.completedAt,
+    this.siyuanBlockId,
+    this.sortOrder = 0,
+    required this.createdAt,
+    required this.updatedAt,
+    this.creationSource = 'text',
+    this.tag,
+    this.recurrenceRule,
+    this.recurrenceEnd,
+    this.recurrenceCount,
+    this.durationMin,
+    this.recurrenceSeriesId,
+    this.syncPending = false,
+  });
+
+  final String id;
+  final String listId;
+  final String title;
+  final String? description;
+  final TaskPriority priority;
+  final DateTime? dueDate;
+  final bool isAllDay;
+  final bool isCompleted;
+  final DateTime? completedAt;
+  final String? siyuanBlockId;
+  final int sortOrder;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final String creationSource;
+  final String? tag;
+  final String? recurrenceRule;
+  final DateTime? recurrenceEnd;
+  final int? recurrenceCount;
+  final int? durationMin;
+  final String? recurrenceSeriesId;
+  final bool syncPending;
+
+  bool get isRecurring =>
+      recurrenceRule != null && recurrenceRule!.trim().isNotEmpty;
+
+  Task copyWith({
+    String? id,
+    String? listId,
+    String? title,
     String? description,
-    @Default(TaskPriority.none) TaskPriority priority,
+    TaskPriority? priority,
     DateTime? dueDate,
-    @Default(false) bool isAllDay,
-    @Default(false) bool isCompleted,
+    bool? isAllDay,
+    bool? isCompleted,
     DateTime? completedAt,
     String? siyuanBlockId,
-    @Default(0) int sortOrder,
-    required DateTime createdAt,
-    required DateTime updatedAt,
-    @Default('text') String creationSource,
+    int? sortOrder,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    String? creationSource,
     String? tag,
-    @Default(false) bool syncPending,
-  }) = _Task;
+    String? recurrenceRule,
+    DateTime? recurrenceEnd,
+    int? recurrenceCount,
+    int? durationMin,
+    String? recurrenceSeriesId,
+    bool? syncPending,
+    bool clearDescription = false,
+    bool clearDueDate = false,
+    bool clearCompletedAt = false,
+    bool clearSiyuanBlockId = false,
+    bool clearTag = false,
+    bool clearRecurrenceRule = false,
+    bool clearRecurrenceEnd = false,
+    bool clearRecurrenceCount = false,
+    bool clearDurationMin = false,
+    bool clearRecurrenceSeriesId = false,
+  }) {
+    return Task(
+      id: id ?? this.id,
+      listId: listId ?? this.listId,
+      title: title ?? this.title,
+      description: clearDescription ? null : (description ?? this.description),
+      priority: priority ?? this.priority,
+      dueDate: clearDueDate ? null : (dueDate ?? this.dueDate),
+      isAllDay: isAllDay ?? this.isAllDay,
+      isCompleted: isCompleted ?? this.isCompleted,
+      completedAt: clearCompletedAt ? null : (completedAt ?? this.completedAt),
+      siyuanBlockId:
+          clearSiyuanBlockId ? null : (siyuanBlockId ?? this.siyuanBlockId),
+      sortOrder: sortOrder ?? this.sortOrder,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      creationSource: creationSource ?? this.creationSource,
+      tag: clearTag ? null : (tag ?? this.tag),
+      recurrenceRule: clearRecurrenceRule
+          ? null
+          : (recurrenceRule ?? this.recurrenceRule),
+      recurrenceEnd: clearRecurrenceEnd
+          ? null
+          : (recurrenceEnd ?? this.recurrenceEnd),
+      recurrenceCount: clearRecurrenceCount
+          ? null
+          : (recurrenceCount ?? this.recurrenceCount),
+      durationMin:
+          clearDurationMin ? null : (durationMin ?? this.durationMin),
+      recurrenceSeriesId: clearRecurrenceSeriesId
+          ? null
+          : (recurrenceSeriesId ?? this.recurrenceSeriesId),
+      syncPending: syncPending ?? this.syncPending,
+    );
+  }
 
-  factory Task.fromJson(Map<String, dynamic> json) => _$TaskFromJson(json);
+  factory Task.fromJson(Map<String, dynamic> json) => Task(
+    id: json['id'] as String,
+    listId: json['listId'] as String,
+    title: json['title'] as String,
+    description: json['description'] as String?,
+    priority: TaskPriority.fromValue(json['priority'] as int? ?? 0),
+    dueDate: json['dueDate'] != null
+        ? DateTime.parse(json['dueDate'] as String)
+        : null,
+    isAllDay: json['isAllDay'] as bool? ?? false,
+    isCompleted: json['isCompleted'] as bool? ?? false,
+    completedAt: json['completedAt'] != null
+        ? DateTime.parse(json['completedAt'] as String)
+        : null,
+    siyuanBlockId: json['siyuanBlockId'] as String?,
+    sortOrder: json['sortOrder'] as int? ?? 0,
+    createdAt: DateTime.parse(json['createdAt'] as String),
+    updatedAt: DateTime.parse(json['updatedAt'] as String),
+    creationSource: json['creationSource'] as String? ?? 'text',
+    tag: json['tag'] as String?,
+    recurrenceRule: json['recurrenceRule'] as String?,
+    recurrenceEnd: json['recurrenceEnd'] != null
+        ? DateTime.parse(json['recurrenceEnd'] as String)
+        : null,
+    recurrenceCount: json['recurrenceCount'] as int?,
+    durationMin: json['durationMin'] as int?,
+    recurrenceSeriesId: json['recurrenceSeriesId'] as String?,
+    syncPending: json['syncPending'] as bool? ?? false,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'listId': listId,
+    'title': title,
+    'description': description,
+    'priority': priority.value,
+    'dueDate': dueDate?.toIso8601String(),
+    'isAllDay': isAllDay,
+    'isCompleted': isCompleted,
+    'completedAt': completedAt?.toIso8601String(),
+    'siyuanBlockId': siyuanBlockId,
+    'sortOrder': sortOrder,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+    'creationSource': creationSource,
+    'tag': tag,
+    'recurrenceRule': recurrenceRule,
+    'recurrenceEnd': recurrenceEnd?.toIso8601String(),
+    'recurrenceCount': recurrenceCount,
+    'durationMin': durationMin,
+    'recurrenceSeriesId': recurrenceSeriesId,
+    'syncPending': syncPending,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Task &&
+          id == other.id &&
+          listId == other.listId &&
+          title == other.title &&
+          description == other.description &&
+          priority == other.priority &&
+          dueDate == other.dueDate &&
+          isAllDay == other.isAllDay &&
+          isCompleted == other.isCompleted &&
+          completedAt == other.completedAt &&
+          siyuanBlockId == other.siyuanBlockId &&
+          sortOrder == other.sortOrder &&
+          createdAt == other.createdAt &&
+          updatedAt == other.updatedAt &&
+          creationSource == other.creationSource &&
+          tag == other.tag &&
+          recurrenceRule == other.recurrenceRule &&
+          recurrenceEnd == other.recurrenceEnd &&
+          recurrenceCount == other.recurrenceCount &&
+          durationMin == other.durationMin &&
+          recurrenceSeriesId == other.recurrenceSeriesId &&
+          syncPending == other.syncPending;
+
+  @override
+  int get hashCode => Object.hashAll([
+    id,
+    listId,
+    title,
+    description,
+    priority,
+    dueDate,
+    isAllDay,
+    isCompleted,
+    completedAt,
+    siyuanBlockId,
+    sortOrder,
+    createdAt,
+    updatedAt,
+    creationSource,
+    tag,
+    recurrenceRule,
+    recurrenceEnd,
+    recurrenceCount,
+    durationMin,
+    recurrenceSeriesId,
+    syncPending,
+  ]);
 }
 
 /// Task Supabase JSON 序列化扩展（snake_case 列名）。
 extension TaskSupabase on Task {
-  /// 转换为 Supabase JSON（snake_case 列名）。
   Map<String, dynamic> toSupabaseJson({required String userId}) => {
     'id': id,
     'list_id': listId,
@@ -66,11 +260,13 @@ extension TaskSupabase on Task {
     'sort_order': sortOrder,
     'creation_source': creationSource,
     'tag': tag,
-    // 不传 updated_at（由触发器管理）
-    // 不传 created_at（由 DB 默认值管理，除非 upsert）
+    'recurrence_rule': recurrenceRule,
+    'recurrence_end': recurrenceEnd?.toUtc().toIso8601String(),
+    'recurrence_count': recurrenceCount,
+    'duration_min': durationMin,
+    'recurrence_series_id': recurrenceSeriesId,
   };
 
-  /// 从 Supabase JSON 构建 Task。
   static Task fromSupabaseJson(Map<String, dynamic> json) => Task(
     id: json['id'] as String,
     listId: json['list_id'] as String,
@@ -91,6 +287,13 @@ extension TaskSupabase on Task {
     updatedAt: DateTime.parse(json['updated_at'] as String).toLocal(),
     creationSource: json['creation_source'] as String? ?? 'text',
     tag: json['tag'] as String?,
-    syncPending: false, // 从云端读取的数据总是已同步的
+    recurrenceRule: json['recurrence_rule'] as String?,
+    recurrenceEnd: json['recurrence_end'] != null
+        ? DateTime.parse(json['recurrence_end'] as String).toLocal()
+        : null,
+    recurrenceCount: json['recurrence_count'] as int?,
+    durationMin: json['duration_min'] as int?,
+    recurrenceSeriesId: json['recurrence_series_id'] as String?,
+    syncPending: false,
   );
 }

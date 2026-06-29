@@ -13,10 +13,10 @@ packages:
     dependency: transitive
     description:
       name: analyzer
-      sha256: f4ad0fea5f102201015c9aae9d93bc02f75dd9491529a8c21f88d17a8523d44c
+      sha256: "974859dc0ff5f37bc4313244b3218c791810d03ab3470a579580279ba971a48d"
       url: "https://pub.dev"
     source: hosted
-    version: "7.6.0"
+    version: "7.7.1"
   app_links:
     dependency: transitive
     description:
@@ -1168,6 +1168,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.6.1"
+  rrule:
+    dependency: "direct main"
+    description:
+      name: rrule
+      sha256: f6f6ad5bf7b19d218d4c985d6055d3c9717f1d6efd5d1c0127b1146f1eb3640c
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.18"
   rxdart:
     dependency: transitive
     description:
@@ -1381,6 +1389,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.11"
+  time:
+    dependency: transitive
+    description:
+      name: time
+      sha256: "46187cf30bffdab28c56be9a63861b36e4ab7347bf403297595d6a97e10c789f"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.6"
   timezone:
     dependency: "direct main"
     description:

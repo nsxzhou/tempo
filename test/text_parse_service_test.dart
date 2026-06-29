@@ -187,6 +187,45 @@ void main() {
       expect(service.cachedResultFor('写周报')?.title, '写周报');
       expect(service.cachedResultFor('其他'), isNull);
     });
+
+    test(
+      'parseTextSoft timeout returns null and late result fills cache',
+      () async {
+        final responseData = {
+          'title': '开会',
+          'description': null,
+          'due_date': null,
+          'priority': 0,
+          'confidence': 0.9,
+          'raw_transcript': '明天下午三点开会',
+        };
+
+        final response = Response<Map<String, dynamic>>(
+          requestOptions: RequestOptions(path: ''),
+          data: responseData,
+          statusCode: 200,
+        );
+        when(
+          () => dio.post<Map<String, dynamic>>(
+            any(),
+            data: any(named: 'data'),
+            options: any(named: 'options'),
+          ),
+        ).thenAnswer((_) async {
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          return response;
+        });
+
+        final result = await service.parseTextSoft(
+          '明天下午三点开会',
+          timeout: const Duration(milliseconds: 10),
+        );
+        expect(result, isNull);
+
+        await Future<void>.delayed(const Duration(milliseconds: 70));
+        expect(service.cachedResultFor('明天下午三点开会')?.title, '开会');
+      },
+    );
   });
 }
 

@@ -12,6 +12,10 @@ class VoiceTaskParseResult {
   final double confidence;
   final String rawTranscript;
   final String? tag;
+  final String? recurrenceRule;
+  final DateTime? recurrenceEnd;
+  final int? recurrenceCount;
+  final int? durationMin;
 
   const VoiceTaskParseResult({
     required this.title,
@@ -22,6 +26,10 @@ class VoiceTaskParseResult {
     required this.confidence,
     required this.rawTranscript,
     this.tag,
+    this.recurrenceRule,
+    this.recurrenceEnd,
+    this.recurrenceCount,
+    this.durationMin,
   });
 
   factory VoiceTaskParseResult.fromJson(Map<String, Object?> json) {
@@ -39,6 +47,10 @@ class VoiceTaskParseResult {
       confidence: confidence.clamp(0, 1).toDouble(),
       rawTranscript: _readString(json['raw_transcript']).trim(),
       tag: _readNullableTag(json['tag']),
+      recurrenceRule: _readNullableString(json['recurrence_rule']),
+      recurrenceEnd: _readDateTime(json['recurrence_end']),
+      recurrenceCount: _readNullableInt(json['recurrence_count']),
+      durationMin: _readNullableInt(json['duration_min']),
     );
   }
 
@@ -55,6 +67,10 @@ class VoiceTaskParseResult {
     double? confidence,
     String? rawTranscript,
     String? tag,
+    String? recurrenceRule,
+    DateTime? recurrenceEnd,
+    int? recurrenceCount,
+    int? durationMin,
   }) {
     return VoiceTaskParseResult(
       title: title ?? this.title,
@@ -65,6 +81,10 @@ class VoiceTaskParseResult {
       confidence: confidence ?? this.confidence,
       rawTranscript: rawTranscript ?? this.rawTranscript,
       tag: tag ?? this.tag,
+      recurrenceRule: recurrenceRule ?? this.recurrenceRule,
+      recurrenceEnd: recurrenceEnd ?? this.recurrenceEnd,
+      recurrenceCount: recurrenceCount ?? this.recurrenceCount,
+      durationMin: durationMin ?? this.durationMin,
     );
   }
 }
@@ -99,6 +119,22 @@ double? _readDouble(Object? value) {
   }
   if (value is String) {
     return double.tryParse(value);
+  }
+  return null;
+}
+
+int? _readNullableInt(Object? value) {
+  if (value == null) return null;
+  if (value is int) return value > 0 ? value : null;
+  if (value is num) {
+    final intValue = value.toInt();
+    return intValue > 0 ? intValue : null;
+  }
+  if (value is String) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    final parsed = int.tryParse(trimmed);
+    return parsed != null && parsed > 0 ? parsed : null;
   }
   return null;
 }

@@ -1,8 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tempo/core/constants/app_constants.dart';
 import 'package:tempo/features/tasks/data/notification_service.dart';
+import 'package:tempo/features/tasks/data/task_ai_enhancement_state.dart';
 import 'package:tempo/features/tasks/data/task_creation_orchestrator.dart';
 import 'package:tempo/features/tasks/data/voice_task_parse_result.dart';
+import 'package:tempo/features/tasks/domain/recurrence_models.dart';
 import 'package:tempo/features/tasks/domain/task.dart';
 
 import 'test_fakes.dart';
@@ -12,6 +14,7 @@ void main() {
     late FakeTaskRepository repository;
     late FakeTextParseService parseService;
     late _RecordingNotificationService notifications;
+    late TaskAiEnhancementController aiEnhancement;
     late List<String> snackbarMessages;
     late TaskCreationOrchestrator orchestrator;
 
@@ -29,11 +32,13 @@ void main() {
         ),
       );
       notifications = _RecordingNotificationService();
+      aiEnhancement = TaskAiEnhancementController();
       snackbarMessages = [];
       orchestrator = TaskCreationOrchestrator(
         repository: repository,
         parseService: parseService,
         notificationService: notifications,
+        aiEnhancementTracker: aiEnhancement,
         showSnackbar: ({required message, undoLabel, onUndo}) {
           snackbarMessages.add(message);
         },
@@ -41,23 +46,35 @@ void main() {
     });
 
     tearDown(() async {
+      aiEnhancement.dispose();
       await repository.dispose();
     });
 
     test(
-      'quick create with parse resolves LLM fields and schedules reminder',
+      'quick create creates raw task first then enhances LLM fields',
       () async {
+        parseService.parseDelay = const Duration(milliseconds: 40);
+
         await orchestrator.enqueueQuickCreate(
           const QuickCreateInput(title: '明天下午三点开会'),
         );
 
-        expect(parseService.parseCallCount, 1);
         expect(repository.tasks, hasLength(1));
+        expect(repository.tasks.single.title, '明天下午三点开会');
+        expect(aiEnhancement.state['task-0'], TaskAiEnhancementStatus.pending);
+        expect(snackbarMessages.single, '已创建:明天下午三点开会');
+
+        await _drainBackgroundWork();
+
+        expect(parseService.parseCallCount, 1);
         expect(repository.tasks.single.title, '开会');
         expect(repository.tasks.single.priority, TaskPriority.p1);
         expect(repository.tasks.single.tag, AppConstants.tagWork);
+        expect(
+          aiEnhancement.state['task-0'],
+          TaskAiEnhancementStatus.succeeded,
+        );
         expect(notifications.scheduledTaskIds, ['task-0']);
-        expect(snackbarMessages.single, '已创建:开会');
       },
     );
 
@@ -84,7 +101,10 @@ void main() {
         const QuickCreateInput(title: '买牛奶'),
       );
 
+      await _drainBackgroundWork();
+
       expect(repository.tasks.single.title, '买牛奶');
+      expect(aiEnhancement.state['task-0'], TaskAiEnhancementStatus.failed);
     });
 
     test('quick create with date sets isAllDay', () async {
@@ -133,6 +153,8 @@ void main() {
         const QuickCreateInput(title: '周四去吃KFC'),
       );
 
+      await _drainBackgroundWork();
+
       expect(repository.tasks.single.isAllDay, isTrue);
       expect(repository.tasks.single.tag, AppConstants.tagLife);
     });
@@ -173,14 +195,16 @@ void main() {
         onNeedDraftConfirm: (_) => fail('should auto create'),
       );
 
+      await _drainBackgroundWork();
+
       expect(session.stopped, isTrue);
       expect(repository.tasks, hasLength(1));
       expect(repository.tasks.single.title, '提交设计稿');
-      expect(snackbarMessages.single, contains('已创建语音任务'));
+      expect(snackbarMessages.last, contains('已创建语音任务'));
       await session.dispose();
     });
 
-    test('voice pipeline opens draft confirm on low confidence', () async {
+    test('voice pipeline keeps raw task on low confidence', () async {
       parseService.result = _voiceResult(confidence: 0.5);
       final session = FakeStreamingVoiceSession();
       VoiceTaskParseResult? draft;
@@ -190,12 +214,34 @@ void main() {
         onNeedDraftConfirm: (result) => draft = result,
       );
 
-      expect(repository.tasks, isEmpty);
-      expect(draft, isNotNull);
-      expect(draft!.title, '提交设计稿');
+      await _drainBackgroundWork();
+
+      expect(repository.tasks, hasLength(1));
+      expect(repository.tasks.single.title, '明天下午三点提交设计稿，优先级高');
+      expect(aiEnhancement.state['task-0'], TaskAiEnhancementStatus.failed);
+      expect(draft, isNull);
       await session.dispose();
     });
+
+    test('enhancement does not overwrite user edits', () async {
+      parseService.parseDelay = const Duration(milliseconds: 40);
+
+      await orchestrator.enqueueQuickCreate(
+        const QuickCreateInput(title: '明天下午三点开会'),
+      );
+
+      final created = repository.tasks.single;
+      await repository.updateTask(created.copyWith(title: '用户改过标题'));
+      await _drainBackgroundWork();
+
+      expect(repository.tasks.single.title, '用户改过标题');
+      expect(aiEnhancement.state['task-0'], TaskAiEnhancementStatus.succeeded);
+    });
   });
+}
+
+Future<void> _drainBackgroundWork() async {
+  await Future<void>.delayed(const Duration(milliseconds: 80));
 }
 
 VoiceTaskParseResult _voiceResult({double confidence = 0.86}) {
@@ -219,7 +265,24 @@ class _RecordingNotificationService implements NotificationService {
   Future<void> cancelTaskReminders(String taskId) async {}
 
   @override
+  Future<void> cancelOccurrenceReminder(
+    String taskId,
+    DateTime occurrenceDate,
+  ) async {}
+
+  @override
   Future<void> scheduleTaskReminder(Task task) async {
+    if (task.dueDate == null || task.isCompleted) return;
+    scheduledTaskIds.add(task.id);
+  }
+
+  @override
+  Future<void> scheduleRecurringReminders(
+    Task task, {
+    List<TaskCompletion> completions = const [],
+    List<RecurrenceException> exceptions = const [],
+  }) async {
+    if (task.dueDate == null || task.isCompleted) return;
     scheduledTaskIds.add(task.id);
   }
 

@@ -379,28 +379,60 @@ async function parseTaskWithDoubao(inputText: string): Promise<ParseTaskResponse
 // ── LLM Prompt 模板 ──
 
 function buildSystemPrompt(currentDatetime: string, currentWeekday: string): string {
-  return `Parse Chinese task text into JSON only:
-{"title":"string","description":string|null,"due_date":"ISO8601+08:00"|null,"is_all_day":true|false,"priority":0-4,"confidence":0-1,"raw_transcript":"input","tag":"work"|"life"|null,"recurrence_rule":"RRULE string"|null,"recurrence_end":"ISO date"|null,"recurrence_count":int|null,"duration_min":int|null}
+  return `你是一个专业的高性能中文待办任务（To-Do）解析器。请将用户的输入文本（可能包含口语化表达或语音识别错别字）精准解析为指定的 JSON 格式。
 
-Context: now=${currentDatetime}, weekday=${currentWeekday}（今天${currentWeekday}）
-Rules:
-- Relative dates from now; weekday = next occurrence if passed this week
-- No explicit time on date → due_date at 00:00+08:00, is_all_day: true
-- Explicit time (e.g. "下午3点") → due_date with that time, is_all_day: false
-- No date → due_date: null, is_all_day: false
-- 紧急→1, 高/重要→2, 中→3, 低→4, else 0
-- Title: core action without time/priority/recurrence/duration words
-- tag: 会议/文档/出差→work; 买菜/家务/餐饮/娱乐/外出→life; unsure→null
-- recurrence_rule: RFC5545 RRULE without "RRULE:" prefix; null if not recurring. Examples: FREQ=DAILY;INTERVAL=1, FREQ=WEEKLY;BYDAY=MO,WE,FR
-- recurrence_end: ISO date (YYYY-MM-DD) when recurrence ends by date; null otherwise
-- recurrence_count: total occurrence count when user says "N次/持续N个月" etc.; null if open-ended or date-based end
-- duration_min: event duration in minutes (e.g. 一小时→60, 半小时→30); null if not mentioned
-- Set only one of recurrence_end or recurrence_count when both could apply; prefer recurrence_end for "持续三个月"
-Example (today Monday): "周四去吃KFC" → due next Thu 00:00+08:00, is_all_day: true, tag: life, title "去吃KFC", recurrence fields null
-Example: "明天下午三点开会" → title "开会", due_date tomorrow 15:00+08:00, is_all_day: false, priority: 0, confidence: 0.9, tag: work
-Example: "每周一跑步" → title "跑步", due_date next Mon 00:00+08:00, recurrence_rule "FREQ=WEEKLY;BYDAY=MO", tag: life
-Example: "每天八点锻炼一小时持续三个月" → title "锻炼", due_date next day 08:00+08:00, is_all_day: false, recurrence_rule "FREQ=DAILY;INTERVAL=1", recurrence_end ~3 months from now (YYYY-MM-DD), recurrence_count: null, duration_min: 60, tag: life
-Example: "每周一三五跑步" → title "跑步", due_date next Mon 00:00+08:00 or today if Mon, recurrence_rule "FREQ=WEEKLY;BYDAY=MO,WE,FR", recurrence_end: null, recurrence_count: null, duration_min: null, tag: life`;
+# 任务上下文
+- 当前时间 (now): ${currentDatetime}
+- 当前星期 (weekday): ${currentWeekday}
+
+# 输出格式
+请直接输出 JSON 对象，不要包含任何 Markdown 标记（如 \`\`\`json）、解释或额外字符。格式定义如下：
+{
+  "title": "string", // 核心任务动作。须剔除时间、频次、周期、优先级等修饰词。
+  "description": "string" | null, // 补充备注信息，无则为 null。
+  "due_date": "ISO8601+08:00" | null, // 任务截止或发生时间。
+  "is_all_day": boolean, // 是否全天任务。
+  "priority": 0 | 1 | 2 | 3 | 4, // 优先级：1-紧急, 2-高/重要, 3-中, 4-低, 0-无提及/普通。
+  "confidence": number, // 置信度 (0.0 - 1.0)。存在模糊语义或严重错别字导致推测时降低此值。
+  "raw_transcript": "string", // 原始输入文本。
+  "tag": "work" | "life" | null, // 分类：工作相关（会议、文档、出差、客签等）为 "work"；个人生活（买菜、家务、健身、餐饮、娱乐等）为 "life"；无法确定为 null。
+  "recurrence_rule": "string" | null, // RFC5545 RRULE 规则（不含 "RRULE:" 前缀），如 FREQ=DAILY;INTERVAL=1。非周期任务为 null。
+  "recurrence_end": "YYYY-MM-DD" | null, // 重复截止日期。与 recurrence_count 二选一，优先使用此字段。
+  "recurrence_count": number | null, // 重复次数（如"完成5次后停止"）。与 recurrence_end 二选一。
+  "duration_min": number | null // 任务持续时长（分钟），如"开会一小时"对应 60。无提及为 null。
+}
+
+# 解析与容错规则
+
+1. **错别字与同音字容错 (ASR 纠错)**：
+   - 识别并纠正因拼音或语音输入导致的错别字。例如："开会"误写为"开回/开毁"、"报销"误写为"包销/报消"、"跑步"误写为"泡布"。
+   - 根据上下文语义还原真实意图，并在 \`title\` 中使用纠正后的词汇，同时可适当降低 \`confidence\`。
+
+2. **时间解析逻辑**：
+   - **相对时间**：基于当前时间 (${currentDatetime}) 计算。
+   - **星期/周**：若提到的星期已过（如周一说"周日"），指下一个周日。若提到"这周/本周"，指当前周的对应天。
+   - **无具体时间点**：如"明天"、"周五"，\`due_date\` 设为当日 00:00:00+08:00，且 \`is_all_day\` 为 true。
+   - **有具体时间点**：如"下午3点"、"晚上8点"，\`due_date\` 设为对应具体时间，且 \`is_all_day\` 为 false。
+   - **无任何时间提及**：\`due_date\` 为 null，\`is_all_day\` 为 false。
+
+3. **周期性任务 (Recurrence)**：
+   - 支持标准 RFC5545 规则。
+   - "每周一三五" -> \`FREQ=WEEKLY;BYDAY=MO,WE,FR\`
+   - "每隔一天" -> \`FREQ=DAILY;INTERVAL=2\`
+   - 若用户提到"持续三个月"等模糊结束条件，计算出对应的 \`recurrence_end\`（格式 YYYY-MM-DD），此时 \`recurrence_count\` 保持为 null。
+
+4. **标题提炼 (Title Cleaning)**：
+   - 提取不含时间、频率、修饰词的纯粹行为。例如："明天下午三点去健身房健身一小时" -> \`title\` 应为 "去健身房健身"。
+
+# 解析示例
+
+示例 1（常规）：
+输入："下周一开回" (注：错别字"开回"应为"开会")
+输出：{"title":"开会","description":null,"due_date":"[计算得到的下周一日期]T00:00:00+08:00","is_all_day":true,"priority":0,"confidence":0.8,"raw_transcript":"下周一开回","tag":"work","recurrence_rule":null,"recurrence_end":null,"recurrence_count":null,"duration_min":null}
+
+示例 2（复杂周期）：
+输入："每天早上八点半提醒我吃药持续两周"
+输出：{"title":"吃药","description":null,"due_date":"[计算得到的明天日期]T08:30:00+08:00","is_all_day":false,"priority":0,"confidence":1.0,"raw_transcript":"每天早上八点半提醒我吃药持续两周","tag":"life","recurrence_rule":"FREQ=DAILY;INTERVAL=1","recurrence_end":"[当前日期+14天]","recurrence_count":null,"duration_min":null}`;
 }
 
 function buildShanghaiTimeContext(now = new Date()): {

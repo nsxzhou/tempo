@@ -72,7 +72,7 @@ void main() {
     await session.dispose();
   });
 
-  testWidgets('voice release shows processing before parsed task is created', (
+  testWidgets('voice tap end shows processing before parsed task is created', (
     tester,
   ) async {
     final repository = FakeTaskRepository();
@@ -89,17 +89,19 @@ void main() {
       parseService: parseService,
     );
 
-    final gesture = await tester.startGesture(
-      tester.getCenter(find.byIcon(LucideIcons.mic)),
-    );
+    await tester.tap(find.byIcon(LucideIcons.plus));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
-    expect(find.textContaining('松手结束'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.tap(find.byKey(const Key('fan_action_voice')));
+    await tester.pump();
+    await tester.tap(find.text('准备好后轻触开始'));
+    await tester.pump();
+    expect(find.text('再次点击结束'), findsOneWidget);
 
-    await gesture.up();
+    await tester.tap(find.text('正在聆听…'));
     await tester.pump();
     expect(repository.tasks, isEmpty);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.textContaining('中…'), findsWidgets);
 
     await tester.runAsync(() async {
       await Future<void>.delayed(const Duration(milliseconds: 300));
@@ -447,13 +449,22 @@ Future<void> _pumpTasksPage(
 }
 
 Future<void> _submitVoice(WidgetTester tester) async {
-  final gesture = await tester.startGesture(
-    tester.getCenter(find.byIcon(LucideIcons.mic)),
-  );
+  await tester.tap(find.byIcon(LucideIcons.plus));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 250));
+
+  await tester.tap(find.byKey(const Key('fan_action_voice')));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 100));
+
+  expect(find.text('点击开始录音'), findsOneWidget);
+
+  await tester.tap(find.text('准备好后轻触开始'));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 50));
-  expect(find.textContaining('松手结束'), findsOneWidget);
-  await gesture.up();
+  expect(find.text('再次点击结束'), findsOneWidget);
+
+  await tester.tap(find.text('正在聆听…'));
   await tester.runAsync(() async {
     await Future<void>.delayed(const Duration(milliseconds: 500));
   });

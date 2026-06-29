@@ -195,16 +195,15 @@ void main() {
         onNeedDraftConfirm: (_) => fail('should auto create'),
       );
 
-      await _drainBackgroundWork();
-
       expect(session.stopped, isTrue);
       expect(repository.tasks, hasLength(1));
       expect(repository.tasks.single.title, '提交设计稿');
       expect(snackbarMessages.last, contains('已创建语音任务'));
+      expect(parseService.parseCallCount, 1);
       await session.dispose();
     });
 
-    test('voice pipeline keeps raw task on low confidence', () async {
+    test('voice pipeline opens draft on low confidence', () async {
       parseService.result = _voiceResult(confidence: 0.5);
       final session = FakeStreamingVoiceSession();
       VoiceTaskParseResult? draft;
@@ -214,12 +213,10 @@ void main() {
         onNeedDraftConfirm: (result) => draft = result,
       );
 
-      await _drainBackgroundWork();
-
-      expect(repository.tasks, hasLength(1));
-      expect(repository.tasks.single.title, '明天下午三点提交设计稿，优先级高');
-      expect(aiEnhancement.state['task-0'], TaskAiEnhancementStatus.failed);
-      expect(draft, isNull);
+      expect(session.stopped, isTrue);
+      expect(repository.tasks, isEmpty);
+      expect(draft, isNotNull);
+      expect(draft!.confidence, 0.5);
       await session.dispose();
     });
 

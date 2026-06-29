@@ -49,9 +49,6 @@ verify_jwt = false
 [functions.siyuan-pairing]
 verify_jwt = false
 
-[functions.voice-task]
-verify_jwt = false
-
 [functions.asr-session]
 verify_jwt = false
 

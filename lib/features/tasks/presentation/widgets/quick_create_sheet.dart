@@ -236,7 +236,43 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
       _textParseService.cancelPendingParse();
       return;
     }
-    _textParseService.parseTextDebounced(_titleController.text);
+    _textParseService.parseTextDebounced(
+      _titleController.text,
+      onResult: _applyPreparseResult,
+    );
+  }
+
+  void _applyPreparseResult(VoiceTaskParseResult? result) {
+    if (!mounted || result == null || _skipParse) return;
+
+    var changed = false;
+
+    if (!_dateTouched && result.dueDate != null) {
+      final due = result.dueDate!;
+      _customDate = DateTime(due.year, due.month, due.day);
+      _selectedDate = null;
+      _isAllDay = result.isAllDay;
+      if (!result.isAllDay) {
+        _selectedTime = TimeOfDay(hour: due.hour, minute: due.minute);
+      } else {
+        _selectedTime = null;
+      }
+      changed = true;
+    }
+
+    if (!_priorityTouched && result.priority != TaskPriority.none) {
+      _selectedPriority = result.priority;
+      changed = true;
+    }
+
+    if (!_tagTouched && result.tag != null) {
+      _selectedTag = result.tag;
+      changed = true;
+    }
+
+    if (changed) {
+      setState(() => _expanded = true);
+    }
   }
 
   void _cancelPreparseForManualOverride() {

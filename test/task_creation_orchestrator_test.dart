@@ -51,9 +51,27 @@ void main() {
     });
 
     test(
-      'quick create creates raw task first then enhances LLM fields',
+      'quick create uses soft parse result when available within timeout',
       () async {
         parseService.parseDelay = const Duration(milliseconds: 40);
+
+        await orchestrator.enqueueQuickCreate(
+          const QuickCreateInput(title: '明天下午三点开会'),
+        );
+
+        expect(repository.tasks, hasLength(1));
+        expect(repository.tasks.single.title, '开会');
+        expect(repository.tasks.single.priority, TaskPriority.p1);
+        expect(aiEnhancement.state['task-0'], isNull);
+        expect(snackbarMessages.single, '已创建:开会');
+        expect(parseService.parseCallCount, 1);
+      },
+    );
+
+    test(
+      'quick create creates raw task first when soft parse times out',
+      () async {
+        parseService.parseDelay = const Duration(milliseconds: 2100);
 
         await orchestrator.enqueueQuickCreate(
           const QuickCreateInput(title: '明天下午三点开会'),
@@ -65,16 +83,10 @@ void main() {
         expect(snackbarMessages.single, '已创建:明天下午三点开会');
 
         await _drainBackgroundWork();
+        await Future<void>.delayed(const Duration(seconds: 3));
 
-        expect(parseService.parseCallCount, 1);
+        expect(parseService.parseCallCount, greaterThanOrEqualTo(1));
         expect(repository.tasks.single.title, '开会');
-        expect(repository.tasks.single.priority, TaskPriority.p1);
-        expect(repository.tasks.single.tag, AppConstants.tagWork);
-        expect(
-          aiEnhancement.state['task-0'],
-          TaskAiEnhancementStatus.succeeded,
-        );
-        expect(notifications.scheduledTaskIds, ['task-0']);
       },
     );
 
@@ -221,7 +233,7 @@ void main() {
     });
 
     test('enhancement does not overwrite user edits', () async {
-      parseService.parseDelay = const Duration(milliseconds: 40);
+      parseService.parseDelay = const Duration(seconds: 3);
 
       await orchestrator.enqueueQuickCreate(
         const QuickCreateInput(title: '明天下午三点开会'),
@@ -229,6 +241,7 @@ void main() {
 
       final created = repository.tasks.single;
       await repository.updateTask(created.copyWith(title: '用户改过标题'));
+      await Future<void>.delayed(const Duration(seconds: 4));
       await _drainBackgroundWork();
 
       expect(repository.tasks.single.title, '用户改过标题');

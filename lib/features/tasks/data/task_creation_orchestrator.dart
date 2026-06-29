@@ -92,11 +92,13 @@ class TaskCreationOrchestrator {
   Future<void> enqueueVoicePipeline({
     required StreamingVoiceSession session,
     required VoiceDraftConfirmCallback onNeedDraftConfirm,
+    String partialTranscript = '',
     VoicePipelinePhaseCallback? onPhaseChanged,
     VoicePipelineCompleteCallback? onComplete,
   }) {
     return _runVoicePipeline(
       session: session,
+      partialTranscript: partialTranscript,
       onNeedDraftConfirm: onNeedDraftConfirm,
       onPhaseChanged: onPhaseChanged,
       onComplete: onComplete,
@@ -106,10 +108,17 @@ class TaskCreationOrchestrator {
   Future<void> _runVoicePipeline({
     required StreamingVoiceSession session,
     required VoiceDraftConfirmCallback onNeedDraftConfirm,
+    String partialTranscript = '',
     VoicePipelinePhaseCallback? onPhaseChanged,
     VoicePipelineCompleteCallback? onComplete,
   }) async {
     try {
+      final partial = partialTranscript.trim();
+      Future<VoiceTaskParseResult?>? earlyParse;
+      if (partial.isNotEmpty) {
+        earlyParse = _parseService.flushParse(partial);
+      }
+
       onPhaseChanged?.call(VoicePipelinePhase.transcribing);
       final transcript = await session.stopAndGetTranscript();
       final trimmed = transcript.trim();
@@ -119,7 +128,12 @@ class TaskCreationOrchestrator {
       }
 
       onPhaseChanged?.call(VoicePipelinePhase.parsing);
-      final parsed = await _parseService.parseTextImmediate(trimmed);
+      VoiceTaskParseResult? parsed;
+      if (earlyParse != null && partial == trimmed) {
+        parsed = await earlyParse;
+      } else {
+        parsed = await _parseService.parseTextImmediate(trimmed);
+      }
 
       if (parsed != null && parsed.canAutoCreate) {
         final normalized = parsed.rawTranscript.trim().isEmpty
@@ -164,9 +178,13 @@ class TaskCreationOrchestrator {
       final cached = input.skipParse
           ? null
           : _parseService.cachedResultFor(rawTitle);
-      final fields = cached != null
+      final softParsed = cached == null && !input.skipParse
+          ? await _parseService.parseTextSoft(rawTitle)
+          : null;
+      final resolved = cached ?? softParsed;
+      final fields = resolved != null
           ? _fieldsFromParsedResult(
-              parsed: cached,
+              parsed: resolved,
               rawTitle: rawTitle,
               fallbackDueDate: input.dueDate,
               fallbackIsAllDay: input.isAllDay,
@@ -200,10 +218,11 @@ class TaskCreationOrchestrator {
         recurrenceCount: fields.recurrenceCount,
         durationMin: fields.durationMin,
       );
-      await _notificationService.scheduleTaskReminder(task);
+      final reminderFuture = _notificationService.scheduleTaskReminder(task);
       _showSuccess(task, voice: false);
+      await reminderFuture;
 
-      if (!input.skipParse && cached == null) {
+      if (!input.skipParse && resolved == null) {
         _markEnhancementPending(task.id);
         unawaited(
           _enhanceTaskFromText(
@@ -229,8 +248,9 @@ class TaskCreationOrchestrator {
   Future<void> _runVoiceCreate(VoiceTaskParseResult result) async {
     try {
       final task = await _repository.createVoiceTask(result);
-      await _notificationService.scheduleTaskReminder(task);
+      final reminderFuture = _notificationService.scheduleTaskReminder(task);
       _showSuccess(task, voice: true);
+      await reminderFuture;
     } catch (e) {
       _showFailure(e);
     }

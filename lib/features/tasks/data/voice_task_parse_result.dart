@@ -2,7 +2,7 @@ import '../domain/task.dart';
 
 const double voiceTaskAutoCreateConfidenceThreshold = 0.75;
 
-/// Structured output returned by the voice-task backend proxy.
+/// Structured output returned by the parse-task Edge Function.
 class VoiceTaskParseResult {
   final String title;
   final String? description;

@@ -94,11 +94,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
     await tester.tap(find.byKey(const Key('fan_action_voice')));
     await tester.pump();
-    await tester.tap(find.text('准备好后轻触开始'));
+    await tester.tap(find.byKey(const Key('voice_mic_button')));
     await tester.pump();
     expect(find.text('再次点击结束'), findsOneWidget);
 
-    await tester.tap(find.text('正在聆听…'));
+    await tester.tap(find.byKey(const Key('voice_mic_button')));
     await tester.pump();
     expect(repository.tasks, isEmpty);
     expect(find.textContaining('中…'), findsWidgets);
@@ -459,12 +459,12 @@ Future<void> _submitVoice(WidgetTester tester) async {
 
   expect(find.text('点击开始录音'), findsOneWidget);
 
-  await tester.tap(find.text('准备好后轻触开始'));
+  await tester.tap(find.byKey(const Key('voice_mic_button')));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 50));
   expect(find.text('再次点击结束'), findsOneWidget);
 
-  await tester.tap(find.text('正在聆听…'));
+  await tester.tap(find.byKey(const Key('voice_mic_button')));
   await tester.runAsync(() async {
     await Future<void>.delayed(const Duration(milliseconds: 500));
   });

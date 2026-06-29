@@ -15,10 +15,11 @@ import 'voice_task_parse_result.dart';
 /// 调用 parse-task Edge Function 的 JSON 文本路径，
 /// 将自然语言文本解析为结构化任务字段（标题/日期/优先级/tag）。
 class TextParseService {
-  static const Duration debounceDuration = Duration(milliseconds: 500);
+  static const Duration debounceDuration = Duration(milliseconds: 400);
   static const Duration softTimeoutDuration = Duration(seconds: 2);
   static const int minParseLength = 3;
   static const int cacheCapacity = 5;
+  static const int _maxFuzzyDistance = 2;
 
   final Dio _dio;
   final String _endpoint;
@@ -29,6 +30,7 @@ class TextParseService {
   int _requestGeneration = 0;
   String? _inFlightText;
   Future<VoiceTaskParseResult?>? _inFlightFuture;
+  String? _lastDebouncedText;
 
   TextParseService({required Dio dio, required String endpoint})
     : _dio = dio,
@@ -53,6 +55,8 @@ class TextParseService {
       onResult?.call(null);
       return;
     }
+
+    _lastDebouncedText = trimmed;
 
     final cached = cachedResultFor(trimmed);
     if (cached != null) {
@@ -85,8 +89,11 @@ class TextParseService {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return null;
 
-    final cached = cachedResultFor(trimmed);
-    if (cached != null) return cached;
+    final cached =
+        cachedResultFor(trimmed) ?? _findSimilarCachedResult(trimmed);
+    if (cached != null) {
+      return _withRawTranscript(cached, trimmed);
+    }
 
     if (_inFlightText == trimmed && _inFlightFuture != null) {
       return _inFlightFuture;
@@ -111,7 +118,7 @@ class TextParseService {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return null;
 
-    final cached = cachedResultFor(trimmed);
+    final cached = _cache[trimmed];
     if (cached != null) return cached;
 
     try {
@@ -146,8 +153,9 @@ class TextParseService {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return null;
 
-    final cached = cachedResultFor(trimmed);
-    if (cached != null) return cached;
+    final cached =
+        cachedResultFor(trimmed) ?? _findSimilarCachedResult(trimmed);
+    if (cached != null) return _withRawTranscript(cached, trimmed);
 
     final parseFuture = parseText(trimmed);
     try {
@@ -156,6 +164,68 @@ class TextParseService {
       unawaited(parseFuture.then<void>((_) {}));
       return null;
     }
+  }
+
+  VoiceTaskParseResult? _findSimilarCachedResult(String trimmed) {
+    for (final entry in _cache.entries.toList().reversed) {
+      if (_isSimilarText(entry.key, trimmed)) {
+        return _withRawTranscript(entry.value, trimmed);
+      }
+    }
+
+    final lastDebounced = _lastDebouncedText;
+    if (lastDebounced != null && _isSimilarText(lastDebounced, trimmed)) {
+      final lastResult = _cache[lastDebounced];
+      if (lastResult != null) {
+        return _withRawTranscript(lastResult, trimmed);
+      }
+    }
+
+    return null;
+  }
+
+  bool _isSimilarText(String left, String right) {
+    if (left == right) return true;
+    if (left.startsWith(right) || right.startsWith(left)) return true;
+    return _levenshtein(left, right) <= _maxFuzzyDistance;
+  }
+
+  VoiceTaskParseResult _withRawTranscript(
+    VoiceTaskParseResult result,
+    String transcript,
+  ) {
+    if (result.rawTranscript.trim() == transcript) return result;
+    return result.copyWith(rawTranscript: transcript);
+  }
+
+  int _levenshtein(String a, String b) {
+    if (a == b) return 0;
+    if (a.isEmpty) return b.length;
+    if (b.isEmpty) return a.length;
+
+    final rows = a.length + 1;
+    final cols = b.length + 1;
+    final matrix = List.generate(rows, (_) => List<int>.filled(cols, 0));
+
+    for (var i = 0; i < rows; i++) {
+      matrix[i][0] = i;
+    }
+    for (var j = 0; j < cols; j++) {
+      matrix[0][j] = j;
+    }
+
+    for (var i = 1; i < rows; i++) {
+      for (var j = 1; j < cols; j++) {
+        final cost = a.codeUnitAt(i - 1) == b.codeUnitAt(j - 1) ? 0 : 1;
+        matrix[i][j] = [
+          matrix[i - 1][j] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j - 1] + cost,
+        ].reduce((value, element) => value < element ? value : element);
+      }
+    }
+
+    return matrix[a.length][b.length];
   }
 
   void _rememberCache(String key, VoiceTaskParseResult result) {

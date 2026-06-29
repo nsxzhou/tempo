@@ -14,6 +14,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/theme/tempo_theme_extension.dart';
 import '../../../core/widgets/tempo/tempo.dart';
+import '../../tasks/domain/recurrence_models.dart';
 import '../../tasks/domain/task.dart';
 import 'month_view.dart';
 import 'week_view.dart';
@@ -47,8 +48,11 @@ class _CalendarPageState extends ConsumerState<CalendarPage>
   Widget build(BuildContext context) {
     super.build(context);
     final tasksAsync = ref.watch(taskListProvider);
-    final taskIndex = ref.watch(calendarTaskIndexProvider);
-    final dayTasks = ref.watch(selectedDayTasksProvider(_selectedDate));
+    final taskIndex = ref.watch(calendarDisplayTaskIndexProvider);
+    final dayEntries = ref.watch(selectedDayTasksProvider(_selectedDate));
+    final dayTasks = dayEntries.map((e) => e.displayTask).toList();
+    final occurrenceStates =
+        ref.watch(selectedDayOccurrenceStatesProvider(_selectedDate));
     final tokens = context.tokens;
     final now = DateTime.now();
     final monthLabel = DateFormat('yyyy 年 M 月').format(_selectedDate);
@@ -164,6 +168,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage>
                 _SelectedDayPanel(
                   selectedDate: _selectedDate,
                   dayTasks: dayTasks,
+                  occurrenceStates: occurrenceStates,
                 ),
             ],
           ),
@@ -215,7 +220,12 @@ class _TodayButton extends StatelessWidget {
 class _SelectedDayPanel extends StatelessWidget {
   final DateTime selectedDate;
   final List<Task> dayTasks;
-  const _SelectedDayPanel({required this.selectedDate, required this.dayTasks});
+  final Map<String, OccurrenceState> occurrenceStates;
+  const _SelectedDayPanel({
+    required this.selectedDate,
+    required this.dayTasks,
+    required this.occurrenceStates,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -281,6 +291,7 @@ class _SelectedDayPanel extends StatelessWidget {
                   return _CalendarTaskRow(
                     task: dayTasks[index],
                     cardColor: cardColor,
+                    occurrenceState: occurrenceStates[dayTasks[index].id],
                   );
                 },
               ),
@@ -294,11 +305,18 @@ class _SelectedDayPanel extends StatelessWidget {
 class _CalendarTaskRow extends ConsumerWidget {
   final Task task;
   final Color cardColor;
-  const _CalendarTaskRow({required this.task, required this.cardColor});
+  final OccurrenceState? occurrenceState;
+  const _CalendarTaskRow({
+    required this.task,
+    required this.cardColor,
+    this.occurrenceState,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = context.tokens;
+    final missed = occurrenceState == OccurrenceState.missed;
+    final _ = occurrenceState == OccurrenceState.completed;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -330,7 +348,10 @@ class _CalendarTaskRow extends ConsumerWidget {
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         letterSpacing: -0.2,
-                        color: tokens.fg,
+                        color: missed ? tokens.fgMuted : tokens.fg,
+                        decoration: missed
+                            ? TextDecoration.lineThrough
+                            : null,
                       ),
                     ),
                     const SizedBox(height: 6),

@@ -27,7 +27,10 @@ import '../../../core/theme/tempo_theme_extension.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/tempo/tempo.dart';
 import '../data/task_background_repository.dart';
+import '../domain/recurrence_engine.dart';
+import '../domain/recurrence_models.dart';
 import '../domain/task.dart';
+import 'widgets/recurrence_heatmap.dart';
 import 'widgets/quick_create_sheet.dart';
 import 'widgets/task_background_image.dart';
 
@@ -134,6 +137,10 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                   _buildTitleBlock(task, background),
                   const SizedBox(height: 16),
                   _buildProperties(task),
+                  if (task.isRecurring) ...[
+                    const SizedBox(height: 16),
+                    _buildRecurrenceSection(task),
+                  ],
                   const SizedBox(height: 16),
                   _buildDescription(task),
                   if (task.siyuanBlockId != null) ...[
@@ -331,6 +338,56 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildRecurrenceSection(Task task) {
+    final streak = ref.watch(taskStreakMapProvider)[task.id];
+    final completions = ref.watch(taskCompletionsProvider).valueOrNull ?? [];
+    final exceptions =
+        ref.watch(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
+    const engine = RecurrenceEngine();
+    final now = DateTime.now();
+    final occs = engine.expandOccurrences(
+      task,
+      from: now.subtract(const Duration(days: 7 * 12)),
+      to: now,
+      completions: completions.where((c) => c.taskId == task.id).toList(),
+      exceptions: exceptions.where((e) => e.taskId == task.id).toList(),
+      now: now,
+    );
+    final dayStates = {
+      for (final o in occs) o.calendarDay: o.state,
+    };
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (streak != null) StreakSummaryCard(info: streak),
+          const SizedBox(height: 12),
+          TempoGlassSurface(
+            blur: false,
+            fillColor: ref.watch(taskCardBackgroundProvider),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  recurrenceSummary(task),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                RecurrenceHeatmap(task: task, dayStates: dayStates),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

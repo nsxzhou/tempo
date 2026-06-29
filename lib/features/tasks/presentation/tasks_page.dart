@@ -19,7 +19,9 @@ import '../../../core/theme/theme_manager.dart';
 import '../../../core/theme/tempo_theme_extension.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/tempo/tempo.dart';
+import '../domain/recurrence_engine.dart';
 import '../domain/task.dart';
+import '../domain/task_list_builder.dart';
 import 'widgets/quick_create_sheet.dart';
 import 'widgets/task_tile.dart';
 import 'widgets/voice_overlay.dart';
@@ -253,12 +255,39 @@ class _TasksPageState extends ConsumerState<TasksPage>
   Future<void> _toggleTask(Task task) async {
     try {
       final repository = ref.read(taskRepositoryProvider);
-      final updated = await repository.toggleComplete(task.id);
+      final raw = ref.read(taskMapProvider)[task.id];
       final notificationService = ref.read(notificationServiceProvider);
-      if (updated.isCompleted) {
-        unawaited(notificationService.cancelTaskReminders(task.id));
+
+      if (raw?.isRecurring == true) {
+        final occDate =
+            TaskListBuilder.occurrenceContext[task.id] ??
+            RecurrenceEngine.calendarDay(task.dueDate ?? DateTime.now());
+        final complete = !task.isCompleted;
+        await repository.toggleOccurrenceComplete(
+          task.id,
+          occDate,
+          complete: complete,
+        );
+        if (complete) {
+          unawaited(
+            notificationService.cancelOccurrenceReminder(task.id, occDate),
+          );
+        } else {
+          unawaited(
+            notificationService.scheduleRecurringReminders(
+              raw!,
+              completions: const [],
+              exceptions: const [],
+            ),
+          );
+        }
       } else {
-        unawaited(notificationService.scheduleTaskReminder(updated));
+        final updated = await repository.toggleComplete(task.id);
+        if (updated.isCompleted) {
+          unawaited(notificationService.cancelTaskReminders(task.id));
+        } else {
+          unawaited(notificationService.scheduleTaskReminder(updated));
+        }
       }
     } catch (error) {
       if (!mounted) return;
@@ -358,8 +387,7 @@ typedef _FilterKey = ({_TaskScope scope, String search});
 /// 仅在 taskListProvider 数据或 filter 输入变化时重算，避免无关 rebuild 重算。
 final _taskFilterSnapshotProvider =
     Provider.family<_TaskFilterSnapshot, _FilterKey>((ref, key) {
-      final allTasks =
-          ref.watch(taskListProvider).valueOrNull ?? const <Task>[];
+      final allTasks = ref.watch(displayTaskListProvider);
       return _buildTaskFilterSnapshot(
         allTasks: allTasks,
         scope: key.scope,
@@ -617,6 +645,9 @@ class _TaskListSection extends ConsumerWidget {
     final groups = snapshot.groups;
     final async = ref.watch(taskListProvider);
     final backgrounds = ref.watch(taskBackgroundMapProvider);
+    final aiEnhancementState = ref.watch(taskAiEnhancementStateProvider);
+    final streakMap = ref.watch(taskStreakMapProvider);
+    final taskMap = ref.watch(taskMapProvider);
 
     // 首帧 loading：taskListProvider 尚无数据时显示加载态。
     if (!async.hasValue && !async.hasError) {
@@ -666,6 +697,7 @@ class _TaskListSection extends ConsumerWidget {
               separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final task = active[index];
+                final raw = taskMap[task.id];
                 return RepaintBoundary(
                   child: TaskTile(
                     key: ValueKey('task-${task.id}'),
@@ -675,6 +707,9 @@ class _TaskListSection extends ConsumerWidget {
                     showDelete: true,
                     onDelete: () => onDelete(task),
                     backgroundImagePath: backgrounds[task.id]?.imagePath,
+                    aiEnhancementStatus: aiEnhancementState[task.id],
+                    streakCount: streakMap[task.id]?.current,
+                    showRecurring: raw?.isRecurring ?? false,
                   ),
                 );
               },
@@ -705,6 +740,7 @@ class _TaskListSection extends ConsumerWidget {
                     showDelete: true,
                     onDelete: () => onDelete(task),
                     backgroundImagePath: backgrounds[task.id]?.imagePath,
+                    aiEnhancementStatus: aiEnhancementState[task.id],
                   ),
                 );
               },

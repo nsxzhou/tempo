@@ -134,6 +134,7 @@ export function mountCalendarView(
     }
 
     const tasks = store.getTasks();
+    const completions = store.getCompletions();
     viewHost.innerHTML = '';
     panelHost.innerHTML = '';
 
@@ -142,6 +143,7 @@ export function mountCalendarView(
         renderMonthView({
           selectedDate,
           tasks,
+          completions,
           onSelectDate: (date) => {
             selectedDate = date;
             render();
@@ -153,6 +155,7 @@ export function mountCalendarView(
         renderWeekView({
           selectedDate,
           tasks,
+          completions,
           onSelectDate: (date) => {
             selectedDate = date;
             render();
@@ -175,6 +178,7 @@ export function mountCalendarView(
       renderSelectedDayPanel({
         selectedDate,
         tasks,
+        completions,
         onEditTask: async (task, input: TaskFormInput) => {
           await store.editTask(task, input);
         },

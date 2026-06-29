@@ -9,11 +9,12 @@
     "verify": "tsc --noEmit && node scripts/verify-plugin.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.45.0"
+    "@supabase/supabase-js": "^2.45.0",
+    "rrule": "^2.8.1"
   },
   "devDependencies": {
+    "@types/node": "^20.14.0",
     "esbuild": "^0.25.0",
-    "typescript": "^5.4.0",
-    "@types/node": "^20.14.0"
+    "typescript": "^5.4.0"
   }
 }

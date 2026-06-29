@@ -1,14 +1,15 @@
 import { Task } from '../../models/task';
 import {
   getMonthGrid,
-  isDueOnDate,
   isSameDay,
   priorityDotColor,
 } from '../../utils/date_filter';
+import { tasksForDate } from '../../utils/rrule_expand';
 
 export function renderMonthView(options: {
   selectedDate: Date;
   tasks: Task[];
+  completions?: Set<string>;
   onSelectDate: (date: Date) => void;
 }): HTMLElement {
   const wrap = document.createElement('div');
@@ -47,7 +48,7 @@ export function renderMonthView(options: {
 
 function createDayCell(
   cell: { date: Date; isOtherMonth: boolean },
-  options: { selectedDate: Date; tasks: Task[]; onSelectDate: (date: Date) => void },
+  options: { selectedDate: Date; tasks: Task[]; completions?: Set<string>; onSelectDate: (date: Date) => void },
   now: Date
 ): HTMLElement {
   const button = document.createElement('button');
@@ -63,7 +64,7 @@ function createDayCell(
 
   const isSelected = isSameDay(cell.date, options.selectedDate) && !cell.isOtherMonth;
   const isToday = isSameDay(cell.date, now);
-  const dots = dotsForDay(cell.date, options.tasks);
+  const dots = dotsForDay(cell.date, options.tasks, options.completions);
 
   const day = document.createElement('div');
   day.textContent = `${cell.date.getDate()}`;
@@ -106,9 +107,13 @@ function createDayCell(
   return button;
 }
 
-function dotsForDay(day: Date, tasks: Task[]): string[] {
-  const dayTasks = tasks.filter(
-    (task) => task.dueDate && !task.isCompleted && isDueOnDate(task.dueDate, day)
+function dotsForDay(
+  day: Date,
+  tasks: Task[],
+  completions: Set<string> = new Set()
+): string[] {
+  const dayTasks = tasksForDate(tasks, day, completions).filter(
+    (task) => !task.isCompleted
   );
   const seen = new Set<number>();
   const dots: string[] = [];

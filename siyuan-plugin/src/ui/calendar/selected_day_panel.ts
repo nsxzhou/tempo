@@ -1,18 +1,24 @@
 import { Task } from '../../models/task';
-import { formatMonthYearShort, isDueOnDate } from '../../utils/date_filter';
+import { formatMonthYearShort } from '../../utils/date_filter';
+import { expandTasksInRange } from '../../utils/rrule_expand';
 import { createCalendarTaskRow } from '../components/calendar_task_row';
 import { openTaskFormDialog } from '../dialogs/task_form';
 
 export function renderSelectedDayPanel(options: {
   selectedDate: Date;
   tasks: Task[];
+  completions?: Set<string>;
   onEditTask: (task: Task, input: import('../../data/task_repository').TaskFormInput) => Promise<void>;
 }): HTMLElement {
   const panel = document.createElement('div');
   panel.className = 'tempo-selected-day-panel';
 
-  const dayTasks = options.tasks.filter(
-    (task) => task.dueDate && isDueOnDate(task.dueDate, options.selectedDate)
+  const day = options.selectedDate;
+  const dayTasks = expandTasksInRange(
+    options.tasks,
+    day,
+    day,
+    options.completions
   );
 
   const header = document.createElement('div');
@@ -60,14 +66,14 @@ export function renderSelectedDayPanel(options: {
   const list = document.createElement('div');
   list.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
 
-  for (const task of dayTasks) {
+  for (const item of dayTasks) {
     list.appendChild(
       createCalendarTaskRow({
-        task,
+        task: item.displayTask,
         onTap: () => {
           openTaskFormDialog({
-            task,
-            onSubmit: async (input) => options.onEditTask(task, input),
+            task: item.seriesTask,
+            onSubmit: async (input) => options.onEditTask(item.seriesTask, input),
           });
         },
       })

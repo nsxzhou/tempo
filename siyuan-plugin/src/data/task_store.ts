@@ -3,6 +3,7 @@ import { isDueInWeekRange, isTaskOverdue } from '../utils/date_filter';
 import {
   createTask,
   deleteTask,
+  fetchCompletionsForTasks,
   fetchTasks,
   toggleTaskComplete,
   updateTask,
@@ -10,6 +11,9 @@ import {
   type TaskFormInput,
   type UpdateTaskInput,
 } from './task_repository';
+import { isTaskRecurring } from '../utils/recurrence_config';
+import { resolveToggleOccurrenceDate } from '../utils/rrule_expand';
+import { completionKey } from '../models/completion';
 
 export type TaskScope = 'pending' | 'overdue' | 'week' | 'all';
 
@@ -17,6 +21,7 @@ type Listener = () => void;
 
 export class TaskStore {
   private tasks: Task[] = [];
+  private completions = new Set<string>();
   private listeners = new Set<Listener>();
   private loading = false;
   private error: string | null = null;
@@ -36,6 +41,10 @@ export class TaskStore {
 
   getTasks(): Task[] {
     return this.tasks;
+  }
+
+  getCompletions(): Set<string> {
+    return this.completions;
   }
 
   getLoading(): boolean {
@@ -62,6 +71,10 @@ export class TaskStore {
 
     try {
       this.tasks = await fetchTasks();
+      const recurringIds = this.tasks
+        .filter((task) => isTaskRecurring(task))
+        .map((task) => task.id);
+      this.completions = await fetchCompletionsForTasks(recurringIds);
     } catch (error) {
       this.error = error instanceof Error ? error.message : String(error);
     } finally {
@@ -156,9 +169,31 @@ export class TaskStore {
     this.notify();
   }
 
-  async toggleComplete(task: Task): Promise<void> {
+  async toggleComplete(task: Task, occurrenceDate?: Date): Promise<void> {
+    if (isTaskRecurring(task)) {
+      const resolvedDate =
+        occurrenceDate ?? resolveToggleOccurrenceDate(task, this.completions);
+      const key = completionKey(task.id, resolvedDate);
+      const wasCompleted = this.completions.has(key);
+
+      await toggleTaskComplete(task, {
+        occurrenceDate: resolvedDate,
+        completions: this.completions,
+      });
+
+      if (wasCompleted) {
+        this.completions.delete(key);
+      } else {
+        this.completions.add(key);
+      }
+      this.notify();
+      return;
+    }
+
     const updated = await toggleTaskComplete(task);
-    this.tasks = this.tasks.map((item) => (item.id === updated.id ? updated : item));
+    this.tasks = this.tasks.map((item) =>
+      item.id === updated.id ? updated : item
+    );
     this.notify();
   }
 

@@ -22,6 +22,14 @@ export interface Task {
   updatedAt: Date;
   creationSource: string;
   tag?: string | null;
+  recurrenceRule?: string | null;
+  recurrenceEnd?: Date | null;
+  recurrenceCount?: number | null;
+  durationMin?: number | null;
+}
+
+export function isRecurringTask(task: Task): boolean {
+  return Boolean(task.recurrenceRule && task.recurrenceRule.trim());
 }
 
 export function priorityFromValue(value: number | null | undefined): TaskPriority {
@@ -75,6 +83,12 @@ export function taskFromSupabaseJson(json: Record<string, unknown>): Task {
     updatedAt: new Date(json.updated_at as string),
     creationSource: (json.creation_source as string | undefined) ?? 'text',
     tag: (json.tag as string | null | undefined) ?? null,
+    recurrenceRule: (json.recurrence_rule as string | null | undefined) ?? null,
+    recurrenceEnd: json.recurrence_end
+      ? new Date(json.recurrence_end as string)
+      : null,
+    recurrenceCount: (json.recurrence_count as number | null | undefined) ?? null,
+    durationMin: (json.duration_min as number | null | undefined) ?? null,
   };
 }
 
@@ -109,6 +123,18 @@ export function taskToSupabaseJson(
     payload.creation_source = task.creationSource;
   }
   if (task.tag !== undefined) payload.tag = task.tag;
+  if (task.recurrenceRule !== undefined) {
+    payload.recurrence_rule = task.recurrenceRule;
+  }
+  if (task.recurrenceEnd !== undefined) {
+    payload.recurrence_end = task.recurrenceEnd
+      ? task.recurrenceEnd.toISOString()
+      : null;
+  }
+  if (task.recurrenceCount !== undefined) {
+    payload.recurrence_count = task.recurrenceCount;
+  }
+  if (task.durationMin !== undefined) payload.duration_min = task.durationMin;
 
   return payload;
 }

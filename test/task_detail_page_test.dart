@@ -24,6 +24,80 @@ void main() {
     await initializeDateFormatting('zh_CN', null);
   });
 
+  testWidgets('recurring detail shows next occurrence instead of overdue anchor', (
+    tester,
+  ) async {
+    final repository = FakeTaskRepository();
+    final now = DateTime.now();
+    final anchor = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(const Duration(days: 1));
+
+    final task = await repository.createTask(
+      title: '死虫式',
+      dueDate: anchor,
+      isAllDay: true,
+      recurrenceRule: 'FREQ=DAILY;INTERVAL=1',
+    );
+
+    await _pumpDetailPage(tester, repository: repository, task: task);
+
+    expect(find.text('下次'), findsOneWidget);
+    expect(find.text('已延误'), findsNothing);
+    expect(find.text('${now.month}月${now.day}日'), findsOneWidget);
+    await repository.dispose();
+  });
+
+  testWidgets('active recurring detail shows end recurrence menu item', (
+    tester,
+  ) async {
+    final repository = FakeTaskRepository();
+    final task = await repository.createTask(
+      title: '每日锻炼',
+      dueDate: DateTime(2026, 6, 1),
+      isAllDay: true,
+      recurrenceRule: 'FREQ=DAILY;INTERVAL=1',
+    );
+
+    await _pumpDetailPage(tester, repository: repository, task: task);
+
+    await tester.tap(find.byIcon(LucideIcons.ellipsis));
+    await tester.pumpAndSettle();
+
+    expect(find.text('结束重复'), findsOneWidget);
+    await repository.dispose();
+  });
+
+  testWidgets('ended recurring detail hides complete and end actions', (
+    tester,
+  ) async {
+    final repository = FakeTaskRepository();
+    final now = DateTime.now();
+    final task = await repository.createTask(
+      title: '已结束习惯',
+      dueDate: DateTime(2026, 6, 1),
+      isAllDay: true,
+      recurrenceRule: 'FREQ=DAILY;INTERVAL=1',
+      recurrenceEnd: DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).subtract(const Duration(days: 1)),
+    );
+
+    await _pumpDetailPage(tester, repository: repository, task: task);
+
+    expect(find.text('标记完成'), findsNothing);
+
+    await tester.tap(find.byIcon(LucideIcons.ellipsis));
+    await tester.pumpAndSettle();
+
+    expect(find.text('结束重复'), findsNothing);
+    await repository.dispose();
+  });
+
   testWidgets('detail page edit opens sheet and saves updates', (tester) async {
     final repository = FakeTaskRepository();
     final parseService = FakeTextParseService();

@@ -58,6 +58,12 @@ typedef QuickUpdateCallback =
       required bool isAllDay,
       TaskPriority priority,
       String? tag,
+      String? recurrenceRule,
+      DateTime? recurrenceEnd,
+      int? recurrenceCount,
+      bool clearRecurrenceRule,
+      bool clearRecurrenceEnd,
+      bool clearRecurrenceCount,
     });
 
 class QuickCreateSheet extends ConsumerStatefulWidget {
@@ -182,9 +188,16 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
           initialTask.isRecurring;
       if (initialTask.isRecurring) {
         _repeatEnabled = true;
-        _recurrenceConfig =
+        final parsed =
             RecurrenceConfig.fromRRule(initialTask.recurrenceRule) ??
             const RecurrenceConfig(interval: 1, unit: RecurrenceUnit.day);
+        _recurrenceConfig = RecurrenceConfig(
+          interval: parsed.interval,
+          unit: parsed.unit,
+          weekdays: parsed.weekdays,
+          endDate: initialTask.recurrenceEnd,
+          occurrenceCount: initialTask.recurrenceCount,
+        );
       }
     } else if (voiceDraft != null) {
       _titleController.text = voiceDraft.title;
@@ -311,6 +324,23 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
 
   bool get _hasDate => _selectedDatePart != null;
 
+  /// 重复任务必须有锚点日期；开重复时自动默认今天。
+  void _ensureRepeatAnchorDate() {
+    if (!_repeatEnabled || _selectedDatePart != null) return;
+    _selectedDate = _QuickDate.today;
+    _isAllDay = true;
+    _dateTouched = true;
+    _clearDateTimeState();
+  }
+
+  /// 提交用 dueDate；重复任务在无日期时兜底为今天 00:00。
+  DateTime? _resolveDueDateForSubmit() {
+    final due = _effectiveDueDate;
+    if (!_repeatEnabled || due != null) return due;
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+
   void _clearDateTimeState() {
     _selectedTime = null;
     _isAllDay = true;
@@ -324,13 +354,22 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
     if (_isEditMode) {
       setState(() => _isSubmitting = true);
       try {
+        final resolvedDue = _resolveDueDateForSubmit();
+        final repeatActive = _repeatEnabled && _recurrenceConfig.hasRecurrence;
         final task = await widget.onUpdate!(
           task: widget.initialTask!,
           title: title,
-          dueDate: _effectiveDueDate,
-          isAllDay: _effectiveIsAllDay,
+          dueDate: resolvedDue,
+          isAllDay: resolvedDue != null ? _effectiveIsAllDay : false,
           priority: _selectedPriority,
           tag: _selectedTag,
+          recurrenceRule: repeatActive ? _recurrenceConfig.toRRule() : null,
+          recurrenceEnd: repeatActive ? _recurrenceConfig.endDate : null,
+          recurrenceCount: repeatActive ? _recurrenceConfig.occurrenceCount : null,
+          clearRecurrenceRule: !repeatActive,
+          clearRecurrenceEnd: !repeatActive || _recurrenceConfig.endDate == null,
+          clearRecurrenceCount:
+              !repeatActive || _recurrenceConfig.occurrenceCount == null,
         );
         if (!mounted) return;
         Navigator.of(context).pop(task);
@@ -370,7 +409,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
           .enqueueQuickCreate(
             QuickCreateInput(
               title: title,
-              dueDate: _effectiveDueDate,
+              dueDate: _resolveDueDateForSubmit(),
               isAllDay: _effectiveIsAllDay,
               priority: _selectedPriority,
               tag: _selectedTag,
@@ -601,11 +640,14 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
     return GestureDetector(
       onTap: () => setState(() {
         _repeatEnabled = !_repeatEnabled;
-        if (_repeatEnabled && !_recurrenceConfig.hasRecurrence) {
-          _recurrenceConfig = const RecurrenceConfig(
-            interval: 1,
-            unit: RecurrenceUnit.day,
-          );
+        if (_repeatEnabled) {
+          if (!_recurrenceConfig.hasRecurrence) {
+            _recurrenceConfig = const RecurrenceConfig(
+              interval: 1,
+              unit: RecurrenceUnit.day,
+            );
+          }
+          _ensureRepeatAnchorDate();
         }
       }),
       behavior: HitTestBehavior.opaque,

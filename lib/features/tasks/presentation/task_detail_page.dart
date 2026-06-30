@@ -150,7 +150,8 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                   const SizedBox(height: 16),
                   _buildReadOnlyInfo(task),
                   const SizedBox(height: 24),
-                  _buildCompleteButton(task),
+                  if (!task.isRecurring || !task.isRecurrenceEnded(DateTime.now()))
+                    _buildCompleteButton(task),
                 ],
               ),
             ),
@@ -280,14 +281,19 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     final t = context.tokens;
     final cardColor = ref.watch(taskCardBackgroundProvider);
     final now = DateTime.now();
-    final isOverdue =
-        task.dueDate != null &&
+    final dueDisplay = _resolveDueDisplay(task, now);
+    final displayDue = dueDisplay.dueDate;
+    final isOverdue = displayDue != null &&
         isTaskOverdue(
-          dueDate: task.dueDate!,
-          isAllDay: task.isAllDay,
+          dueDate: displayDue,
+          isAllDay: dueDisplay.isAllDay,
           isCompleted: task.isCompleted,
           now: now,
         );
+    final showDueBadge = !task.isCompleted &&
+        displayDue != null &&
+        (isOverdue || isDueOnDate(displayDue, now));
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: TempoGlassSurface(
@@ -298,18 +304,18 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
           children: [
             TempoPropertyRow(
               icon: LucideIcons.calendar,
-              label: '截止',
-              value: task.dueDate != null
+              label: dueDisplay.label,
+              value: displayDue != null
                   ? Row(
                       children: [
                         Text(
                           formatTaskDueDetail(
-                            dueDate: task.dueDate!,
-                            isAllDay: task.isAllDay,
+                            dueDate: displayDue,
+                            isAllDay: dueDisplay.isAllDay,
                           ),
                           style: t.mono(size: 13, weight: FontWeight.w500),
                         ),
-                        if (!task.isCompleted) ...[
+                        if (showDueBadge) ...[
                           const SizedBox(width: 8),
                           TempoPillBadge(
                             label: isOverdue ? '已延误' : '即将截止',
@@ -339,6 +345,35 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
           ],
         ),
       ),
+    );
+  }
+
+  /// 重复任务展示「下次」待办 occurrence，避免锚点日期被误判为截止/延误。
+  ({DateTime? dueDate, bool isAllDay, String label}) _resolveDueDisplay(
+    Task task,
+    DateTime now,
+  ) {
+    if (!task.isRecurring) {
+      return (dueDate: task.dueDate, isAllDay: task.isAllDay, label: '截止');
+    }
+
+    const engine = RecurrenceEngine();
+    final completions = ref.watch(taskCompletionsProvider).valueOrNull ?? [];
+    final exceptions =
+        ref.watch(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
+    final next = engine.nextOccurrence(
+      task,
+      completions: completions.where((c) => c.taskId == task.id).toList(),
+      exceptions: exceptions.where((e) => e.taskId == task.id).toList(),
+      now: now,
+    );
+    if (next?.effectiveDue == null) {
+      return (dueDate: null, isAllDay: task.isAllDay, label: '下次');
+    }
+    return (
+      dueDate: next!.effectiveDue,
+      isAllDay: task.isAllDay,
+      label: '下次',
     );
   }
 
@@ -667,6 +702,12 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
             required bool isAllDay,
             TaskPriority priority = TaskPriority.none,
             String? tag,
+            String? recurrenceRule,
+            DateTime? recurrenceEnd,
+            int? recurrenceCount,
+            bool clearRecurrenceRule = false,
+            bool clearRecurrenceEnd = false,
+            bool clearRecurrenceCount = false,
           }) async {
             final repository = ref.read(taskRepositoryProvider);
             final updated = task.copyWith(
@@ -676,6 +717,12 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
               priority: priority,
               tag: tag,
               updatedAt: DateTime.now(),
+              recurrenceRule: recurrenceRule,
+              recurrenceEnd: recurrenceEnd,
+              recurrenceCount: recurrenceCount,
+              clearRecurrenceRule: clearRecurrenceRule,
+              clearRecurrenceEnd: clearRecurrenceEnd,
+              clearRecurrenceCount: clearRecurrenceCount,
             );
             final saved = await repository.updateTask(updated);
             final notificationService = ref.read(notificationServiceProvider);
@@ -725,6 +772,12 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                 title: const Text('清除背景'),
                 onTap: () => Navigator.of(context).pop('clear_background'),
               ),
+            if (task.isRecurring && !task.isRecurrenceEnded(DateTime.now()))
+              ListTile(
+                leading: const Icon(LucideIcons.calendar_x),
+                title: const Text('结束重复'),
+                onTap: () => Navigator.of(context).pop('end_recurrence'),
+              ),
             ListTile(
               leading: const Icon(
                 LucideIcons.trash_2,
@@ -748,8 +801,39 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
         await _changeBackground(task);
       case 'clear_background':
         await _clearBackground(task);
+      case 'end_recurrence':
+        await _confirmEndRecurrence(task);
       case 'delete':
         await _confirmDelete(task);
+    }
+  }
+
+  Future<void> _confirmEndRecurrence(Task task) async {
+    final confirmed = await TempoConfirmDialog.show(
+      context,
+      title: '结束重复',
+      message: '「${task.title}」将不再重复出现。历史打卡记录会保留。',
+      confirmLabel: '结束重复',
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isSaving = true);
+    try {
+      final truncated = ref
+          .read(recurrenceRepositoryProvider)
+          .truncateSeriesAt(task, DateTime.now());
+      final saved = await ref.read(taskRepositoryProvider).updateTask(truncated);
+      if (!mounted) return;
+      setState(() {
+        _task = saved;
+        _isSaving = false;
+      });
+      TempoSnackbar.show(context, message: '重复已结束');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      TempoSnackbar.show(context, message: '操作失败: $e');
     }
   }
 

@@ -318,6 +318,46 @@ class SyncTaskRepository implements TaskRepository {
 
   // ── 读取路径 ──
 
+  /// 修复 dueDate 为空但有 recurrenceRule 的脏数据（用 createdAt 作锚点）。
+  Future<void> repairRecurringTasksMissingDueDate() async {
+    final rows =
+        await (_localDb.select(_localDb.tasks)..where(
+              (t) => t.recurrenceRule.isNotNull() & t.dueDate.isNull(),
+            ))
+            .get();
+
+    for (final row in rows) {
+      final rule = row.recurrenceRule?.trim();
+      if (rule == null || rule.isEmpty) continue;
+
+      final anchor = row.createdAt;
+      final dueDate = DateTime(anchor.year, anchor.month, anchor.day);
+      final now = DateTime.now();
+      final shouldSync = _userId != null;
+
+      await (_localDb.update(
+        _localDb.tasks,
+      )..where((t) => t.id.equals(row.id))).write(
+        db.TasksCompanion(
+          dueDate: Value(dueDate),
+          isAllDay: const Value(true),
+          updatedAt: Value(now),
+          syncPending: Value(shouldSync),
+        ),
+      );
+
+      if (shouldSync) {
+        final repaired = _mapTask(row).copyWith(
+          dueDate: dueDate,
+          isAllDay: true,
+          updatedAt: now,
+          syncPending: true,
+        );
+        unawaited(_syncTaskToCloud(repaired));
+      }
+    }
+  }
+
   @override
   Stream<List<domain.Task>> watchTasks() {
     // 立即返回本地流（毫秒级）。远端刷新由应用级单例驱动（首次订阅 +

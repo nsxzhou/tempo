@@ -106,12 +106,8 @@ class MonthView extends StatelessWidget {
                       cell: cell,
                       dots: _dotsForDay(cell.date, tokens),
                       isToday: isSameDay(cell.date, now),
-                      isSelected:
-                          isSameDay(cell.date, selectedDate) &&
-                          !cell.isOtherMonth,
-                      onTap: cell.isOtherMonth
-                          ? null
-                          : () => onSelectDate(cell.date),
+                      isSelected: isSameDay(cell.date, selectedDate),
+                      onTap: () => onSelectDate(cell.date),
                     ),
                   );
                 }),

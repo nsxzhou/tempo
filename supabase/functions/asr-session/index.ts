@@ -1,29 +1,20 @@
 // ============================================================
 // Tempo asr-session Edge Function
-// 为客户端流式 ASR 下发短期会话配置（密钥仅存服务端）
+// 为客户端流式 ASR 下发 relay 会话配置（密钥仅存 asr-relay）
 //
-// 环境变量（二选一鉴权）:
-//   A) VOLCENGINE_ASR_APP_KEY + VOLCENGINE_ASR_ACCESS_KEY — 旧版 App/Token
-//   B) VOLCENGINE_ASR_API_KEY — 新版控制台单一 API Key (X-Api-Key)
-//   VOLCENGINE_ASR_RESOURCE_ID  — 资源 ID，默认 volc.seedasr.sauc.duration
-//   VOLCENGINE_ASR_WS_ENDPOINT  — WebSocket 端点，默认 bigmodel_async
-//   VOICE_TASK_MOCK             — "true" 时返回 mock 配置
+// 环境变量:
+//   VOLCENGINE_ASR_APP_KEY + VOLCENGINE_ASR_ACCESS_KEY — 旧版 App/Token
+//   VOLCENGINE_ASR_API_KEY — 新版控制台单一 API Key
+//   VOLCENGINE_ASR_RESOURCE_ID — 资源 ID，默认 volc.seedasr.sauc.duration
+//   VOICE_TASK_MOCK — "true" 时返回 mock 配置
 // ============================================================
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { corsHeaders, json } from "../_shared/http.ts";
 
 const DEFAULT_RESOURCE_ID = "volc.seedasr.sauc.duration";
 
 type AsrSessionResponse = {
-  auth_mode: "relay" | "app_access" | "api_key";
-  app_key: string;
-  access_key: string;
-  api_key: string;
+  auth_mode: "relay";
   resource_id: string;
   ws_endpoint: string;
   connect_id: string;
@@ -61,9 +52,6 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
     return json({
       auth_mode: "relay",
-      app_key: "",
-      access_key: "",
-      api_key: "",
       resource_id: resourceId,
       ws_endpoint: relayEndpoint,
       connect_id: connectId,
@@ -78,9 +66,6 @@ Deno.serve(async (request: Request): Promise<Response> => {
 function mockSession(): AsrSessionResponse {
   return {
     auth_mode: "relay",
-    app_key: "",
-    access_key: "",
-    api_key: "",
     resource_id: DEFAULT_RESOURCE_ID,
     ws_endpoint: buildRelayEndpoint(),
     connect_id: crypto.randomUUID(),
@@ -95,11 +80,4 @@ function buildRelayEndpoint(): string {
   }
   const wsBase = supabaseUrl.replace(/^http/i, "ws");
   return `${wsBase}/functions/v1/asr-relay`;
-}
-
-function json(payload: unknown, status = 200): Response {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
 }

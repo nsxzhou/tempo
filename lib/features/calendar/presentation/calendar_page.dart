@@ -90,7 +90,11 @@ class _CalendarPageState extends ConsumerState<CalendarPage>
     super.build(context);
     final tasksAsync = ref.watch(taskListProvider);
     final selectedDate = ref.watch(calendarFocusDateProvider);
-    final taskIndex = ref.watch(calendarDisplayTaskIndexProvider);
+    final calendarIndex = ref.watch(calendarTaskIndexProvider);
+    final taskIndex = {
+      for (final entry in calendarIndex.entries)
+        entry.key: entry.value.map((e) => e.displayTask).toList(),
+    };
     final dayEntries = ref.watch(selectedDayTasksProvider(selectedDate));
     final dayTasks = dayEntries.map((e) => e.displayTask).toList();
     final occurrenceStates =

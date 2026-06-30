@@ -32,35 +32,72 @@ class CalendarPage extends ConsumerStatefulWidget {
 class _CalendarPageState extends ConsumerState<CalendarPage>
     with AutomaticKeepAliveClientMixin {
   _CalendarViewMode _viewMode = _CalendarViewMode.month;
-  DateTime _selectedDate = DateTime.now();
 
   @override
   bool get wantKeepAlive => true;
 
+  void _selectDate(DateTime date) {
+    ref.read(calendarFocusDateProvider.notifier).state = date;
+  }
+
   void _goToToday() {
+    ref.read(calendarFocusDateProvider.notifier).state = DateTime.now();
     setState(() {
-      _selectedDate = DateTime.now();
       _viewMode = _CalendarViewMode.month;
     });
+  }
+
+  void _navigateCalendar(int direction) {
+    final d = ref.read(calendarFocusDateProvider);
+    final next = switch (_viewMode) {
+      _CalendarViewMode.month => _addMonths(d, direction),
+      _CalendarViewMode.week => d.add(Duration(days: 7 * direction)),
+      _CalendarViewMode.day => d.add(Duration(days: direction)),
+    };
+    _selectDate(next);
+  }
+
+  /// 按月偏移，处理月末溢出（如 3/31 → 2 月取 2/28）。
+  static DateTime _addMonths(DateTime date, int months) {
+    final targetMonth = DateTime(date.year, date.month + months, 1);
+    final daysInTargetMonth = DateTime(
+      targetMonth.year,
+      targetMonth.month + 1,
+      0,
+    ).day;
+    final day = date.day <= daysInTargetMonth ? date.day : daysInTargetMonth;
+    return DateTime(targetMonth.year, targetMonth.month, day);
+  }
+
+  String _periodLabel(
+    DateTime selectedDate,
+    DateTime now,
+  ) {
+    final monthLabel = DateFormat('yyyy 年 M 月').format(selectedDate);
+    if (_viewMode == _CalendarViewMode.month) return monthLabel;
+    if (_viewMode == _CalendarViewMode.week) {
+      final weekNum =
+          ((selectedDate.difference(DateTime(now.year, 1, 1)).inDays) / 7)
+              .floor() +
+          1;
+      return '$monthLabel · 第 $weekNum 周';
+    }
+    return DateFormat('M 月 d 日').format(selectedDate);
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
     final tasksAsync = ref.watch(taskListProvider);
+    final selectedDate = ref.watch(calendarFocusDateProvider);
     final taskIndex = ref.watch(calendarDisplayTaskIndexProvider);
-    final dayEntries = ref.watch(selectedDayTasksProvider(_selectedDate));
+    final dayEntries = ref.watch(selectedDayTasksProvider(selectedDate));
     final dayTasks = dayEntries.map((e) => e.displayTask).toList();
     final occurrenceStates =
-        ref.watch(selectedDayOccurrenceStatesProvider(_selectedDate));
+        ref.watch(selectedDayOccurrenceStatesProvider(selectedDate));
     final tokens = context.tokens;
     final now = DateTime.now();
-    final monthLabel = DateFormat('yyyy 年 M 月').format(_selectedDate);
-    final weekNum =
-        ((_selectedDate.difference(DateTime(now.year, 1, 1)).inDays) / 7)
-            .floor() +
-        1;
-    final dayLabel = DateFormat('M 月 d 日').format(_selectedDate);
+    final periodLabel = _periodLabel(selectedDate, now);
 
     return Scaffold(
       backgroundColor: ref.watch(scaffoldBackgroundProvider),
@@ -87,17 +124,28 @@ class _CalendarPageState extends ConsumerState<CalendarPage>
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      _viewMode == _CalendarViewMode.month
-                          ? monthLabel
-                          : _viewMode == _CalendarViewMode.week
-                          ? '$monthLabel · 第 $weekNum 周'
-                          : dayLabel,
-                      style: tokens.mono(
-                        size: 12,
-                        color: tokens.fgMuted,
-                        letterSpacing: -0.2,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            periodLabel,
+                            style: tokens.mono(
+                              size: 12,
+                              color: tokens.fgMuted,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        ),
+                        _HeaderNavBtn(
+                          icon: LucideIcons.chevron_left,
+                          onTap: () => _navigateCalendar(-1),
+                        ),
+                        const SizedBox(width: 4),
+                        _HeaderNavBtn(
+                          icon: LucideIcons.chevron_right,
+                          onTap: () => _navigateCalendar(1),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -139,18 +187,17 @@ class _CalendarPageState extends ConsumerState<CalendarPage>
                 child: tasksAsync.when(
                   data: (_) => switch (_viewMode) {
                     _CalendarViewMode.month => MonthView(
-                      selectedDate: _selectedDate,
+                      selectedDate: selectedDate,
                       taskIndex: taskIndex,
-                      onSelectDate: (d) => setState(() => _selectedDate = d),
+                      onSelectDate: _selectDate,
                     ),
                     _CalendarViewMode.week => WeekView(
-                      selectedDate: _selectedDate,
+                      selectedDate: selectedDate,
                       taskIndex: taskIndex,
-                      onSelectDate: (d) => setState(() => _selectedDate = d),
+                      onSelectDate: _selectDate,
                     ),
                     _CalendarViewMode.day => DayView(
-                      selectedDate: _selectedDate,
-                      onChange: (d) => setState(() => _selectedDate = d),
+                      selectedDate: selectedDate,
                     ),
                   },
                   loading: () => const Padding(
@@ -166,12 +213,40 @@ class _CalendarPageState extends ConsumerState<CalendarPage>
               const SizedBox(height: 16),
               if (tasksAsync.hasValue)
                 _SelectedDayPanel(
-                  selectedDate: _selectedDate,
+                  selectedDate: selectedDate,
                   dayTasks: dayTasks,
                   occurrenceStates: occurrenceStates,
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderNavBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _HeaderNavBtn({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.tokens;
+    return Material(
+      color: tokens.bg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        side: BorderSide(color: tokens.borderStrong, width: 0.8),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        child: SizedBox(
+          width: 32,
+          height: 32,
+          child: Icon(icon, size: 18, color: tokens.fgMuted),
         ),
       ),
     );

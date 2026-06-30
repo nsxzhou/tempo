@@ -24,7 +24,7 @@ npm run package
 1. Tempo App → **我的** → **思源外部笔记 Petal 连接** → 生成 6 位配对码
 2. 在思源 Tempo Tab 输入配对码并绑定
 3. 绑定成功后使用顶部 **待办 | 日历** 切换页面
-4. 与手机 App 的数据通过 Supabase Realtime 近实时同步
+4. 与手机 App 的数据通过 Supabase 共享同步（Tab 获焦时刷新）
 
 ## 功能（v0.3.0）
 
@@ -46,4 +46,3 @@ npm run package # 输出 dist/tempo-sync.zip
 ## 说明
 
 - 解绑需在思源插件设置与 Tempo App 两侧分别操作
-- v2 计划：思源块导入、语音创建、完成状态回写思源

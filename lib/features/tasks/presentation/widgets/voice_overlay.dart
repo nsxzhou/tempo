@@ -129,8 +129,7 @@ class _VoiceCaptureOverlayState extends State<VoiceCaptureOverlay>
         ? AppTheme.priorityP0Border
         : tokens.borderStrong;
 
-    return Positioned.fill(
-      child: Material(
+    return Material(
         color: Colors.transparent,
         child: AnimatedBuilder(
           animation: _barrierOpacity,
@@ -262,7 +261,6 @@ class _VoiceCaptureOverlayState extends State<VoiceCaptureOverlay>
             ),
           ),
         ),
-      ),
     );
   }
 

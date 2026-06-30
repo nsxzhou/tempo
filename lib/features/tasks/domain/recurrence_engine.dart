@@ -1,5 +1,6 @@
 import 'package:rrule/rrule.dart';
 
+import '../../../core/utils/date_utils.dart' as date_utils;
 import 'recurrence_models.dart';
 import 'task.dart';
 
@@ -7,8 +8,7 @@ import 'task.dart';
 class RecurrenceEngine {
   const RecurrenceEngine();
 
-  static DateTime calendarDay(DateTime dt) =>
-      DateTime(dt.year, dt.month, dt.day);
+  static DateTime calendarDay(DateTime dt) => date_utils.calendarDay(dt);
 
   /// 在 [from, to] 窗口内展开 occurrence（含例外处理）
   List<TaskOccurrence> expandOccurrences(

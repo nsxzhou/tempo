@@ -1,6 +1,67 @@
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/date_utils.dart';
+import 'recurrence_models.dart';
 import 'task.dart';
+
+/// 列表 scope 筛选 badge 计数（含重复系列结束语义）。
+class TaskScopeCounts {
+  final int pending;
+  final int overdue;
+  final int week;
+  final int all;
+
+  const TaskScopeCounts({
+    required this.pending,
+    required this.overdue,
+    required this.week,
+    required this.all,
+  });
+
+  static const empty = TaskScopeCounts(
+    pending: 0,
+    overdue: 0,
+    week: 0,
+    all: 0,
+  );
+
+  factory TaskScopeCounts.from(List<Task> tasks, {DateTime? now}) {
+    if (tasks.isEmpty) return TaskScopeCounts.empty;
+
+    final current = now ?? DateTime.now();
+    var pending = 0;
+    var overdue = 0;
+    var week = 0;
+
+    for (final task in tasks) {
+      final ended = task.isRecurrenceEnded(current);
+      if (!task.isCompleted && !ended) pending++;
+      final due = task.dueDate;
+      if (!ended &&
+          due != null &&
+          isTaskOverdue(
+            dueDate: due,
+            isAllDay: task.isAllDay,
+            isCompleted: task.isCompleted,
+            now: current,
+          )) {
+        overdue++;
+      }
+      if (!task.isCompleted &&
+          !ended &&
+          due != null &&
+          isDueInWeekRange(due, current)) {
+        week++;
+      }
+    }
+
+    return TaskScopeCounts(
+      pending: pending,
+      overdue: overdue,
+      week: week,
+      all: tasks.length,
+    );
+  }
+}
 
 class TaskCategoryCounts {
   final int all;
@@ -99,19 +160,22 @@ class TaskCounts {
     final current = now ?? DateTime.now();
 
     for (final task in tasks) {
+      final ended = task.isRecurrenceEnded(current);
       allCategories = allCategories.increment(task.tag);
       if (task.isCompleted) {
         completed++;
-      } else {
+      } else if (!ended) {
         pending++;
         activeCategories = activeCategories.increment(task.tag);
       }
       if (task.dueDate != null &&
           !task.isCompleted &&
+          !ended &&
           isDueOnDate(task.dueDate!, current)) {
         todayDue++;
       }
       if (task.dueDate != null &&
+          !ended &&
           isTaskOverdue(
             dueDate: task.dueDate!,
             isAllDay: task.isAllDay,
@@ -121,6 +185,7 @@ class TaskCounts {
         overdue++;
       }
       if (!task.isCompleted &&
+          !ended &&
           task.dueDate != null &&
           isDueInWeekRange(task.dueDate!, current)) {
         weekDue++;

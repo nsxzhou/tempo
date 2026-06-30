@@ -137,60 +137,6 @@ class Task {
     );
   }
 
-  factory Task.fromJson(Map<String, dynamic> json) => Task(
-    id: json['id'] as String,
-    listId: json['listId'] as String,
-    title: json['title'] as String,
-    description: json['description'] as String?,
-    priority: TaskPriority.fromValue(json['priority'] as int? ?? 0),
-    dueDate: json['dueDate'] != null
-        ? DateTime.parse(json['dueDate'] as String)
-        : null,
-    isAllDay: json['isAllDay'] as bool? ?? false,
-    isCompleted: json['isCompleted'] as bool? ?? false,
-    completedAt: json['completedAt'] != null
-        ? DateTime.parse(json['completedAt'] as String)
-        : null,
-    siyuanBlockId: json['siyuanBlockId'] as String?,
-    sortOrder: json['sortOrder'] as int? ?? 0,
-    createdAt: DateTime.parse(json['createdAt'] as String),
-    updatedAt: DateTime.parse(json['updatedAt'] as String),
-    creationSource: json['creationSource'] as String? ?? 'text',
-    tag: json['tag'] as String?,
-    recurrenceRule: json['recurrenceRule'] as String?,
-    recurrenceEnd: json['recurrenceEnd'] != null
-        ? DateTime.parse(json['recurrenceEnd'] as String)
-        : null,
-    recurrenceCount: json['recurrenceCount'] as int?,
-    durationMin: json['durationMin'] as int?,
-    recurrenceSeriesId: json['recurrenceSeriesId'] as String?,
-    syncPending: json['syncPending'] as bool? ?? false,
-  );
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'listId': listId,
-    'title': title,
-    'description': description,
-    'priority': priority.value,
-    'dueDate': dueDate?.toIso8601String(),
-    'isAllDay': isAllDay,
-    'isCompleted': isCompleted,
-    'completedAt': completedAt?.toIso8601String(),
-    'siyuanBlockId': siyuanBlockId,
-    'sortOrder': sortOrder,
-    'createdAt': createdAt.toIso8601String(),
-    'updatedAt': updatedAt.toIso8601String(),
-    'creationSource': creationSource,
-    'tag': tag,
-    'recurrenceRule': recurrenceRule,
-    'recurrenceEnd': recurrenceEnd?.toIso8601String(),
-    'recurrenceCount': recurrenceCount,
-    'durationMin': durationMin,
-    'recurrenceSeriesId': recurrenceSeriesId,
-    'syncPending': syncPending,
-  };
-
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

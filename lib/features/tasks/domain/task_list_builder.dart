@@ -9,9 +9,6 @@ class TaskListBuilder {
 
   final RecurrenceEngine _engine;
 
-  /// occurrence 上下文：taskId → 当前展示的 occurrence 日期
-  static final occurrenceContext = <String, DateTime>{};
-
   List<TaskOccurrenceView> buildListViews({
     required List<Task> tasks,
     List<TaskCompletion> completions = const [],
@@ -29,10 +26,8 @@ class TaskListBuilder {
           now: current,
         );
         if (next != null) {
-          occurrenceContext[task.id] = next.occurrenceDate;
           views.add(TaskOccurrenceView(seriesTask: task, occurrence: next));
         } else if (task.isRecurrenceEnded(current)) {
-          occurrenceContext.remove(task.id);
           views.add(
             TaskOccurrenceView(
               seriesTask: task,

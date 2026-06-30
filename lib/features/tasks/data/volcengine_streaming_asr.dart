@@ -1,9 +1,8 @@
-// Volcengine 流式 ASR 客户端（WebSocket v3）
+// Volcengine 流式 ASR 客户端（WebSocket relay）
 
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -13,39 +12,26 @@ import 'volcengine_asr_protocol.dart';
 
 class AsrSessionConfig {
   final String authMode;
-  final String appKey;
-  final String accessKey;
-  final String apiKey;
   final String resourceId;
   final String wsEndpoint;
   final String connectId;
   final bool mock;
 
   const AsrSessionConfig({
-    this.authMode = 'app_access',
-    required this.appKey,
-    required this.accessKey,
-    this.apiKey = '',
+    this.authMode = 'relay',
     required this.resourceId,
     required this.wsEndpoint,
     required this.connectId,
     this.mock = false,
   });
 
-  bool get usesApiKey => authMode == 'api_key' || apiKey.isNotEmpty;
-
   bool get usesRelay => authMode == 'relay';
 
   factory AsrSessionConfig.fromJson(Map<String, Object?> json) {
-    final authMode = _readString(json['auth_mode']);
-    final apiKey = _readString(json['api_key']);
     return AsrSessionConfig(
-      authMode: authMode.isNotEmpty
-          ? authMode
-          : (apiKey.isNotEmpty ? 'api_key' : 'app_access'),
-      appKey: _readString(json['app_key']),
-      accessKey: _readString(json['access_key']),
-      apiKey: apiKey,
+      authMode: _readString(json['auth_mode']).isNotEmpty
+          ? _readString(json['auth_mode'])
+          : 'relay',
       resourceId: _readString(json['resource_id']),
       wsEndpoint: _readString(json['ws_endpoint']),
       connectId: _readString(json['connect_id']),
@@ -169,17 +155,15 @@ class VolcengineStreamingAsrService implements VolcengineStreamingAsr {
       return;
     }
 
-    final uri = _normalizeWssUri(_session!.wsEndpoint);
-    final authHeaders = _session!.usesRelay
-        ? Map<String, String>.from(_relayHeaders ?? const {})
-        : _buildVolcengineAuthHeaders(_session!);
+    if (!_session!.usesRelay) {
+      throw const VolcengineStreamingAsrException('ASR 会话必须使用 relay 模式');
+    }
 
-    final socket = _session!.usesRelay
-        ? await WebSocket.connect(
-            _session!.wsEndpoint,
-            headers: authHeaders.isEmpty ? null : authHeaders,
-          )
-        : await _connectVolcengineWebSocket(uri, authHeaders);
+    final authHeaders = Map<String, String>.from(_relayHeaders ?? const {});
+    final socket = await WebSocket.connect(
+      _session!.wsEndpoint,
+      headers: authHeaders.isEmpty ? null : authHeaders,
+    );
     _channel = IOWebSocketChannel(socket);
 
     await _channel!.ready;
@@ -371,80 +355,4 @@ String? _readServerError(Object? data) {
     }
   }
   return null;
-}
-
-Uri _normalizeWssUri(String endpoint) {
-  final parsed = Uri.parse(endpoint);
-  return Uri(
-    scheme: 'wss',
-    host: parsed.host,
-    port: parsed.hasPort && parsed.port != 0 ? parsed.port : 443,
-    path: parsed.path,
-  );
-}
-
-Map<String, String> _buildVolcengineAuthHeaders(AsrSessionConfig session) {
-  final requestId = session.connectId;
-  if (session.usesApiKey) {
-    return {
-      'X-Api-Key': session.apiKey,
-      'X-Api-Resource-Id': session.resourceId,
-      'X-Api-Connect-Id': session.connectId,
-      'X-Api-Request-Id': requestId,
-    };
-  }
-  return {
-    'X-Api-App-Key': session.appKey,
-    'X-Api-Access-Key': session.accessKey,
-    'X-Api-Resource-Id': session.resourceId,
-    'X-Api-Connect-Id': session.connectId,
-    'X-Api-Request-Id': requestId,
-  };
-}
-
-Future<WebSocket> _connectVolcengineWebSocket(
-  Uri uri,
-  Map<String, String> headers,
-) async {
-  final client = HttpClient();
-  final upgradeUri = _toHttpUpgradeUri(uri);
-  try {
-    final request = await client.openUrl('GET', upgradeUri);
-    final nonce = base64.encode(
-      List<int>.generate(16, (_) => Random.secure().nextInt(256)),
-    );
-    request.headers
-      ..set('Connection', 'Upgrade', preserveHeaderCase: true)
-      ..set('Upgrade', 'websocket', preserveHeaderCase: true)
-      ..set('Sec-WebSocket-Version', '13', preserveHeaderCase: true)
-      ..set('Sec-WebSocket-Key', nonce, preserveHeaderCase: true);
-
-    for (final entry in headers.entries) {
-      request.headers.set(entry.key, entry.value, preserveHeaderCase: true);
-    }
-
-    final response = await request.close();
-    if (response.statusCode != HttpStatus.switchingProtocols) {
-      throw WebSocketException(
-        'Connection to \'$uri#\' was not upgraded to websocket, '
-        'HTTP status code: ${response.statusCode}',
-        response.statusCode,
-      );
-    }
-
-    final socket = await response.detachSocket();
-    return WebSocket.fromUpgradedSocket(socket, serverSide: false);
-  } finally {
-    client.close(force: true);
-  }
-}
-
-Uri _toHttpUpgradeUri(Uri wsUri) {
-  if (wsUri.scheme == 'wss') {
-    return wsUri.replace(scheme: 'https');
-  }
-  if (wsUri.scheme == 'ws') {
-    return wsUri.replace(scheme: 'http');
-  }
-  return wsUri;
 }

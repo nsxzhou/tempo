@@ -28,10 +28,6 @@ export interface Task {
   durationMin?: number | null;
 }
 
-export function isRecurringTask(task: Task): boolean {
-  return Boolean(task.recurrenceRule && task.recurrenceRule.trim());
-}
-
 export function priorityFromValue(value: number | null | undefined): TaskPriority {
   switch (value) {
     case TaskPriority.p0:

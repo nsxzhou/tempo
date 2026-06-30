@@ -203,27 +203,5 @@ export async function withAuthRetryVoid(
   }
 }
 
-/** 通过 RPC 创建任务（思源导入，v2 预留） */
-export async function createTaskFromSiyuan(
-  title: string,
-  siyuanBlockId: string,
-  description?: string | null,
-  dueDate?: string | null,
-  priority?: number
-): Promise<string> {
-  return withAuthRetry(async () => {
-    const supabase = getClient();
-    if (!supabase) throw new Error('未绑定 Tempo 账号');
-
-    return supabase.rpc('create_task_from_siyuan', {
-      p_title: title,
-      p_siyuan_block_id: siyuanBlockId,
-      p_description: description ?? null,
-      p_due_date: dueDate ?? null,
-      p_priority: priority ?? 0,
-    });
-  });
-}
-
 export { SUPABASE_URL, SUPABASE_ANON_KEY };
 export { PAIRING_ENDPOINT } from './config';

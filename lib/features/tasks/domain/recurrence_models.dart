@@ -1,6 +1,7 @@
 /// 重复任务相关领域模型
 library;
 
+import 'recurrence_engine.dart';
 import 'task.dart';
 
 /// occurrence 状态
@@ -113,13 +114,22 @@ class TaskOccurrenceView {
   const TaskOccurrenceView({
     required this.seriesTask,
     required this.occurrence,
+    this.isSeriesEnded = false,
   });
 
   final Task seriesTask;
   final TaskOccurrence occurrence;
+  final bool isSeriesEnded;
 
   /// 用于 UI 绑定的 Task（id 仍为 series id，附带 occurrence 上下文）
   Task get displayTask {
+    if (isSeriesEnded) {
+      return seriesTask.copyWith(
+        clearDueDate: true,
+        isCompleted: false,
+        clearCompletedAt: true,
+      );
+    }
     final occ = occurrence;
     final completed = occ.state == OccurrenceState.completed;
     return seriesTask.copyWith(
@@ -131,6 +141,16 @@ class TaskOccurrenceView {
   }
 
   bool get isRecurring => seriesTask.isRecurring;
+}
+
+/// 重复系列是否已结束（`recurrenceEnd` 当天仍算有效，次日起视为已结束）。
+extension TaskRecurrenceLifecycle on Task {
+  bool isRecurrenceEnded(DateTime now) {
+    if (!isRecurring || recurrenceEnd == null) return false;
+    final endDay = RecurrenceEngine.calendarDay(recurrenceEnd!);
+    final today = RecurrenceEngine.calendarDay(now);
+    return today.isAfter(endDay);
+  }
 }
 
 /// 重复规则 UI 配置（创建/编辑表单用）

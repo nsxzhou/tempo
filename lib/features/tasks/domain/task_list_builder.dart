@@ -19,17 +19,34 @@ class TaskListBuilder {
     DateTime? now,
   }) {
     final views = <TaskOccurrenceView>[];
+    final current = now ?? DateTime.now();
     for (final task in tasks) {
       if (task.isRecurring) {
         final next = _engine.nextOccurrence(
           task,
           exceptions: exceptions.where((e) => e.taskId == task.id).toList(),
           completions: completions.where((c) => c.taskId == task.id).toList(),
-          now: now,
+          now: current,
         );
         if (next != null) {
           occurrenceContext[task.id] = next.occurrenceDate;
           views.add(TaskOccurrenceView(seriesTask: task, occurrence: next));
+        } else if (task.isRecurrenceEnded(current)) {
+          occurrenceContext.remove(task.id);
+          views.add(
+            TaskOccurrenceView(
+              seriesTask: task,
+              occurrence: TaskOccurrence(
+                seriesTaskId: task.id,
+                occurrenceDate: RecurrenceEngine.calendarDay(
+                  task.recurrenceEnd!,
+                ),
+                effectiveDue: null,
+                title: task.title,
+              ),
+              isSeriesEnded: true,
+            ),
+          );
         }
       } else {
         views.add(

@@ -20,6 +20,7 @@ import '../../../core/theme/tempo_theme_extension.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/tempo/tempo.dart';
 import '../domain/recurrence_engine.dart';
+import '../domain/recurrence_models.dart';
 import '../domain/task.dart';
 import '../domain/task_list_builder.dart';
 import '../data/task_creation_orchestrator.dart';
@@ -128,7 +129,7 @@ class _TasksPageState extends ConsumerState<TasksPage>
           if (_voiceCapture == _VoiceCaptureState.inactive && !_showQuickCreate)
             Positioned(
               right: 20,
-              bottom: 120,
+              bottom: 120 + MediaQuery.paddingOf(context).bottom,
               child: RepaintBoundary(
                 child: CreateActionFanFab(
                   onTextCreate: _openQuickCreate,
@@ -557,10 +558,12 @@ bool _matchesSearch(Task task, String q) {
 
 bool _matchesScope(Task task, _TaskScope scope, DateTime now) {
   final due = task.dueDate;
+  final ended = task.isRecurrenceEnded(now);
   return switch (scope) {
-    _TaskScope.pending => !task.isCompleted,
+    _TaskScope.pending => !task.isCompleted && !ended,
     _TaskScope.overdue =>
-      due != null &&
+      !ended &&
+          due != null &&
           isTaskOverdue(
             dueDate: due,
             isAllDay: task.isAllDay,
@@ -568,7 +571,10 @@ bool _matchesScope(Task task, _TaskScope scope, DateTime now) {
             now: now,
           ),
     _TaskScope.week =>
-      !task.isCompleted && due != null && isDueInWeekRange(due, now),
+      !task.isCompleted &&
+          !ended &&
+          due != null &&
+          isDueInWeekRange(due, now),
     _TaskScope.all => true,
   };
 }
@@ -578,9 +584,11 @@ _TaskScopeCounts _countScopes(List<Task> tasks, DateTime now) {
   var overdue = 0;
   var week = 0;
   for (final task in tasks) {
-    if (!task.isCompleted) pending++;
+    final ended = task.isRecurrenceEnded(now);
+    if (!task.isCompleted && !ended) pending++;
     final due = task.dueDate;
-    if (due != null &&
+    if (!ended &&
+        due != null &&
         isTaskOverdue(
           dueDate: due,
           isAllDay: task.isAllDay,
@@ -589,7 +597,10 @@ _TaskScopeCounts _countScopes(List<Task> tasks, DateTime now) {
         )) {
       overdue++;
     }
-    if (!task.isCompleted && due != null && isDueInWeekRange(due, now)) {
+    if (!task.isCompleted &&
+        !ended &&
+        due != null &&
+        isDueInWeekRange(due, now)) {
       week++;
     }
   }
@@ -820,6 +831,7 @@ class _TaskListSection extends ConsumerWidget {
               itemBuilder: (context, index) {
                 final task = active[index];
                 final raw = taskMap[task.id];
+                final now = DateTime.now();
                 return RepaintBoundary(
                   child: TaskTile(
                     key: ValueKey('task-${task.id}'),
@@ -831,7 +843,10 @@ class _TaskListSection extends ConsumerWidget {
                     backgroundImagePath: backgrounds[task.id]?.imagePath,
                     aiEnhancementStatus: aiEnhancementState[task.id],
                     streakCount: streakMap[task.id]?.current,
-                    showRecurring: raw?.isRecurring ?? false,
+                    showRecurring:
+                        (raw?.isRecurring ?? false) &&
+                        !(raw?.isRecurrenceEnded(now) ?? false),
+                    showEnded: raw?.isRecurrenceEnded(now) ?? false,
                   ),
                 );
               },

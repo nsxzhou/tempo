@@ -5,6 +5,8 @@
 //       / SiyuanPairingService / FeedbackService / Connectivity
 // ============================================================
 
+import 'dart:async';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -38,6 +40,12 @@ export 'features/auth/data/auth_service.dart';
 
 // ── Shell ──
 final shellTabBarVisibleProvider = StateProvider<bool>((ref) => true);
+
+/// 日历当前浏览/选中日期，驱动重复任务展开窗口中心。
+final calendarFocusDateProvider = StateProvider<DateTime>(
+  (ref) => DateTime.now(),
+  name: 'calendarFocusDateProvider',
+);
 
 /// push 详情前同步置 true，避免 Shell 未及时 rebuild 导致列表透出。
 final taskDetailOverlayProvider = StateProvider<bool>((ref) => false);
@@ -142,6 +150,8 @@ final taskRepositoryProvider = Provider<TaskRepository>((ref) {
     },
     recurrenceRefresh: recurrenceRepo.refreshFromRemote,
   );
+
+  unawaited(repository.repairRecurringTasksMissingDueDate());
 
   // 应用级单例刷新触发：连接恢复 + 用户变更。
   final connectivitySub = connectivity.onConnectivityChanged.listen((result) {
@@ -262,10 +272,11 @@ final calendarTaskIndexProvider =
       final completions = ref.watch(taskCompletionsProvider).valueOrNull ?? [];
       final exceptions =
           ref.watch(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
+      final focusDate = ref.watch(calendarFocusDateProvider);
       final now = DateTime.now();
       return _taskListBuilder.buildCalendarIndex(
         tasks: tasks,
-        centerDate: now,
+        centerDate: focusDate,
         completions: completions,
         exceptions: exceptions,
         now: now,

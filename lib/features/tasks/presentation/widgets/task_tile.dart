@@ -26,6 +26,7 @@ class TaskTile extends StatefulWidget {
   final TaskAiEnhancementStatus? aiEnhancementStatus;
   final int? streakCount;
   final bool showRecurring;
+  final bool showEnded;
 
   const TaskTile({
     super.key,
@@ -38,6 +39,7 @@ class TaskTile extends StatefulWidget {
     this.aiEnhancementStatus,
     this.streakCount,
     this.showRecurring = false,
+    this.showEnded = false,
   });
 
   @override
@@ -178,6 +180,7 @@ class _TaskTileState extends State<TaskTile> {
   }
 
   Future<void> _handleToggle() async {
+    if (widget.showEnded) return;
     if (_localCompleted) {
       widget.onToggleComplete?.call();
       return;
@@ -215,16 +218,19 @@ class _TaskTileState extends State<TaskTile> {
 
     return Row(
       children: [
-        SizedBox(
-          width: _checkboxHitSize,
-          height: _checkboxHitSize,
-          child: Center(
-            child: TempoCheckbox(
-              value: completed,
-              onChanged: (_) => _handleToggle(),
+        if (!widget.showEnded)
+          SizedBox(
+            width: _checkboxHitSize,
+            height: _checkboxHitSize,
+            child: Center(
+              child: TempoCheckbox(
+                value: completed,
+                onChanged: (_) => _handleToggle(),
+              ),
             ),
-          ),
-        ),
+          )
+        else
+          const SizedBox(width: 12),
         Expanded(
           child: Material(
             color: Colors.transparent,
@@ -258,6 +264,28 @@ class _TaskTileState extends State<TaskTile> {
                     if (widget.showRecurring) ...[
                       const SizedBox(width: 6),
                       Icon(Icons.repeat, size: 14, color: t.fgMuted),
+                    ],
+                    if (widget.showEnded) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: t.bgMuted,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: t.borderStrong, width: 0.6),
+                        ),
+                        child: Text(
+                          '已结束',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: t.fgMuted,
+                          ),
+                        ),
+                      ),
                     ],
                     if (widget.streakCount != null &&
                         widget.streakCount! > 0) ...[

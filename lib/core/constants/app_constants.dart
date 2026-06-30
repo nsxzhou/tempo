@@ -87,13 +87,6 @@ class AppConstants {
       : (dotenv.env['TEMPO_ASR_SESSION_ENDPOINT'] ??
             'http://127.0.0.1:54321/functions/v1/asr-session');
 
-  /// siyuan-pairing 配对码交换端点。
-  static String get siyuanPairingEndpoint =>
-      const String.fromEnvironment('TEMPO_SIYUAN_PAIRING_ENDPOINT').isNotEmpty
-      ? const String.fromEnvironment('TEMPO_SIYUAN_PAIRING_ENDPOINT')
-      : (dotenv.env['TEMPO_SIYUAN_PAIRING_ENDPOINT'] ??
-            'http://127.0.0.1:54321/functions/v1/siyuan-pairing');
-
   // ── SharedPreferences Keys ──
   static const String prefOnboardingCompleted = 'onboarding_completed';
   static const String prefNotificationEnabled = 'notification_enabled';
@@ -103,7 +96,6 @@ class AppConstants {
   // ── 配对码 ──
   static const int pairingCodeLength = 6;
   static const Duration pairingCodeExpiry = Duration(minutes: 5);
-  static const String siyuanStorageKey = 'tempo_siyuan_auth';
 
   // ── Supabase 表名 ──
   static const String tableTasks = 'tasks';

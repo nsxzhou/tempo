@@ -1,9 +1,12 @@
-/// 日期比较工具（日历 / 本周过滤共用）
+/// 日期比较工具（日历 / 本周过滤 / 重复任务共用）
 library;
+
+/// 归一化为本地时区年月日（时分秒归零）。
+DateTime calendarDay(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
 
 /// 判断 [a] 与 [b] 是否为同一天（本地时区年月日）。
 bool isSameDay(DateTime a, DateTime b) {
-  return a.year == b.year && a.month == b.month && a.day == b.day;
+  return calendarDay(a) == calendarDay(b);
 }
 
 /// 判断 [dueDate] 是否落在 [date] 当天。
@@ -41,26 +44,6 @@ bool isTaskOverdue({
   return dueDate.isBefore(current);
 }
 
-/// 格式化任务截止日期展示文案。
-String formatTaskDueLabel({
-  required DateTime dueDate,
-  required bool isAllDay,
-  DateTime? now,
-}) {
-  final current = now ?? DateTime.now();
-  if (isAllDay) {
-    if (isSameDay(dueDate, current)) return '今天';
-    return '${dueDate.month}月${dueDate.day}日';
-  }
-  if (isSameDay(dueDate, current)) {
-    return '今天 ${_hm(dueDate)}';
-  }
-  return '${dueDate.month}月${dueDate.day}日 ${_hm(dueDate)}';
-}
-
-String _hm(DateTime d) =>
-    '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
-
 /// 详情页截止日期展示。
 String formatTaskDueDetail({
   required DateTime dueDate,
@@ -71,3 +54,6 @@ String formatTaskDueDetail({
   }
   return '${dueDate.month}月${dueDate.day}日 ${_hm(dueDate)}';
 }
+
+String _hm(DateTime d) =>
+    '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';

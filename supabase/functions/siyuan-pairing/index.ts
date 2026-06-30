@@ -14,12 +14,7 @@
 //   SUPABASE_SERVICE_ROLE_KEY — Service Role Key (仅 Edge Function 持有)
 // ============================================================
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { corsHeaders, json, requiredEnv } from "../_shared/http.ts";
 
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === "OPTIONS") {
@@ -211,17 +206,4 @@ async function exchangeTokenForSession(
   }
 
   throw new Error(`verify 失败: ${lastError}`);
-}
-
-function requiredEnv(name: string): string {
-  const value = Deno.env.get(name);
-  if (!value) throw new Error(`Missing required environment variable: ${name}`);
-  return value;
-}
-
-function json(payload: unknown, status = 200): Response {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
 }

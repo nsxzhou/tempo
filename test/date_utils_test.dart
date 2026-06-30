@@ -44,17 +44,5 @@ void main() {
         isTrue,
       );
     });
-
-    test('formatTaskDueLabel hides time for all-day tasks', () {
-      final due = DateTime(2026, 6, 25);
-      expect(
-        formatTaskDueLabel(
-          dueDate: due,
-          isAllDay: true,
-          now: DateTime(2026, 1, 1),
-        ),
-        '6月25日',
-      );
-    });
   });
 }

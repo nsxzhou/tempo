@@ -192,17 +192,22 @@ final taskStreakMapProvider = Provider<Map<String, StreakInfo>>((ref) {
   );
 }, name: 'taskStreakMapProvider');
 
-/// 列表展示用 Task（重复任务展开为下一次 occurrence）
-final displayTaskListProvider = Provider<List<Task>>((ref) {
+/// 列表展示用 occurrence 视图（重复任务展开为下一次 occurrence）
+final displayOccurrenceListProvider = Provider<List<TaskOccurrenceView>>((ref) {
   final tasks = ref.watch(taskListProvider).valueOrNull ?? [];
   final completions = ref.watch(taskCompletionsProvider).valueOrNull ?? [];
   final exceptions =
       ref.watch(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
-  final views = _taskListBuilder.buildListViews(
+  return _taskListBuilder.buildListViews(
     tasks: tasks,
     completions: completions,
     exceptions: exceptions,
   );
+}, name: 'displayOccurrenceListProvider');
+
+/// 列表展示用 Task（重复任务展开为下一次 occurrence）
+final displayTaskListProvider = Provider<List<Task>>((ref) {
+  final views = ref.watch(displayOccurrenceListProvider);
   return views.map((v) => v.displayTask).toList();
 }, name: 'displayTaskListProvider');
 
@@ -255,7 +260,7 @@ final statsSnapshotProvider = Provider.family<StatsSnapshot, int>((ref, days) {
 
 /// 单次遍历的任务计数（Bento + 分类筛选共用）。
 final taskCountsProvider = Provider<TaskCounts>((ref) {
-  final tasks = ref.watch(taskListProvider).valueOrNull ?? [];
+  final tasks = ref.watch(displayTaskListProvider);
   return TaskCounts.from(tasks);
 });
 
@@ -282,17 +287,6 @@ final calendarTaskIndexProvider =
         now: now,
       );
     }, name: 'calendarTaskIndexProvider');
-
-/// 日历展示用 Task 索引（兼容现有月/周视图）
-final calendarDisplayTaskIndexProvider = Provider<Map<DateTime, List<Task>>>((
-  ref,
-) {
-  final index = ref.watch(calendarTaskIndexProvider);
-  return {
-    for (final entry in index.entries)
-      entry.key: entry.value.map((e) => e.displayTask).toList(),
-  };
-}, name: 'calendarDisplayTaskIndexProvider');
 
 /// 选中日 occurrence 状态（taskId → state）
 final selectedDayOccurrenceStatesProvider =

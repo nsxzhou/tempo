@@ -186,10 +186,6 @@ class _InfoCard extends StatelessWidget {
       final when = DateFormat('yyyy/M/d HH:mm').format(status.pairedAt!);
       lines.add('绑定时间 · $when');
     }
-    if (status.hasSynced && status.lastSyncAt != null) {
-      final when = DateFormat('yyyy/M/d HH:mm').format(status.lastSyncAt!);
-      lines.add('最近同步 · $when · 导入 ${status.lastImportedCount} 项');
-    }
     if (status.pluginVersion != null) {
       lines.add('插件版本 · v${status.pluginVersion}');
     }

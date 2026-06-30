@@ -22,8 +22,6 @@ class _MockAsrSessionClient implements AsrSessionClient {
   Future<AsrSessionConfig> fetchSession() async {
     return const AsrSessionConfig(
       authMode: 'relay',
-      appKey: '',
-      accessKey: '',
       resourceId: 'volc.seedasr.sauc.duration',
       wsEndpoint: 'wss://example.com/asr-relay',
       connectId: 'mock-connect-id',

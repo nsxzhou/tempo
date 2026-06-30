@@ -15,22 +15,11 @@ void main() {
   });
 
   group('siyuanIntegrationBadge', () {
-    test('paired without sync shows 待连通', () {
+    test('paired shows 已绑定', () {
       const status = SiyuanBindingStatus(isPaired: true);
       final badge = siyuanIntegrationBadge(status);
 
-      expect(badge.label, '待连通');
-      expect(badge.kind, TempoBadgeKind.neutral);
-    });
-
-    test('paired with sync shows 已连通', () {
-      final status = SiyuanBindingStatus(
-        isPaired: true,
-        lastSyncAt: DateTime(2026, 6, 22, 15, 30),
-      );
-      final badge = siyuanIntegrationBadge(status);
-
-      expect(badge.label, '已连通');
+      expect(badge.label, '已绑定');
       expect(badge.kind, TempoBadgeKind.success);
     });
 
@@ -70,9 +59,9 @@ void main() {
   });
 
   group('siyuanIntegrationSubtitle', () {
-    test('paired without sync explains plugin pairing', () {
+    test('paired explains Supabase sync', () {
       const status = SiyuanBindingStatus(isPaired: true);
-      expect(siyuanIntegrationSubtitle(status), '云端已记录绑定 · 请在思源插件输入配对码');
+      expect(siyuanIntegrationSubtitle(status), contains('Supabase'));
     });
 
     test('status load failure asks user to retry', () {
@@ -82,22 +71,12 @@ void main() {
       );
       expect(siyuanIntegrationSubtitle(status), contains('点击重试'));
     });
-
-    test('paired with sync shows last sync summary', () {
-      final status = SiyuanBindingStatus(
-        isPaired: true,
-        lastSyncAt: DateTime(2026, 6, 22, 15, 30),
-        lastImportedCount: 3,
-      );
-      expect(siyuanIntegrationSubtitle(status), contains('最近同步'));
-      expect(siyuanIntegrationSubtitle(status), contains('导入 3 项'));
-    });
   });
 
   group('siyuanManageSheetSubtitle', () {
-    test('paired without sync guides plugin input', () {
+    test('paired explains Supabase sync', () {
       const status = SiyuanBindingStatus(isPaired: true);
-      expect(siyuanManageSheetSubtitle(status), contains('请在思源插件输入配对码'));
+      expect(siyuanManageSheetSubtitle(status), contains('Supabase'));
     });
   });
 }

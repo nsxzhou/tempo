@@ -94,10 +94,13 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
     await tester.tap(find.byKey(const Key('fan_action_voice')));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.ensureVisible(find.byKey(const Key('voice_mic_button')));
     await tester.tap(find.byKey(const Key('voice_mic_button')));
     await tester.pump();
-    expect(find.text('再次点击结束'), findsOneWidget);
+    expect(find.text('再次轻触结束'), findsOneWidget);
 
+    await tester.ensureVisible(find.byKey(const Key('voice_mic_button')));
     await tester.tap(find.byKey(const Key('voice_mic_button')));
     await tester.pump();
     expect(repository.tasks, isEmpty);
@@ -181,7 +184,7 @@ void main() {
     final session = FakeStreamingVoiceSession();
     final parseService = FakeTextParseService();
 
-    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.physicalSize = const Size(800, 2000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -226,7 +229,7 @@ void main() {
       await repository.createTask(title: '海底捞', tag: AppConstants.tagLife);
       await repository.createTask(title: '去吃KFC');
 
-      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.physicalSize = const Size(800, 2000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -278,7 +281,7 @@ void main() {
     await repository.createTask(title: '活跃生活', tag: AppConstants.tagLife);
     await repository.createTask(title: '未分类任务');
 
-    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.physicalSize = const Size(800, 2000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -328,7 +331,7 @@ void main() {
     await repository.createTask(title: '列表不应透出');
     await repository.createTask(title: '详情任务');
 
-    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.physicalSize = const Size(800, 2000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -417,8 +420,9 @@ Future<void> _pumpTasksPage(
   required FakeStreamingVoiceSession session,
   required FakeTextParseService parseService,
 }) async {
-  tester.view.physicalSize = const Size(800, 1200);
+  tester.view.physicalSize = const Size(800, 1600);
   tester.view.devicePixelRatio = 1.0;
+  tester.view.padding = FakeViewPadding.zero;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
 
@@ -455,15 +459,17 @@ Future<void> _submitVoice(WidgetTester tester) async {
 
   await tester.tap(find.byKey(const Key('fan_action_voice')));
   await tester.pump();
-  await tester.pump(const Duration(milliseconds: 100));
+  await tester.pump(const Duration(milliseconds: 350));
 
-  expect(find.text('点击开始录音'), findsOneWidget);
+  expect(find.text('轻触开始录音'), findsOneWidget);
 
+  await tester.ensureVisible(find.byKey(const Key('voice_mic_button')));
   await tester.tap(find.byKey(const Key('voice_mic_button')));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 50));
-  expect(find.text('再次点击结束'), findsOneWidget);
+  expect(find.text('再次轻触结束'), findsOneWidget);
 
+  await tester.ensureVisible(find.byKey(const Key('voice_mic_button')));
   await tester.tap(find.byKey(const Key('voice_mic_button')));
   await tester.runAsync(() async {
     await Future<void>.delayed(const Duration(milliseconds: 500));

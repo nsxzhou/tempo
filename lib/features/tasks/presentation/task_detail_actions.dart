@@ -9,6 +9,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/tempo_theme_extension.dart';
 import '../../../core/widgets/tempo/tempo.dart';
+import '../domain/recurrence_engine.dart';
 import '../domain/recurrence_models.dart';
 import '../domain/task.dart';
 import 'widgets/quick_create_sheet.dart';
@@ -30,12 +31,45 @@ class TaskDetailActions {
   final Task? Function() getTask;
   final void Function(Task? task) setLastDeletedTask;
 
-  Future<void> toggleComplete(Task task) async {
+  Future<void> toggleComplete(Task task, {DateTime? occurrenceDate}) async {
     onSavingChanged(true);
     try {
       final repository = ref.read(taskRepositoryProvider);
-      final updated = await repository.toggleComplete(task.id);
       final notificationService = ref.read(notificationServiceProvider);
+
+      if (task.isRecurring) {
+        // 重复任务按 occurrence 打卡，绝不修改 series 的 is_completed。
+        final occDate = occurrenceDate ?? _resolveRecurringOccurrenceDate(task);
+        if (occDate == null) {
+          onSavingChanged(false);
+          return;
+        }
+        final complete = !task.isCompleted;
+        await repository.toggleOccurrenceComplete(
+          task.id,
+          occDate,
+          complete: complete,
+        );
+        if (complete) {
+          await notificationService.cancelOccurrenceReminder(task.id, occDate);
+        } else {
+          final raw = ref.read(taskMapProvider)[task.id] ?? task;
+          unawaited(
+            notificationService.scheduleRecurringReminders(
+              raw,
+              completions: const [],
+              exceptions: const [],
+            ),
+          );
+        }
+        if (!context.mounted) return;
+        // 详情页本地 state 仍由父 widget 通过 onTaskChanged 反映；
+        // 这里仅刷新 saving 状态，列表/heatmap 由 stream 推动。
+        onSavingChanged(false);
+        return;
+      }
+
+      final updated = await repository.toggleComplete(task.id);
       if (updated.isCompleted) {
         await notificationService.cancelTaskReminders(task.id);
       } else {
@@ -49,6 +83,26 @@ class TaskDetailActions {
       onSavingChanged(false);
       TempoSnackbar.show(context, message: '操作失败:$e');
     }
+  }
+
+  /// 解析重复任务的当前 occurrenceDate：优先用 nextOccurrence，
+  /// 兜底到 task.dueDate 当天。
+  DateTime? _resolveRecurringOccurrenceDate(Task task) {
+    const engine = RecurrenceEngine();
+    final completions =
+        ref.read(taskCompletionsProvider).valueOrNull ?? [];
+    final exceptions =
+        ref.read(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
+    final next = engine.nextOccurrence(
+      task,
+      completions: completions.where((c) => c.taskId == task.id).toList(),
+      exceptions: exceptions.where((e) => e.taskId == task.id).toList(),
+      now: DateTime.now(),
+    );
+    if (next != null) return next.occurrenceDate;
+    final due = task.dueDate;
+    if (due != null) return RecurrenceEngine.calendarDay(due);
+    return null;
   }
 
   Future<void> saveDescription(String value) async {

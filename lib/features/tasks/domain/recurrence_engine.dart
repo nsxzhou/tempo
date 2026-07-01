@@ -30,9 +30,10 @@ class RecurrenceEngine {
     final exceptionMap = {
       for (final e in exceptions) calendarDay(e.exceptionDate): e,
     };
-    final completionDays = completions
-        .map((c) => calendarDay(c.occurrenceDate))
-        .toSet();
+    final completionMap = <DateTime, DateTime>{
+      for (final c in completions)
+        calendarDay(c.occurrenceDate): c.completedAt,
+    };
 
     final anchor = task.dueDate!;
     // rrule 要求 UTC，但保留本地日期/时刻数值
@@ -57,7 +58,9 @@ class RecurrenceEngine {
 
       final effectiveDue = _effectiveDue(task, day, ex);
       final title = ex?.overrideTitle ?? task.title;
-      final state = _stateFor(day, completionDays, today);
+      final state = _stateFor(day, completionMap.keys.toSet(), today);
+      final completedAt =
+          state == OccurrenceState.completed ? completionMap[day] : null;
 
       results.add(
         TaskOccurrence(
@@ -66,6 +69,7 @@ class RecurrenceEngine {
           effectiveDue: effectiveDue,
           title: title,
           state: state,
+          completedAt: completedAt,
         ),
       );
 

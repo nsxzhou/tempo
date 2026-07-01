@@ -113,6 +113,20 @@ class AppDatabase extends _$AppDatabase {
           ..where((t) => t.completedAt.isSmallerThanValue(endExclusive)))
         .watch();
   }
+
+  /// 监听指定时间范围内的重复任务打卡记录（统计趋势用）。
+  ///
+  /// 重复任务的完成不写 tasks.completed_at，只写 task_completions.completed_at，
+  /// 因此统计需 union 两表。
+  Stream<List<TaskCompletion>> watchTaskCompletionsInRange(
+    DateTime startInclusive,
+    DateTime endExclusive,
+  ) {
+    return (select(taskCompletions)
+          ..where((c) => c.completedAt.isBiggerOrEqualValue(startInclusive))
+          ..where((c) => c.completedAt.isSmallerThanValue(endExclusive)))
+        .watch();
+  }
 }
 
 LazyDatabase _openConnection() {

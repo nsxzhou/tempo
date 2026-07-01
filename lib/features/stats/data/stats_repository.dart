@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../database/database.dart' as db;
@@ -10,11 +12,24 @@ class StatsRepository {
   final db.AppDatabase _database;
 
   /// Drift 监听 + 按日聚合（补零空日）。
+  ///
+  /// 入桶来源 union：
+  /// - 单次任务（recurrence_rule IS NULL）：tasks.completed_at
+  /// - 重复任务：task_completions.completed_at
+  /// 重复任务从不写 tasks.completed_at，避免双计。
   Stream<List<DailyCompletion>> watchDailyCompletions(int days) {
     final range = _dateRange(days);
-    return _database
-        .watchCompletedTasksInRange(range.start, range.end)
-        .map((rows) => _aggregateDaily(rows, range.start, days));
+    final tasksStream = _database.watchCompletedTasksInRange(
+      range.start,
+      range.end,
+    );
+    final completionsStream = _database.watchTaskCompletionsInRange(
+      range.start,
+      range.end,
+    );
+    return _combineLatest(tasksStream, completionsStream).map(
+      (pair) => _aggregateDailyUnion(pair.$1, pair.$2, range.start, days),
+    );
   }
 
   /// 内存聚合：优先级 / 分类 / 完成率。
@@ -115,16 +130,28 @@ class StatsRepository {
     );
   }
 
-  List<DailyCompletion> _aggregateDaily(
-    List<db.Task> rows,
+  List<DailyCompletion> _aggregateDailyUnion(
+    List<db.Task> taskRows,
+    List<db.TaskCompletion> completionRows,
     DateTime startDay,
     int days,
   ) {
     final counts = <DateTime, int>{};
-    for (final row in rows) {
+    // 单次任务：按 tasks.completed_at 桶
+    for (final row in taskRows) {
+      // 重复任务的完成不应走 tasks.completed_at（正常路径下不会写），
+      // 但容错过滤：若 history 残留了重复任务的 series 级完成，跳过避免双计。
+      if (row.recurrenceRule != null && row.recurrenceRule!.isNotEmpty) {
+        continue;
+      }
       final completedAt = row.completedAt;
       if (completedAt == null) continue;
       final day = _dateOnly(completedAt);
+      counts[day] = (counts[day] ?? 0) + 1;
+    }
+    // 重复任务：按 task_completions.completed_at 桶
+    for (final row in completionRows) {
+      final day = _dateOnly(row.completedAt);
       counts[day] = (counts[day] ?? 0) + 1;
     }
 
@@ -132,6 +159,47 @@ class StatsRepository {
       final day = startDay.add(Duration(days: i));
       return DailyCompletion(date: day, count: counts[day] ?? 0);
     });
+  }
+
+  /// 合并两条 Drift Stream，任一更新都重发最新组合。
+  ///
+  /// Drift 不依赖 rxdart；这里手写 broadcast controller 实现等价 combineLatest。
+  Stream<(List<db.Task>, List<db.TaskCompletion>)> _combineLatest(
+    Stream<List<db.Task>> a,
+    Stream<List<db.TaskCompletion>> b,
+  ) {
+    List<db.Task>? lastA;
+    List<db.TaskCompletion>? lastB;
+    final controller = StreamController<
+      (List<db.Task>, List<db.TaskCompletion>)
+    >.broadcast();
+    void emit() {
+      if (lastA != null && lastB != null) {
+        controller.add((lastA!, lastB!));
+      }
+    }
+
+    final subA = a.listen(
+      (v) {
+        lastA = v;
+        emit();
+      },
+      onError: controller.addError,
+      onDone: controller.close,
+    );
+    final subB = b.listen(
+      (v) {
+        lastB = v;
+        emit();
+      },
+      onError: controller.addError,
+      onDone: controller.close,
+    );
+    controller.onCancel = () {
+      subA.cancel();
+      subB.cancel();
+    };
+    return controller.stream;
   }
 
   ({DateTime start, DateTime end}) _dateRange(int days) {

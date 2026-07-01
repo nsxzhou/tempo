@@ -35,6 +35,7 @@ void main() {
     DateTime? completedAt,
     TaskPriority priority = TaskPriority.none,
     String? tag,
+    String? recurrenceRule,
   }) async {
     await db
         .into(db.tasks)
@@ -49,6 +50,23 @@ void main() {
             completedAt: Value(completedAt),
             priority: Value(priority.value),
             tag: Value(tag),
+            recurrenceRule: Value(recurrenceRule),
+          ),
+        );
+  }
+
+  Future<void> insertCompletion({
+    required String taskId,
+    required DateTime occurrenceDate,
+    required DateTime completedAt,
+  }) async {
+    await db
+        .into(db.taskCompletions)
+        .insert(
+          TaskCompletionsCompanion.insert(
+            taskId: taskId,
+            occurrenceDate: occurrenceDate,
+            completedAt: Value(completedAt),
           ),
         );
   }
@@ -84,6 +102,79 @@ void main() {
     expect(first.last.count, 2);
     expect(first[first.length - 2].count, 1);
   });
+
+  test(
+    'watchDailyCompletions unions single-task and recurring-task sources',
+    () async {
+      // 复刻用户 6/30→7/1 bug：单次任务用 tasks.completed_at 入桶，
+      // 重复任务用 task_completions.completed_at 入桶，避免串日。
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day, 15);
+      final yesterday = today.subtract(const Duration(days: 1));
+
+      // 单次任务：今天完成
+      await insertTask(
+        id: 'single-1',
+        createdAt: yesterday,
+        isCompleted: true,
+        completedAt: today,
+      );
+
+      // 重复任务：昨天打卡（occurrenceDate=昨天, completedAt=昨天 22:00）
+      // 不应再写 tasks.completed_at
+      await insertTask(
+        id: 'recurring-1',
+        createdAt: yesterday,
+        recurrenceRule: 'FREQ=DAILY;INTERVAL=1',
+      );
+      await insertCompletion(
+        taskId: 'recurring-1',
+        occurrenceDate: DateTime(yesterday.year, yesterday.month, yesterday.day),
+        completedAt: yesterday,
+      );
+
+      final stream = repository.watchDailyCompletions(7);
+      final first = await stream.first;
+
+      expect(first, hasLength(7));
+      // 昨天应只有 1 条（重复任务的打卡）
+      expect(first[first.length - 2].count, 1);
+      // 今天应只有 1 条（单次任务）
+      expect(first.last.count, 1);
+    },
+  );
+
+  test(
+    'watchDailyCompletions skips stale series-level completed_at on recurring tasks',
+    () async {
+      // 历史脏数据：重复任务 series 的 is_completed=true + completed_at=今天
+      // （来自旧的 detail-page bug）。新逻辑不应计入这条，避免双计。
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day, 15);
+      final yesterday = today.subtract(const Duration(days: 1));
+
+      await insertTask(
+        id: 'dirty-recurring',
+        createdAt: yesterday,
+        isCompleted: true,
+        completedAt: today,
+        recurrenceRule: 'FREQ=DAILY;INTERVAL=1',
+      );
+      // 正确的打卡记录在昨天
+      await insertCompletion(
+        taskId: 'dirty-recurring',
+        occurrenceDate: DateTime(yesterday.year, yesterday.month, yesterday.day),
+        completedAt: yesterday,
+      );
+
+      final stream = repository.watchDailyCompletions(7);
+      final first = await stream.first;
+
+      // 今天应该是 0（脏数据被过滤），昨天应该是 1（task_completions）
+      expect(first.last.count, 0);
+      expect(first[first.length - 2].count, 1);
+    },
+  );
 
   test('computeSnapshot counts priority and categories for active tasks', () {
     final now = DateTime.now();

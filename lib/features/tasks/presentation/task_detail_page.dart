@@ -111,6 +111,18 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
         .watch(taskBackgroundByTaskIdProvider(task.id))
         .valueOrNull;
 
+    // 重复任务的「当前展示 occurrence」：从 displayOccurrenceListProvider 取，
+    // 它已经按 nextOccurrence 算好了 state 与 occurrenceDate。
+    // 单次任务直接用 series task 本身。
+    final TaskOccurrenceView? recurringView = task.isRecurring
+        ? ref
+              .watch(displayOccurrenceListProvider)
+              .where((v) => v.seriesTask.id == task.id)
+              .firstOrNull
+        : null;
+    final displayTask = recurringView?.displayTask ?? task;
+    final displayOccurrenceDate = recurringView?.occurrence.occurrenceDate;
+
     return Scaffold(
       backgroundColor: scaffoldBg,
       body: Column(
@@ -159,9 +171,16 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                   if (!task.isRecurring ||
                       !task.isRecurrenceEnded(DateTime.now()))
                     TaskDetailCompleteButton(
-                      task: task,
+                      task: displayTask,
                       isSaving: _isSaving,
-                      onPressed: () => _actions.toggleComplete(task),
+                      onPressed: () {
+                        // 重复任务用 displayTask（含 occurrence 状态），
+                        // 这样 toggleComplete 才能正确判断 complete=!isCompleted。
+                        _actions.toggleComplete(
+                          displayTask,
+                          occurrenceDate: displayOccurrenceDate,
+                        );
+                      },
                     ),
                 ],
               ),

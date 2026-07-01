@@ -226,13 +226,22 @@ class TaskDetailProperties extends ConsumerWidget {
   }
 }
 
-({DateTime? dueDate, bool isAllDay, String label}) resolveTaskDueDisplay(
+({DateTime? dueDate, DateTime? occurrenceDate, bool isAllDay, String label})
+resolveTaskDueDisplay(
   WidgetRef ref,
   Task task,
   DateTime now,
 ) {
   if (!task.isRecurring) {
-    return (dueDate: task.dueDate, isAllDay: task.isAllDay, label: '截止');
+    final occDate = task.dueDate != null
+        ? RecurrenceEngine.calendarDay(task.dueDate!)
+        : null;
+    return (
+      dueDate: task.dueDate,
+      occurrenceDate: occDate,
+      isAllDay: task.isAllDay,
+      label: '截止',
+    );
   }
 
   const engine = RecurrenceEngine();
@@ -246,10 +255,11 @@ class TaskDetailProperties extends ConsumerWidget {
     now: now,
   );
   if (next?.effectiveDue == null) {
-    return (dueDate: null, isAllDay: task.isAllDay, label: '下次');
+    return (dueDate: null, occurrenceDate: null, isAllDay: task.isAllDay, label: '下次');
   }
   return (
     dueDate: next!.effectiveDue,
+    occurrenceDate: next.occurrenceDate,
     isAllDay: task.isAllDay,
     label: '下次',
   );

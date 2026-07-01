@@ -151,9 +151,33 @@ class _TasksPageState extends ConsumerState<TasksPage>
             break;
           }
         }
-        final occDate =
-            view?.occurrence.occurrenceDate ??
-            RecurrenceEngine.calendarDay(task.dueDate ?? DateTime.now());
+        // 优先用 view 的 occurrence；找不到时退到 nextOccurrence；
+        // 最后兜底到 series dueDate 当天（仅用于取消完成场景）。
+        DateTime? occDate = view?.occurrence.occurrenceDate;
+        if (occDate == null) {
+          const engine = RecurrenceEngine();
+          final completions =
+              ref.read(taskCompletionsProvider).valueOrNull ?? [];
+          final exceptions =
+              ref.read(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
+          occDate = engine
+              .nextOccurrence(
+                raw!,
+                completions:
+                    completions.where((c) => c.taskId == raw.id).toList(),
+                exceptions:
+                    exceptions.where((e) => e.taskId == raw.id).toList(),
+                now: DateTime.now(),
+              )
+              ?.occurrenceDate;
+        }
+        if (occDate == null) {
+          // 已结束或无下次 occurrence，但仍可能是已完成态需取消。
+          if (!task.isCompleted) return;
+          occDate = raw!.dueDate != null
+              ? RecurrenceEngine.calendarDay(raw.dueDate!)
+              : RecurrenceEngine.calendarDay(DateTime.now());
+        }
         final complete = !task.isCompleted;
         await repository.toggleOccurrenceComplete(
           task.id,

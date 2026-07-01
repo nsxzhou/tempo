@@ -15,6 +15,7 @@ class TaskOccurrence {
     required this.effectiveDue,
     required this.title,
     this.state = OccurrenceState.pending,
+    this.completedAt,
   });
 
   final String seriesTaskId;
@@ -22,6 +23,10 @@ class TaskOccurrence {
   final DateTime? effectiveDue;
   final String title;
   final OccurrenceState state;
+
+  /// 该 occurrence 真实打卡时刻（来自 TaskCompletion.completedAt）。
+  /// 仅在 [state] == [OccurrenceState.completed] 时有值。
+  final DateTime? completedAt;
 
   DateTime get calendarDay => DateTime(
     occurrenceDate.year,
@@ -34,6 +39,8 @@ class TaskOccurrence {
     DateTime? effectiveDue,
     String? title,
     OccurrenceState? state,
+    DateTime? completedAt,
+    bool clearCompletedAt = false,
   }) {
     return TaskOccurrence(
       seriesTaskId: seriesTaskId,
@@ -41,6 +48,8 @@ class TaskOccurrence {
       effectiveDue: effectiveDue ?? this.effectiveDue,
       title: title ?? this.title,
       state: state ?? this.state,
+      completedAt:
+          clearCompletedAt ? null : (completedAt ?? this.completedAt),
     );
   }
 }
@@ -136,7 +145,9 @@ class TaskOccurrenceView {
       dueDate: occ.effectiveDue,
       title: occ.title,
       isCompleted: completed,
-      completedAt: completed ? occ.effectiveDue : null,
+      completedAt: completed
+          ? (occ.completedAt ?? occ.effectiveDue)
+          : null,
     );
   }
 

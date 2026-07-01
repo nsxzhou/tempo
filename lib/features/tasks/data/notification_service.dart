@@ -68,7 +68,7 @@ class NotificationService {
     );
 
     await _plugin.initialize(
-      settings,
+      settings: settings,
       onDidReceiveNotificationResponse: _onNotificationResponse,
     );
 
@@ -186,16 +186,24 @@ class NotificationService {
     String taskId,
     DateTime occurrenceDate,
   ) async {
-    await _plugin.cancel(_occurrenceNotificationId(taskId, occurrenceDate));
+    await _safeCancel(_occurrenceNotificationId(taskId, occurrenceDate));
   }
 
   Future<void> cancelTaskReminders(String taskId) async {
-    await _plugin.cancel(_notificationId(taskId));
-    await _plugin.cancel(_notificationId(taskId) + 1);
+    await _safeCancel(_notificationId(taskId));
     // 取消预调度的 occurrence 通知（id 基于日期 hash）
-    for (var i = 0; i < 30; i++) {
+    for (var i = 0; i < _recurringHorizon; i++) {
       final day = DateTime.now().add(Duration(days: i));
-      await _plugin.cancel(_occurrenceNotificationId(taskId, day));
+      await _safeCancel(_occurrenceNotificationId(taskId, day));
+    }
+  }
+
+  Future<void> _safeCancel(int id) async {
+    try {
+      await _plugin.cancel(id: id);
+    } catch (e) {
+      // 对不存在通知 ID 的取消操作静默忽略
+      debugPrint('[Tempo] cancel($id) ignored: $e');
     }
   }
 
@@ -291,11 +299,9 @@ class NotificationService {
     final androidScheduleMode = await _androidScheduleMode();
 
     await _plugin.zonedSchedule(
-      id,
-      title,
-      body,
-      tzTime,
-      const NotificationDetails(
+      id: id,
+      scheduledDate: tzTime,
+      notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
           AppConstants.notificationChannelId,
           AppConstants.notificationChannelName,
@@ -307,8 +313,8 @@ class NotificationService {
         iOS: DarwinNotificationDetails(),
       ),
       androidScheduleMode: androidScheduleMode,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
+      title: title,
+      body: body,
       payload: payload,
     );
   }

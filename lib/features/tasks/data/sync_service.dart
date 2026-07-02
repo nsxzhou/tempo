@@ -58,6 +58,8 @@ class SyncService {
   /// 网络恢复回调：推送 pending 记录。
   void _onNetworkRestored() {
     pushPending();
+    // 强制全量同步 completions，修复因 syncPending 标记异常导致的同步遗漏。
+    _recurrenceRepository?.forceSyncCompletions();
   }
 
   /// 停止监听。

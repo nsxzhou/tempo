@@ -1,4 +1,4 @@
-// ShellScaffold — 底部 4 Tab 自绘容器
+// ShellScaffold — 底部 3 Tab 自绘容器
 // 用 Stack 包裹 child + 绝对定位 TempoTabBar
 // TabBar 与 sheet 同步：AnimatedSlide + AnimatedOpacity
 //
@@ -33,8 +33,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
     final location = GoRouterState.of(context).matchedLocation;
     if (location.startsWith(AppConstants.routeTasks)) return 0;
     if (location.startsWith(AppConstants.routeCalendar)) return 1;
-    if (location.startsWith(AppConstants.routeStats)) return 2;
-    if (location.startsWith(AppConstants.routeSettings)) return 3;
+    if (location.startsWith(AppConstants.routeSettings)) return 2;
     return 0;
   }
 
@@ -62,7 +61,6 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
     const paths = [
       AppConstants.routeTasks,
       AppConstants.routeCalendar,
-      AppConstants.routeStats,
       AppConstants.routeSettings,
     ];
 

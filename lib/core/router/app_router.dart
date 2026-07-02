@@ -10,7 +10,6 @@ import 'package:go_router/go_router.dart';
 import '../../app_providers.dart';
 import '../../core/constants/app_constants.dart';
 import '../../features/auth/data/auth_service.dart';
-import '../../features/stats/presentation/stats_page.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/tasks/presentation/tasks_page.dart';
 import '../../core/utils/date_utils.dart';
@@ -111,10 +110,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: AppConstants.routeCalendar,
             pageBuilder: (context, state) =>
                 _shellTabPage(const CalendarPage()),
-          ),
-          GoRoute(
-            path: AppConstants.routeStats,
-            pageBuilder: (context, state) => _shellTabPage(const StatsPage()),
           ),
           GoRoute(
             path: AppConstants.routeSettings,

@@ -1,5 +1,4 @@
-// TempoTabBar — 底部 4 Tab 自绘区
-// 对应原型 4 Tab 底部导航
+// TempoTabBar — 底部 3 Tab 自绘区
 // 指示器 spring 200ms · 图标/字重过渡 200ms
 
 import 'package:flutter/material.dart';
@@ -27,11 +26,6 @@ class TempoTabBar extends ConsumerWidget {
       path: AppConstants.routeCalendar,
       icon: LucideIcons.calendar_days,
       label: '日历',
-    ),
-    _TabSpec(
-      path: AppConstants.routeStats,
-      icon: LucideIcons.chart_column,
-      label: '统计',
     ),
     _TabSpec(
       path: AppConstants.routeSettings,

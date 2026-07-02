@@ -31,8 +31,6 @@ import 'features/tasks/data/volcengine_streaming_asr.dart';
 import 'features/tasks/domain/recurrence_models.dart';
 import 'features/tasks/domain/task.dart';
 import 'features/tasks/domain/task_list_builder.dart';
-import 'features/stats/data/stats_repository.dart';
-import 'features/stats/domain/stats_models.dart';
 import 'features/tasks/domain/task_counts.dart';
 
 // Re-export auth providers so consumers of app_providers can access them.
@@ -251,21 +249,6 @@ final taskBackgroundByTaskIdProvider =
           .watchBackground(taskId);
     }, name: 'taskBackgroundByTaskIdProvider');
 
-/// 统计页快照（内存聚合，移出 build）。
-final statsSnapshotProvider = Provider.family<StatsSnapshot, int>((ref, days) {
-  final tasks = ref.watch(taskListProvider).valueOrNull ?? [];
-  if (tasks.isEmpty) return StatsSnapshot.empty(days);
-  final completions = ref.watch(taskCompletionsProvider).valueOrNull ?? [];
-  final exceptions =
-      ref.watch(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
-  return ref.read(statsRepositoryProvider).computeSnapshot(
-    tasks: tasks,
-    completions: completions,
-    exceptions: exceptions,
-    days: days,
-  );
-}, name: 'statsSnapshotProvider');
-
 /// 单次遍历的任务计数（Bento + 分类筛选共用）。
 final taskCountsProvider = Provider<TaskCounts>((ref) {
   final tasks = ref.watch(displayTaskListProvider);
@@ -317,21 +300,6 @@ final selectedDayTasksProvider =
       );
       return index[day] ?? const [];
     });
-
-// ── Stats ──
-
-final statsRepositoryProvider = Provider<StatsRepository>((ref) {
-  final db = ref.watch(databaseProvider);
-  return StatsRepository(db);
-});
-
-final statsDaysProvider = StateProvider<int>((ref) => 7);
-
-final dailyCompletionsProvider =
-    StreamProvider.family<List<DailyCompletion>, int>((ref, days) {
-      final repository = ref.watch(statsRepositoryProvider);
-      return repository.watchDailyCompletions(days);
-    }, name: 'dailyCompletionsProvider');
 
 // ── SyncService ──
 

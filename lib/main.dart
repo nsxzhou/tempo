@@ -43,8 +43,6 @@ Future<void> main() async {
               RebuildObserver(const {
                 'taskListProvider',
                 'calendarTaskIndexProvider',
-                'dailyCompletionsProvider',
-                'statsSnapshotProvider',
               }),
             ]
           : const [],

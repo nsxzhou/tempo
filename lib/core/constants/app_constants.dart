@@ -12,7 +12,6 @@ class AppConstants {
   // ── 路由路径 ──
   static const String routeTasks = '/tasks';
   static const String routeCalendar = '/calendar';
-  static const String routeStats = '/stats';
   static const String routeSettings = '/settings';
   static const String routeOnboarding = '/onboarding';
   static const String routeLogin = '/login';

@@ -23,9 +23,8 @@ export function openSettingsDialog(options: { onUnbind: () => void }): void {
     </div>
     <div class="b3-dialog__action">
       <button class="b3-button b3-button--cancel">关闭</button>
-      <div class="fn__space"></div>
       <button class="b3-button b3-button--text" id="tempo-close-tab">关闭 Tempo 页签</button>
-      <button class="b3-button b3-button--text" id="tempo-unbind" style="color:var(--tempo-p0);">解绑</button>
+      <button class="b3-button b3-button--text" id="tempo-unbind" style="background:var(--tempo-p0-bg);color:var(--tempo-p0);border-color:var(--tempo-p0-border);">解绑</button>
     </div>`,
     width: '420px',
   });

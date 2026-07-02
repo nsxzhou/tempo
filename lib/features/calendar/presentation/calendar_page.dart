@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app_providers.dart';
+import '../../../core/utils/date_utils.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/theme/tempo_theme_extension.dart';
@@ -369,6 +370,7 @@ class _SelectedDayPanel extends StatelessWidget {
                 itemBuilder: (context, index) {
                   return _CalendarTaskRow(
                     task: dayTasks[index],
+                    selectedDate: selectedDate,
                     cardColor: cardColor,
                     occurrenceState: occurrenceStates[dayTasks[index].id],
                   );
@@ -383,10 +385,12 @@ class _SelectedDayPanel extends StatelessWidget {
 
 class _CalendarTaskRow extends ConsumerWidget {
   final Task task;
+  final DateTime selectedDate;
   final Color cardColor;
   final OccurrenceState? occurrenceState;
   const _CalendarTaskRow({
     required this.task,
+    required this.selectedDate,
     required this.cardColor,
     this.occurrenceState,
   });
@@ -401,7 +405,8 @@ class _CalendarTaskRow extends ConsumerWidget {
       child: InkWell(
         onTap: () {
           ref.read(taskDetailOverlayProvider.notifier).state = true;
-          context.push('/tasks/${task.id}').whenComplete(() {
+          final dateQuery = formatOccurrenceDateQuery(selectedDate);
+          context.push('/tasks/${task.id}?date=$dateQuery').whenComplete(() {
             ref.read(taskDetailOverlayProvider.notifier).state = false;
           });
         },

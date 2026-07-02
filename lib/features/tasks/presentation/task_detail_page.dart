@@ -7,7 +7,9 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/database_provider.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/widgets/tempo/tempo.dart';
+import '../../../core/utils/date_utils.dart';
 import '../domain/recurrence_models.dart';
+import '../domain/task_list_builder.dart';
 import '../domain/task.dart';
 import 'task_detail_actions.dart';
 import 'widgets/task_detail_sections.dart';
@@ -15,7 +17,13 @@ import 'widgets/task_detail_top_bar.dart';
 
 class TaskDetailPage extends ConsumerStatefulWidget {
   final String taskId;
-  const TaskDetailPage({super.key, required this.taskId});
+  final DateTime? occurrenceDate;
+
+  const TaskDetailPage({
+    super.key,
+    required this.taskId,
+    this.occurrenceDate,
+  });
 
   @override
   ConsumerState<TaskDetailPage> createState() => _TaskDetailPageState();
@@ -27,14 +35,39 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isEditingDesc = false;
+  DateTime? _activeOccurrenceDate;
+  bool _lockVerticalScroll = false;
   late final TextEditingController _descController;
   late final TaskDetailActions _actions;
 
   @override
   void initState() {
     super.initState();
+    _activeOccurrenceDate = widget.occurrenceDate;
     _descController = TextEditingController();
     _loadTask();
+  }
+
+  @override
+  void didUpdateWidget(TaskDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.occurrenceDate != widget.occurrenceDate) {
+      _activeOccurrenceDate = widget.occurrenceDate;
+    }
+  }
+
+  void _selectOccurrence(DateTime day) {
+    final normalized = calendarDay(day);
+    if (_activeOccurrenceDate != null &&
+        calendarDay(_activeOccurrenceDate!) == normalized) {
+      return;
+    }
+    setState(() => _activeOccurrenceDate = normalized);
+  }
+
+  void _setTimelineScrollLock(bool locked) {
+    if (_lockVerticalScroll == locked) return;
+    setState(() => _lockVerticalScroll = locked);
   }
 
   @override
@@ -111,17 +144,44 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
         .watch(taskBackgroundByTaskIdProvider(task.id))
         .valueOrNull;
 
-    // 重复任务的「当前展示 occurrence」：从 displayOccurrenceListProvider 取，
-    // 它已经按 nextOccurrence 算好了 state 与 occurrenceDate。
-    // 单次任务直接用 series task 本身。
-    final TaskOccurrenceView? recurringView = task.isRecurring
-        ? ref
-              .watch(displayOccurrenceListProvider)
-              .where((v) => v.seriesTask.id == task.id)
-              .firstOrNull
-        : null;
+    // 重复任务的「当前展示 occurrence」：
+    // - 有 ?date= 时按日历上下文日解析
+    // - 否则从 displayOccurrenceListProvider 取可打卡 occurrence；
+    //   若今日已打完卡则从今日视图展示已完成态
+    final completions = ref.watch(taskCompletionsProvider).valueOrNull ?? [];
+    final exceptions =
+        ref.watch(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
+    final now = DateTime.now();
+    TaskOccurrenceView? recurringView;
+    if (task.isRecurring) {
+      if (_activeOccurrenceDate != null) {
+        recurringView = const TaskListBuilder().resolveOccurrenceView(
+          task: task,
+          contextDate: _activeOccurrenceDate!,
+          completions: completions,
+          exceptions: exceptions,
+          now: now,
+        );
+      } else {
+        recurringView = ref
+            .watch(displayOccurrenceListProvider)
+            .where((v) => v.seriesTask.id == task.id)
+            .firstOrNull;
+        recurringView ??= const TaskListBuilder().resolveOccurrenceView(
+          task: task,
+          contextDate: now,
+          completions: completions,
+          exceptions: exceptions,
+          now: now,
+        );
+      }
+    }
     final displayTask = recurringView?.displayTask ?? task;
     final displayOccurrenceDate = recurringView?.occurrence.occurrenceDate;
+    final contextDateHasNoOccurrence =
+        task.isRecurring &&
+        _activeOccurrenceDate != null &&
+        recurringView == null;
 
     return Scaffold(
       backgroundColor: scaffoldBg,
@@ -135,7 +195,9 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.only(bottom: 100),
-              physics: const BouncingScrollPhysics(),
+              physics: _lockVerticalScroll
+                  ? const NeverScrollableScrollPhysics()
+                  : const BouncingScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -144,7 +206,12 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                   TaskDetailProperties(task: task, listName: _listName),
                   if (task.isRecurring) ...[
                     const SizedBox(height: 16),
-                    TaskDetailRecurrenceSection(task: task),
+                    TaskDetailRecurrenceSection(
+                      task: task,
+                      activeOccurrenceDate: _activeOccurrenceDate,
+                      onOccurrenceSelected: _selectOccurrence,
+                      onTimelineScrollLockChanged: _setTimelineScrollLock,
+                    ),
                   ],
                   const SizedBox(height: 16),
                   TaskDetailDescription(
@@ -168,7 +235,19 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                   const SizedBox(height: 16),
                   TaskDetailReadOnlyInfo(task: task),
                   const SizedBox(height: 24),
-                  if (!task.isRecurring ||
+                  if (contextDateHasNoOccurrence)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Text(
+                        '所选日期没有该重复任务的排期',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  else if (!task.isRecurring ||
                       !task.isRecurrenceEnded(DateTime.now()))
                     TaskDetailCompleteButton(
                       task: displayTask,

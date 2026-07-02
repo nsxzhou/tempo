@@ -24,6 +24,74 @@ void main() {
     await initializeDateFormatting('zh_CN', null);
   });
 
+  testWidgets('recurring detail with occurrenceDate targets that day', (
+    tester,
+  ) async {
+    final repository = FakeTaskRepository();
+    final now = DateTime.now();
+    final yesterday = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(const Duration(days: 1));
+
+    final task = await repository.createTask(
+      title: '补录测试',
+      dueDate: yesterday.subtract(const Duration(days: 29)),
+      isAllDay: true,
+      recurrenceRule: 'FREQ=DAILY;INTERVAL=1',
+    );
+
+    await _pumpDetailPage(
+      tester,
+      repository: repository,
+      task: task,
+      occurrenceDate: yesterday,
+    );
+
+    await tester.ensureVisible(find.text('标记完成'));
+    await tester.tap(find.text('标记完成'));
+    await tester.pumpAndSettle();
+
+    expect(repository.occurrenceToggles, hasLength(1));
+    expect(
+      repository.occurrenceToggles.single.occurrenceDate,
+      yesterday,
+    );
+    expect(repository.occurrenceToggles.single.complete, isTrue);
+    await repository.dispose();
+  });
+
+  testWidgets('capped series timeline chip switches completion target date', (
+    tester,
+  ) async {
+    final repository = FakeTaskRepository();
+    final task = await repository.createTask(
+      title: '五次打卡',
+      dueDate: DateTime(2026, 6, 1),
+      isAllDay: true,
+      recurrenceRule: 'FREQ=DAILY;INTERVAL=2;COUNT=5',
+      recurrenceCount: 5,
+    );
+
+    await _pumpDetailPage(tester, repository: repository, task: task);
+
+    expect(find.text('第3次'), findsOneWidget);
+    await tester.tap(find.text('第3次'));
+    await tester.pump();
+
+    await tester.ensureVisible(find.text('标记完成'));
+    await tester.tap(find.text('标记完成'));
+    await tester.pumpAndSettle();
+
+    expect(repository.occurrenceToggles, hasLength(1));
+    expect(
+      repository.occurrenceToggles.single.occurrenceDate,
+      DateTime(2026, 6, 5),
+    );
+    await repository.dispose();
+  });
+
   testWidgets('recurring detail shows next occurrence instead of overdue anchor', (
     tester,
   ) async {
@@ -216,6 +284,7 @@ Future<void> _pumpDetailPage(
   required Task task,
   FakeTextParseService? parseService,
   TaskBackground? background,
+  DateTime? occurrenceDate,
 }) async {
   final db = AppDatabase.forTesting(NativeDatabase.memory());
   addTearDown(db.close);
@@ -243,7 +312,10 @@ Future<void> _pumpDetailPage(
       overrides: overrides,
       child: MaterialApp(
         navigatorKey: navigatorKey,
-        home: TaskDetailPage(taskId: task.id),
+        home: TaskDetailPage(
+          taskId: task.id,
+          occurrenceDate: occurrenceDate,
+        ),
       ),
     ),
   );

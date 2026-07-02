@@ -13,6 +13,7 @@ import '../../features/auth/data/auth_service.dart';
 import '../../features/stats/presentation/stats_page.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/tasks/presentation/tasks_page.dart';
+import '../../core/utils/date_utils.dart';
 import '../../features/tasks/presentation/task_detail_page.dart';
 import '../../features/calendar/presentation/calendar_page.dart';
 import '../../features/settings/presentation/settings_page.dart';
@@ -35,17 +36,6 @@ CustomTransitionPage<void> _shellTabPage(Widget child) {
         child: child,
       );
     },
-  );
-}
-
-/// 详情页即时覆盖，避免透明背景或转场边缘短暂露出列表页 UI。
-CustomTransitionPage<void> _taskDetailPage(Widget child) {
-  return CustomTransitionPage<void>(
-    child: child,
-    transitionDuration: Duration.zero,
-    reverseTransitionDuration: Duration.zero,
-    transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-        child,
   );
 }
 
@@ -139,7 +129,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppConstants.routeTaskDetail,
         pageBuilder: (context, state) {
           final id = state.pathParameters['id']!;
-          return _taskDetailPage(TaskDetailPage(taskId: id));
+          final occurrenceDate = parseOccurrenceDateQuery(
+            state.uri.queryParameters['date'],
+          );
+          return MaterialPage<void>(
+            key: state.pageKey,
+            child: TaskDetailPage(taskId: id, occurrenceDate: occurrenceDate),
+          );
         },
       ),
     ],

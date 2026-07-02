@@ -1,4 +1,5 @@
 import { Task } from '../models/task';
+import { startOfDay } from './date_filter';
 
 export enum RecurrenceUnit {
   day = 'day',
@@ -123,4 +124,15 @@ export function recurrenceConfigFromTask(task: Task): RecurrenceConfig {
 
 export function isTaskRecurring(task: Task): boolean {
   return Boolean(task.recurrenceRule && task.recurrenceRule.trim());
+}
+
+/**
+ * 重复系列是否已结束（`recurrenceEnd` 当天仍算有效，次日起视为已结束）。
+ * 与 Flutter 端 `TaskRecurrenceLifecycle.isRecurrenceEnded` 逻辑一致。
+ */
+export function isTaskRecurrenceEnded(task: Task, now = new Date()): boolean {
+  if (!isTaskRecurring(task) || !task.recurrenceEnd) return false;
+  const endDay = startOfDay(task.recurrenceEnd);
+  const today = startOfDay(now);
+  return today.getTime() > endDay.getTime();
 }

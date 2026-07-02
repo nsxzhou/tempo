@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app_providers.dart';
+import '../../../core/extensions/task_filter.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/tempo_theme_extension.dart';
@@ -64,7 +65,7 @@ class TaskDetailActions {
         }
         if (!context.mounted) return;
         // 详情页本地 state 仍由父 widget 通过 onTaskChanged 反映；
-        // 这里仅刷新 saving 状态，列表/heatmap 由 stream 推动。
+        // 这里仅刷新 saving 状态，列表/连续统计由 stream 推动。
         onSavingChanged(false);
         return;
       }
@@ -85,7 +86,7 @@ class TaskDetailActions {
     }
   }
 
-  /// 解析重复任务的当前 occurrenceDate：优先用 nextOccurrence，
+  /// 解析重复任务当前可打卡的 occurrenceDate：优先用 nextCompletableOccurrence，
   /// 兜底到 task.dueDate 当天。
   DateTime? _resolveRecurringOccurrenceDate(Task task) {
     const engine = RecurrenceEngine();
@@ -93,15 +94,13 @@ class TaskDetailActions {
         ref.read(taskCompletionsProvider).valueOrNull ?? [];
     final exceptions =
         ref.read(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
-    final next = engine.nextOccurrence(
+    final next = engine.nextCompletableOccurrence(
       task,
-      completions: completions.where((c) => c.taskId == task.id).toList(),
-      exceptions: exceptions.where((e) => e.taskId == task.id).toList(),
+      completions: completions.forTask(task.id, (c) => c.taskId),
+      exceptions: exceptions.forTask(task.id, (e) => e.taskId),
       now: DateTime.now(),
     );
     if (next != null) return next.occurrenceDate;
-    final due = task.dueDate;
-    if (due != null) return RecurrenceEngine.calendarDay(due);
     return null;
   }
 

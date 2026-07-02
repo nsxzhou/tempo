@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app_providers.dart';
+import '../../../core/extensions/task_filter.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/widgets/tempo/tempo.dart';
 import '../domain/recurrence_engine.dart';
@@ -151,7 +152,7 @@ class _TasksPageState extends ConsumerState<TasksPage>
             break;
           }
         }
-        // 优先用 view 的 occurrence；找不到时退到 nextOccurrence；
+        // 优先用 view 的 occurrence；找不到时退到 nextCompletableOccurrence；
         // 最后兜底到 series dueDate 当天（仅用于取消完成场景）。
         DateTime? occDate = view?.occurrence.occurrenceDate;
         if (occDate == null) {
@@ -161,12 +162,12 @@ class _TasksPageState extends ConsumerState<TasksPage>
           final exceptions =
               ref.read(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
           occDate = engine
-              .nextOccurrence(
+              .nextCompletableOccurrence(
                 raw!,
                 completions:
-                    completions.where((c) => c.taskId == raw.id).toList(),
+                    completions.forTask(raw.id, (c) => c.taskId),
                 exceptions:
-                    exceptions.where((e) => e.taskId == raw.id).toList(),
+                    exceptions.forTask(raw.id, (e) => e.taskId),
                 now: DateTime.now(),
               )
               ?.occurrenceDate;

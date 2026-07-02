@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../app_providers.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/extensions/task_filter.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_manager.dart';
 import '../../../../core/theme/tempo_theme_extension.dart';
@@ -13,8 +14,10 @@ import '../../data/task_background_repository.dart';
 import '../../domain/recurrence_engine.dart';
 import '../../domain/recurrence_models.dart';
 import '../../domain/task.dart';
+import '../../domain/task_list_builder.dart';
 import '../task_detail_helpers.dart';
-import 'recurrence_heatmap.dart';
+import 'recurrence_series_timeline.dart';
+import 'streak_summary_card.dart';
 import 'task_background_image.dart';
 
 class TaskDetailTitleBlock extends StatelessWidget {
@@ -250,8 +253,8 @@ resolveTaskDueDisplay(
       ref.watch(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
   final next = engine.nextOccurrence(
     task,
-    completions: completions.where((c) => c.taskId == task.id).toList(),
-    exceptions: exceptions.where((e) => e.taskId == task.id).toList(),
+    completions: completions.forTask(task.id, (c) => c.taskId),
+    exceptions: exceptions.forTask(task.id, (e) => e.taskId),
     now: now,
   );
   if (next?.effectiveDue == null) {
@@ -267,8 +270,17 @@ resolveTaskDueDisplay(
 
 class TaskDetailRecurrenceSection extends ConsumerWidget {
   final Task task;
+  final DateTime? activeOccurrenceDate;
+  final ValueChanged<DateTime>? onOccurrenceSelected;
+  final ValueChanged<bool>? onTimelineScrollLockChanged;
 
-  const TaskDetailRecurrenceSection({super.key, required this.task});
+  const TaskDetailRecurrenceSection({
+    super.key,
+    required this.task,
+    this.activeOccurrenceDate,
+    this.onOccurrenceSelected,
+    this.onTimelineScrollLockChanged,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -276,17 +288,29 @@ class TaskDetailRecurrenceSection extends ConsumerWidget {
     final completions = ref.watch(taskCompletionsProvider).valueOrNull ?? [];
     final exceptions =
         ref.watch(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
-    const engine = RecurrenceEngine();
     final now = DateTime.now();
-    final occs = engine.expandOccurrences(
-      task,
-      from: now.subtract(const Duration(days: 7 * 12)),
-      to: now,
-      completions: completions.where((c) => c.taskId == task.id).toList(),
-      exceptions: exceptions.where((e) => e.taskId == task.id).toList(),
-      now: now,
-    );
-    final dayStates = {for (final o in occs) o.calendarDay: o.state};
+    final isCapped = task.recurrenceCount != null;
+
+    final Widget? seriesTimeline;
+    if (isCapped) {
+      const builder = TaskListBuilder();
+      final seriesOccs = builder.buildSeriesOccurrences(
+        task: task,
+        completions: completions,
+        exceptions: exceptions,
+        now: now,
+      );
+      seriesTimeline = RecurrenceSeriesTimeline(
+        occurrences: seriesOccs,
+        selectedOccurrenceDate: activeOccurrenceDate,
+        onTapOccurrence: onOccurrenceSelected == null
+            ? null
+            : (occ) => onOccurrenceSelected!(occ.calendarDay),
+        onScrollLockChanged: onTimelineScrollLockChanged,
+      );
+    } else {
+      seriesTimeline = null;
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -294,26 +318,28 @@ class TaskDetailRecurrenceSection extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (streak != null) StreakSummaryCard(info: streak),
-          const SizedBox(height: 12),
-          TempoGlassSurface(
-            blur: false,
-            fillColor: ref.watch(taskCardBackgroundProvider),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  recurrenceSummary(task),
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+          if (seriesTimeline != null) ...[
+            const SizedBox(height: 12),
+            TempoGlassSurface(
+              blur: false,
+              fillColor: ref.watch(taskCardBackgroundProvider),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    recurrenceSummary(task),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                RecurrenceHeatmap(task: task, dayStates: dayStates),
-              ],
+                  const SizedBox(height: 12),
+                  seriesTimeline,
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

@@ -12,6 +12,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/tempo_theme_extension.dart';
 import '../../../../core/motion/tempo_sheet.dart';
+import '../../../../core/utils/date_utils.dart';
 import '../../../../core/widgets/tempo/tempo.dart';
 import '../../data/task_creation_orchestrator.dart';
 import '../../data/text_parse_service.dart';
@@ -35,16 +36,16 @@ enum _QuickDate {
     final now = DateTime.now();
     switch (this) {
       case _QuickDate.today:
-        return DateTime(now.year, now.month, now.day);
+        return calendarDay(now);
       case _QuickDate.tomorrow:
-        return DateTime(now.year, now.month, now.day + 1);
+        return calendarDay(now).add(const Duration(days: 1));
       case _QuickDate.dayAfter:
-        return DateTime(now.year, now.month, now.day + 2);
+        return calendarDay(now).add(const Duration(days: 2));
       case _QuickDate.nextMonday:
         // 找下一个周一
         final daysUntilMonday = (DateTime.monday - now.weekday + 7) % 7;
         final offset = daysUntilMonday == 0 ? 7 : daysUntilMonday;
-        return DateTime(now.year, now.month, now.day + offset);
+        return calendarDay(now).add(Duration(days: offset));
     }
   }
 }
@@ -296,7 +297,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
   /// 获取选中的日期部分（不含时间）
   DateTime? get _selectedDatePart {
     if (_customDate != null) {
-      return DateTime(_customDate!.year, _customDate!.month, _customDate!.day);
+      return calendarDay(_customDate!);
     }
     return _selectedDate?.toDateTime();
   }
@@ -306,7 +307,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
     final date = _selectedDatePart;
     if (date == null) return null;
     if (_isAllDay || _selectedTime == null) {
-      return DateTime(date.year, date.month, date.day);
+      return calendarDay(date);
     }
     return DateTime(
       date.year,
@@ -338,7 +339,7 @@ class _QuickCreateSheetState extends ConsumerState<QuickCreateSheet> {
     final due = _effectiveDueDate;
     if (!_repeatEnabled || due != null) return due;
     final now = DateTime.now();
-    return DateTime(now.year, now.month, now.day);
+    return calendarDay(now);
   }
 
   void _clearDateTimeState() {

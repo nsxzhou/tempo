@@ -95,12 +95,8 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
   // ─── 日期判断 ───
 
   bool _isInRange(DateTime date) {
-    final d = DateTime(date.year, date.month, date.day);
-    final first = DateTime(
-      widget.firstDate.year,
-      widget.firstDate.month,
-      widget.firstDate.day,
-    );
+    final d = calendarDay(date);
+    final first = calendarDay(widget.firstDate);
     final last = DateTime(
       widget.lastDate.year,
       widget.lastDate.month,

@@ -1,6 +1,7 @@
 /// 重复任务相关领域模型
 library;
 
+import '../../../core/utils/date_utils.dart' as date_utils;
 import 'recurrence_engine.dart';
 import 'task.dart';
 
@@ -28,11 +29,7 @@ class TaskOccurrence {
   /// 仅在 [state] == [OccurrenceState.completed] 时有值。
   final DateTime? completedAt;
 
-  DateTime get calendarDay => DateTime(
-    occurrenceDate.year,
-    occurrenceDate.month,
-    occurrenceDate.day,
-  );
+  DateTime get calendarDay => date_utils.calendarDay(occurrenceDate);
 
   TaskOccurrence copyWith({
     DateTime? occurrenceDate,
@@ -72,11 +69,7 @@ class RecurrenceException {
   final bool isCancelled;
   final bool syncPending;
 
-  DateTime get calendarDay => DateTime(
-    exceptionDate.year,
-    exceptionDate.month,
-    exceptionDate.day,
-  );
+  DateTime get calendarDay => date_utils.calendarDay(exceptionDate);
 }
 
 /// 打卡完成记录
@@ -93,11 +86,7 @@ class TaskCompletion {
   final DateTime completedAt;
   final bool syncPending;
 
-  DateTime get calendarDay => DateTime(
-    occurrenceDate.year,
-    occurrenceDate.month,
-    occurrenceDate.day,
-  );
+  DateTime get calendarDay => date_utils.calendarDay(occurrenceDate);
 }
 
 /// Streak 统计
@@ -107,13 +96,29 @@ class StreakInfo {
     required this.longest,
     required this.completedCount,
     required this.scheduledCount,
+    this.seriesTotal,
+    this.seriesCompleted = 0,
   });
 
   final int current;
   final int longest;
+
+  /// 回看窗口内（通常到今天）已到期 occurrence 数
   final int completedCount;
   final int scheduledCount;
 
+  /// [Task.recurrenceCount]；无上限时为 null
+  final int? seriesTotal;
+
+  /// 全系列已完成次数（按 occurrence_date 计，与补录时间无关）
+  final int seriesCompleted;
+
+  bool get hasSeriesCap => seriesTotal != null && seriesTotal! > 0;
+
+  String? get seriesProgressLabel =>
+      hasSeriesCap ? '$seriesCompleted/$seriesTotal 次' : null;
+
+  @Deprecated('Use seriesProgressLabel for capped series')
   double get completionRate =>
       scheduledCount == 0 ? 0 : completedCount / scheduledCount;
 }

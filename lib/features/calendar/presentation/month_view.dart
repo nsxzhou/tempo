@@ -21,7 +21,7 @@ class MonthView extends StatelessWidget {
   });
 
   List<Color> _dotsForDay(DateTime day, TempoTokens tokens) {
-    final dayKey = DateTime(day.year, day.month, day.day);
+    final dayKey = calendarDay(day);
     final dayTasks = taskIndex[dayKey] ?? const [];
 
     // 取前 3 个不同优先级

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/tempo_theme_extension.dart';
+import '../../../../core/utils/date_utils.dart';
 import '../../../../core/widgets/tempo/tempo.dart';
 import '../../domain/recurrence_models.dart';
 
@@ -277,7 +278,7 @@ class _RepeatPickerState extends State<RepeatPicker> {
 
   Future<void> _pickEndDate() async {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = calendarDay(now);
     final picked = await TempoDatePicker.show(
       context,
       initialDate: _endDate ?? now.add(const Duration(days: 90)),

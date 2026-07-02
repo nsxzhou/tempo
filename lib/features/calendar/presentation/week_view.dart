@@ -41,7 +41,7 @@ class WeekView extends StatelessWidget {
       child: Row(
         children: List.generate(7, (i) {
           final day = days[i];
-          final dayKey = DateTime(day.year, day.month, day.day);
+          final dayKey = calendarDay(day);
           final isSel = isSameDay(day, selectedDate);
           final isToday = isSameDay(day, now);
           final hasTask = taskIndex[dayKey]?.isNotEmpty ?? false;

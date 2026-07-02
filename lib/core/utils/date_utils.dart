@@ -16,7 +16,7 @@ bool isDueOnDate(DateTime dueDate, DateTime date) {
 
 /// 判断 [dueDate] 是否在 [todayStart, todayStart + 7天) 区间内。
 bool isDueInWeekRange(DateTime dueDate, DateTime now) {
-  final todayStart = DateTime(now.year, now.month, now.day);
+  final todayStart = calendarDay(now);
   final weekEnd = todayStart.add(const Duration(days: 7));
   return !dueDate.isBefore(todayStart) && dueDate.isBefore(weekEnd);
 }
@@ -57,3 +57,25 @@ String formatTaskDueDetail({
 
 String _hm(DateTime d) =>
     '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+/// 任务详情 URL `?date=` 查询参数（`yyyy-MM-dd` 日历日）。
+String formatOccurrenceDateQuery(DateTime day) {
+  final d = calendarDay(day);
+  final y = d.year.toString().padLeft(4, '0');
+  final m = d.month.toString().padLeft(2, '0');
+  final dayStr = d.day.toString().padLeft(2, '0');
+  return '$y-$m-$dayStr';
+}
+
+/// 解析 [formatOccurrenceDateQuery] 格式；非法则返回 null。
+DateTime? parseOccurrenceDateQuery(String? raw) {
+  if (raw == null || raw.isEmpty) return null;
+  final parts = raw.split('-');
+  if (parts.length != 3) return null;
+  final y = int.tryParse(parts[0]);
+  final m = int.tryParse(parts[1]);
+  final d = int.tryParse(parts[2]);
+  if (y == null || m == null || d == null) return null;
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+  return DateTime(y, m, d);
+}

@@ -11,6 +11,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/date_utils.dart';
+import '../../../core/utils/sync_guard.dart';
 import '../../../database/database.dart' as db;
 import '../domain/task.dart' as domain;
 import 'voice_task_parse_result.dart';
@@ -293,27 +295,26 @@ class SyncTaskRepository implements TaskRepository {
   }
 
   Future<void> _syncDeleteToCloud(String id) async {
-    final isOnline = await _connectivity.isOnline;
-    if (!isOnline || _userId == null) return;
-
-    try {
-      await _supabase.from(AppConstants.tableTasks).delete().eq('id', id);
-    } catch (_) {
-      // 静默忽略：本地已删除
-    }
+    final guard = SyncGuard(_connectivity, _userId);
+    await guard.executeIfCanSync((userId) async {
+      try {
+        await _supabase.from(AppConstants.tableTasks).delete().eq('id', id);
+      } catch (_) {
+        // 静默忽略：本地已删除
+      }
+    });
   }
 
   Future<void> _syncTaskToCloud(domain.Task task) async {
-    final isOnline = await _connectivity.isOnline;
-    final userId = _userId;
-    if (!isOnline || userId == null) return;
-
-    try {
-      final remote = await _upsertRemoteTask(task, userId);
-      await _upsertLocal(remote.copyWith(syncPending: false));
-    } catch (_) {
-      // Keep syncPending=true; SyncService.pushPending retries later.
-    }
+    final guard = SyncGuard(_connectivity, _userId);
+    await guard.executeIfCanSync((userId) async {
+      try {
+        final remote = await _upsertRemoteTask(task, userId);
+        await _upsertLocal(remote.copyWith(syncPending: false));
+      } catch (_) {
+        // Keep syncPending=true; SyncService.pushPending retries later.
+      }
+    });
   }
 
   // ── 读取路径 ──
@@ -331,7 +332,7 @@ class SyncTaskRepository implements TaskRepository {
       if (rule == null || rule.isEmpty) continue;
 
       final anchor = row.createdAt;
-      final dueDate = DateTime(anchor.year, anchor.month, anchor.day);
+      final dueDate = calendarDay(anchor);
       final now = DateTime.now();
       final shouldSync = _userId != null;
 
@@ -413,38 +414,37 @@ class SyncTaskRepository implements TaskRepository {
 
   @override
   Future<void> pushPending() async {
-    final isOnline = await _connectivity.isOnline;
-    final userId = _userId;
-    if (!isOnline || userId == null) return;
+    final guard = SyncGuard(_connectivity, _userId);
+    await guard.executeIfCanSync((userId) async {
+      final pending = await (_localDb.select(
+        _localDb.tasks,
+      )..where((t) => t.syncPending.equals(true))).get();
 
-    final pending = await (_localDb.select(
-      _localDb.tasks,
-    )..where((t) => t.syncPending.equals(true))).get();
+      if (pending.isEmpty) return;
 
-    if (pending.isEmpty) return;
-
-    final clearedIds = <String>[];
-    for (final row in pending) {
-      try {
-        final task = _mapTask(row);
-        final remote = await _upsertRemoteTask(task, userId);
-        await _upsertLocal(remote.copyWith(syncPending: false));
-        clearedIds.add(row.id);
-      } catch (_) {
-        // 保留 pending，下次重试
+      final clearedIds = <String>[];
+      for (final row in pending) {
+        try {
+          final task = _mapTask(row);
+          final remote = await _upsertRemoteTask(task, userId);
+          await _upsertLocal(remote.copyWith(syncPending: false));
+          clearedIds.add(row.id);
+        } catch (_) {
+          // 保留 pending，下次重试
+        }
       }
-    }
 
-    if (clearedIds.isEmpty) return;
+      if (clearedIds.isEmpty) return;
 
-    await _localDb.batch((batch) {
-      for (final id in clearedIds) {
-        batch.update(
-          _localDb.tasks,
-          const db.TasksCompanion(syncPending: Value(false)),
-          where: (t) => t.id.equals(id),
-        );
-      }
+      await _localDb.batch((batch) {
+        for (final id in clearedIds) {
+          batch.update(
+            _localDb.tasks,
+            const db.TasksCompanion(syncPending: Value(false)),
+            where: (t) => t.id.equals(id),
+          );
+        }
+      });
     });
   }
 
@@ -469,42 +469,41 @@ class SyncTaskRepository implements TaskRepository {
     if (_refreshInFlight) return;
     _refreshInFlight = true;
     try {
-      final isOnline = await _connectivity.isOnline;
-      final userId = _userId;
-      if (!isOnline || userId == null) return;
+      final guard = SyncGuard(_connectivity, _userId);
+      await guard.executeIfCanSync((userId) async {
+        final rows = await _supabase
+            .from(AppConstants.tableTasks)
+            .select()
+            .eq('user_id', userId);
 
-      final rows = await _supabase
-          .from(AppConstants.tableTasks)
-          .select()
-          .eq('user_id', userId);
+        final pendingIds = await (_localDb.select(
+          _localDb.tasks,
+        )..where((t) => t.syncPending.equals(true))).map((r) => r.id).get();
+        final pendingSet = pendingIds.toSet();
 
-      final pendingIds = await (_localDb.select(
-        _localDb.tasks,
-      )..where((t) => t.syncPending.equals(true))).map((r) => r.id).get();
-      final pendingSet = pendingIds.toSet();
+        final recurringIds = <String>[];
 
-      final recurringIds = <String>[];
-
-      await _localDb.batch((batch) {
-        for (final row in rows as List) {
-          final map = row as Map<String, dynamic>;
-          final remote = domain.TaskSupabase.fromSupabaseJson(map);
-          if (pendingSet.contains(remote.id)) continue;
-          batch.insert(
-            _localDb.tasks,
-            _companionFor(remote),
-            mode: InsertMode.insertOrReplace,
-          );
-          if (map['recurrence_rule'] != null) {
-            recurringIds.add(remote.id);
+        await _localDb.batch((batch) {
+          for (final row in rows as List) {
+            final map = row as Map<String, dynamic>;
+            final remote = domain.TaskSupabase.fromSupabaseJson(map);
+            if (pendingSet.contains(remote.id)) continue;
+            batch.insert(
+              _localDb.tasks,
+              _companionFor(remote),
+              mode: InsertMode.insertOrReplace,
+            );
+            if (map['recurrence_rule'] != null) {
+              recurringIds.add(remote.id);
+            }
           }
+        });
+
+        final refreshRecurrence = _recurrenceRefresh;
+        if (refreshRecurrence != null && recurringIds.isNotEmpty) {
+          await refreshRecurrence(recurringIds);
         }
       });
-
-      final refreshRecurrence = _recurrenceRefresh;
-      if (refreshRecurrence != null && recurringIds.isNotEmpty) {
-        await refreshRecurrence(recurringIds);
-      }
     } catch (_) {
       // 静默失败，下次重试
     } finally {

@@ -1,8 +1,11 @@
 import 'dart:async';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/extensions/task_filter.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../database/database.dart' as db;
+import '../../tasks/domain/recurrence_engine.dart';
+import '../../tasks/domain/recurrence_models.dart';
 import '../../tasks/domain/task.dart';
 import '../domain/stats_models.dart';
 
@@ -10,6 +13,7 @@ class StatsRepository {
   StatsRepository(this._database);
 
   final db.AppDatabase _database;
+  static const _engine = RecurrenceEngine();
 
   /// Drift 监听 + 按日聚合（补零空日）。
   ///
@@ -33,34 +37,25 @@ class StatsRepository {
   }
 
   /// 内存聚合：优先级 / 分类 / 完成率。
-  StatsSnapshot computeSnapshot(List<Task> tasks, int days) {
-    final active = tasks.where((t) => !t.isCompleted).toList();
-    final now = DateTime.now();
-    final windowStart = _dateOnly(now).subtract(Duration(days: days - 1));
-    final windowEnd = _dateOnly(now).add(const Duration(days: 1));
+  ///
+  /// 重复任务在窗口内按 occurrence 展开；单次任务保持 series 级语义。
+  StatsSnapshot computeSnapshot({
+    required List<Task> tasks,
+    required List<TaskCompletion> completions,
+    required List<RecurrenceException> exceptions,
+    required int days,
+    DateTime? now,
+  }) {
+    final current = now ?? DateTime.now();
+    final today = calendarDay(current);
+    final windowStart = today.subtract(Duration(days: days - 1));
 
-    final windowTasks = tasks.where((t) {
-      final created = _dateOnly(t.createdAt);
-      return !created.isBefore(windowStart) && created.isBefore(windowEnd);
-    }).toList();
-
+    var pending = 0;
     var overdue = 0;
     var weekDue = 0;
-    for (final task in active) {
-      final due = task.dueDate;
-      if (due == null) continue;
-      if (isTaskOverdue(
-        dueDate: due,
-        isAllDay: task.isAllDay,
-        isCompleted: task.isCompleted,
-        now: now,
-      )) {
-        overdue++;
-      }
-      if (isDueInWeekRange(due, now)) {
-        weekDue++;
-      }
-    }
+    var completedInPeriod = 0;
+    var scheduledInWindow = 0;
+    var completedInWindow = 0;
 
     final priorityCounts = <TaskPriority, int>{
       TaskPriority.p0: 0,
@@ -68,9 +63,101 @@ class StatsRepository {
       TaskPriority.p2: 0,
       TaskPriority.p3: 0,
     };
-    for (final task in active) {
-      if (task.priority == TaskPriority.none) continue;
-      priorityCounts[task.priority] = (priorityCounts[task.priority] ?? 0) + 1;
+    var work = 0;
+    var life = 0;
+    var untagged = 0;
+
+    for (final task in tasks) {
+      if (task.isRecurring) {
+        final taskCompletions = completions.forTask(task.id, (c) => c.taskId);
+        final taskExceptions = exceptions.forTask(task.id, (e) => e.taskId);
+        final occs = _engine.expandOccurrences(
+          task,
+          from: windowStart,
+          to: today,
+          completions: taskCompletions,
+          exceptions: taskExceptions,
+          now: current,
+        );
+
+        for (final occ in occs) {
+          if (occ.occurrenceDate.isAfter(today)) continue;
+          scheduledInWindow++;
+
+          switch (occ.state) {
+            case OccurrenceState.completed:
+              completedInPeriod++;
+              completedInWindow++;
+            case OccurrenceState.missed:
+              overdue++;
+              _incrementPriorityAndCategory(
+                task,
+                priorityCounts,
+                onWork: () => work++,
+                onLife: () => life++,
+                onUntagged: () => untagged++,
+              );
+            case OccurrenceState.pending:
+              pending++;
+              _incrementPriorityAndCategory(
+                task,
+                priorityCounts,
+                onWork: () => work++,
+                onLife: () => life++,
+                onUntagged: () => untagged++,
+              );
+              final due = occ.effectiveDue;
+              if (due != null && isDueInWeekRange(due, current)) {
+                weekDue++;
+              }
+          }
+        }
+      } else {
+        final created = calendarDay(task.createdAt);
+        final createdInWindow =
+            !created.isBefore(windowStart) && !created.isAfter(today);
+
+        if (!task.isCompleted) {
+          pending++;
+          _incrementPriorityAndCategory(
+            task,
+            priorityCounts,
+            onWork: () => work++,
+            onLife: () => life++,
+            onUntagged: () => untagged++,
+          );
+          final due = task.dueDate;
+          if (due != null) {
+            if (isTaskOverdue(
+              dueDate: due,
+              isAllDay: task.isAllDay,
+              isCompleted: false,
+              now: current,
+            )) {
+              overdue++;
+            }
+            if (isDueInWeekRange(due, current)) {
+              weekDue++;
+            }
+          }
+        }
+
+        if (createdInWindow) {
+          scheduledInWindow++;
+          if (task.isCompleted) {
+            completedInWindow++;
+          }
+        }
+
+        final completedAt = task.completedAt;
+        if (completedAt != null) {
+          final completedDay = calendarDay(completedAt);
+          if (!completedDay.isBefore(windowStart) &&
+              !completedDay.isAfter(today)) {
+            completedInPeriod++;
+          }
+        }
+      }
     }
 
     final prioritySlices = priorityCounts.entries
@@ -84,20 +171,6 @@ class StatsRepository {
         )
         .toList();
 
-    var work = 0;
-    var life = 0;
-    var untagged = 0;
-    for (final task in active) {
-      switch (task.tag) {
-        case AppConstants.tagWork:
-          work++;
-        case AppConstants.tagLife:
-          life++;
-        default:
-          untagged++;
-      }
-    }
-
     final categorySlices = <CategorySlice>[
       if (work > 0) CategorySlice(id: 'work', label: '工作', count: work),
       if (life > 0) CategorySlice(id: 'life', label: '生活', count: life),
@@ -105,18 +178,9 @@ class StatsRepository {
         CategorySlice(id: 'untagged', label: '未分类', count: untagged),
     ];
 
-    final completedInWindow = windowTasks.where((t) => t.isCompleted).length;
-    final completedInPeriod = tasks.where((t) {
-      final completedAt = t.completedAt;
-      if (completedAt == null) return false;
-      final completedDay = _dateOnly(completedAt);
-      return !completedDay.isBefore(windowStart) &&
-          completedDay.isBefore(windowEnd);
-    }).length;
-
     return StatsSnapshot(
       health: StatsHealth(
-        pending: active.length,
+        pending: pending,
         overdue: overdue,
         weekDue: weekDue,
         completedInPeriod: completedInPeriod,
@@ -125,9 +189,29 @@ class StatsRepository {
       categorySlices: categorySlices,
       completionRate: CompletionRate(
         completed: completedInWindow,
-        total: windowTasks.length,
+        total: scheduledInWindow,
       ),
     );
+  }
+
+  void _incrementPriorityAndCategory(
+    Task task,
+    Map<TaskPriority, int> priorityCounts, {
+    required void Function() onWork,
+    required void Function() onLife,
+    required void Function() onUntagged,
+  }) {
+    if (task.priority != TaskPriority.none) {
+      priorityCounts[task.priority] = (priorityCounts[task.priority] ?? 0) + 1;
+    }
+    switch (task.tag) {
+      case AppConstants.tagWork:
+        onWork();
+      case AppConstants.tagLife:
+        onLife();
+      default:
+        onUntagged();
+    }
   }
 
   List<DailyCompletion> _aggregateDailyUnion(
@@ -146,12 +230,12 @@ class StatsRepository {
       }
       final completedAt = row.completedAt;
       if (completedAt == null) continue;
-      final day = _dateOnly(completedAt);
+      final day = calendarDay(completedAt);
       counts[day] = (counts[day] ?? 0) + 1;
     }
     // 重复任务：按 task_completions.completed_at 桶
     for (final row in completionRows) {
-      final day = _dateOnly(row.completedAt);
+      final day = calendarDay(row.completedAt);
       counts[day] = (counts[day] ?? 0) + 1;
     }
 
@@ -203,10 +287,8 @@ class StatsRepository {
   }
 
   ({DateTime start, DateTime end}) _dateRange(int days) {
-    final start = _dateOnly(DateTime.now()).subtract(Duration(days: days - 1));
-    final end = _dateOnly(DateTime.now()).add(const Duration(days: 1));
+    final start = calendarDay(DateTime.now()).subtract(Duration(days: days - 1));
+    final end = calendarDay(DateTime.now()).add(const Duration(days: 1));
     return (start: start, end: end);
   }
-
-  DateTime _dateOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
 }

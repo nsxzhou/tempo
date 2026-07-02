@@ -7,6 +7,7 @@ import '../../../app_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../core/theme/tempo_theme_extension.dart';
+import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/tempo/tempo.dart';
 import '../domain/stats_models.dart';
 
@@ -34,7 +35,7 @@ class _StatsPageState extends ConsumerState<StatsPage>
         List.generate(days, (i) {
           final start = DateTime.now().subtract(Duration(days: days - 1 - i));
           return DailyCompletion(
-            date: DateTime(start.year, start.month, start.day),
+            date: calendarDay(start),
             count: 0,
           );
         });

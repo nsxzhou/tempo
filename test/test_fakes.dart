@@ -15,6 +15,8 @@ import 'package:tempo/features/tasks/domain/task.dart';
 class FakeTaskRepository implements TaskRepository {
   final List<Task> tasks = [];
   final List<String> deletedTaskIds = [];
+  final List<({String taskId, DateTime occurrenceDate, bool complete})>
+  occurrenceToggles = [];
   final StreamController<List<Task>> _controller =
       StreamController<List<Task>>.broadcast();
   int _nextId = 0;
@@ -113,7 +115,13 @@ class FakeTaskRepository implements TaskRepository {
     String taskId,
     DateTime occurrenceDate, {
     required bool complete,
-  }) async {}
+  }) async {
+    occurrenceToggles.add((
+      taskId: taskId,
+      occurrenceDate: occurrenceDate,
+      complete: complete,
+    ));
+  }
 
   @override
   Future<void> deleteTask(String id) async {

@@ -6,70 +6,152 @@ import 'package:tempo/features/tasks/domain/task_list_builder.dart';
 void main() {
   const builder = TaskListBuilder();
 
-  Task recurringTask({required String id, DateTime? dueDate}) {
+  Task dailyTask({DateTime? due}) {
     return Task(
-      id: id,
+      id: 't1',
       listId: 'list',
-      title: 'Daily habit',
-      dueDate: dueDate,
+      title: '锻炼',
+      dueDate: due ?? DateTime(2026, 6, 1, 20),
       recurrenceRule: 'FREQ=DAILY;INTERVAL=1',
       createdAt: DateTime(2026, 6, 1),
       updatedAt: DateTime(2026, 6, 1),
     );
   }
 
-  test('buildListViews returns next occurrence when dueDate is set', () {
-    final task = recurringTask(id: 'r1', dueDate: DateTime(2026, 6, 1));
+  test('resolveOccurrenceView returns historical missed occurrence', () {
+    final task = dailyTask();
+    final view = builder.resolveOccurrenceView(
+      task: task,
+      contextDate: DateTime(2026, 6, 30),
+      now: DateTime(2026, 7, 1),
+    );
+
+    expect(view, isNotNull);
+    expect(view!.occurrence.occurrenceDate, DateTime(2026, 6, 30));
+    expect(view.occurrence.state, OccurrenceState.missed);
+    expect(view.displayTask.isCompleted, isFalse);
+  });
+
+  test('resolveOccurrenceView returns completed state when completion exists', () {
+    final task = dailyTask();
+    final view = builder.resolveOccurrenceView(
+      task: task,
+      contextDate: DateTime(2026, 6, 30),
+      completions: [
+        TaskCompletion(
+          taskId: task.id,
+          occurrenceDate: DateTime(2026, 6, 30),
+          completedAt: DateTime(2026, 7, 1, 9),
+        ),
+      ],
+      now: DateTime(2026, 7, 1),
+    );
+
+    expect(view!.occurrence.state, OccurrenceState.completed);
+    expect(view.displayTask.isCompleted, isTrue);
+  });
+
+  test('resolveOccurrenceView returns null when day is not scheduled', () {
+    final task = dailyTask(
+      due: DateTime(2026, 6, 2),
+    ).copyWith(recurrenceRule: 'FREQ=WEEKLY;INTERVAL=1;BYDAY=MO');
+    final view = builder.resolveOccurrenceView(
+      task: task,
+      contextDate: DateTime(2026, 6, 30), // Monday in June 2026 is 1,8,15,22,29
+      now: DateTime(2026, 7, 1),
+    );
+
+    expect(view, isNull);
+  });
+
+  group('buildSeriesOccurrences', () {
+    // 每 2 天一次、共 5 次：6/1, 6/3, 6/5, 6/7, 6/9
+    Task cappedTask() {
+      return Task(
+        id: 'series',
+        listId: 'list',
+        title: '打卡',
+        dueDate: DateTime(2026, 6, 1, 20),
+        recurrenceRule: 'FREQ=DAILY;INTERVAL=2;COUNT=5',
+        recurrenceCount: 5,
+        createdAt: DateTime(2026, 6, 1),
+        updatedAt: DateTime(2026, 6, 1),
+      );
+    }
+
+    test('returns 5 occurrences with 3 completed', () {
+      final task = cappedTask();
+      final occs = builder.buildSeriesOccurrences(
+        task: task,
+        completions: [
+          for (final d in [DateTime(2026, 6, 1), DateTime(2026, 6, 3), DateTime(2026, 6, 5)])
+            TaskCompletion(
+              taskId: task.id,
+              occurrenceDate: d,
+              completedAt: DateTime(2026, 6, 9, 9),
+            ),
+        ],
+        now: DateTime(2026, 6, 9),
+      );
+
+      expect(occs.length, 5);
+      final completed = occs
+          .where((o) => o.state == OccurrenceState.completed)
+          .length;
+      expect(completed, 3);
+    });
+
+    test('returns empty for unlimited recurring task', () {
+      final task = dailyTask(); // no recurrenceCount
+      final occs = builder.buildSeriesOccurrences(
+        task: task,
+        now: DateTime(2026, 7, 1),
+      );
+      expect(occs, isEmpty);
+    });
+  });
+
+  test('buildListViews shows today-completed recurring task for visibility', () {
+    final task = dailyTask(due: DateTime(2026, 7, 1, 20));
     final views = builder.buildListViews(
       tasks: [task],
-      now: DateTime(2026, 6, 15),
+      completions: [
+        TaskCompletion(
+          taskId: task.id,
+          occurrenceDate: DateTime(2026, 7, 1),
+          completedAt: DateTime(2026, 7, 1, 11),
+        ),
+      ],
+      now: DateTime(2026, 7, 1, 12),
     );
-
     expect(views, hasLength(1));
-    expect(views.first.displayTask.dueDate, isNotNull);
-    expect(views.first.displayTask.isCompleted, isFalse);
+    expect(views.single.displayTask.isCompleted, isTrue);
   });
 
-  test('buildListViews skips recurring task without dueDate', () {
-    final task = recurringTask(id: 'r2', dueDate: null);
+  test('buildListViews shows unlimited task when today is still pending', () {
+    final task = dailyTask(due: DateTime(2026, 7, 1, 20));
     final views = builder.buildListViews(
       tasks: [task],
-      now: DateTime(2026, 6, 15),
+      now: DateTime(2026, 7, 1, 12),
     );
-
-    expect(views, isEmpty);
-  });
-
-  test('buildCalendarIndex expands around centerDate not today', () {
-    final task = recurringTask(id: 'r3', dueDate: DateTime(2026, 12, 1));
-    final index = builder.buildCalendarIndex(
-      tasks: [task],
-      centerDate: DateTime(2026, 12, 15),
-      now: DateTime(2026, 6, 1),
-    );
-
-    expect(index.containsKey(DateTime(2026, 12, 1)), isTrue);
-    expect(index.containsKey(DateTime(2026, 12, 15)), isTrue);
-    expect(index.containsKey(DateTime(2026, 6, 1)), isFalse);
-  });
-
-  test('buildListViews includes ended recurring series', () {
-    final now = DateTime(2026, 6, 30);
-    final task = Task(
-      id: 'ended',
-      listId: 'list',
-      title: 'Ended habit',
-      dueDate: DateTime(2026, 6, 1),
-      recurrenceRule: 'FREQ=DAILY;INTERVAL=1',
-      recurrenceEnd: DateTime(2026, 6, 29),
-      createdAt: DateTime(2026, 6, 1),
-      updatedAt: DateTime(2026, 6, 29),
-    );
-    final views = builder.buildListViews(tasks: [task], now: now);
-
     expect(views, hasLength(1));
-    expect(views.first.isSeriesEnded, isTrue);
-    expect(views.first.displayTask.dueDate, isNull);
-    expect(task.isRecurrenceEnded(now), isTrue);
+    expect(views.single.occurrence.occurrenceDate, DateTime(2026, 7, 1));
+  });
+
+  test('buildListViews shows earliest missed day for backfill', () {
+    final task = dailyTask(due: DateTime(2026, 6, 1, 20));
+    final views = builder.buildListViews(
+      tasks: [task],
+      completions: [
+        TaskCompletion(
+          taskId: task.id,
+          occurrenceDate: DateTime(2026, 6, 30),
+          completedAt: DateTime(2026, 7, 1, 9),
+        ),
+      ],
+      now: DateTime(2026, 7, 1, 12),
+    );
+    expect(views, hasLength(1));
+    expect(views.single.occurrence.occurrenceDate, DateTime(2026, 7, 1));
   });
 }

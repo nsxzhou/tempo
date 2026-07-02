@@ -82,7 +82,7 @@ class RecurrenceEngine {
     return results;
   }
 
-  /// 下一次 occurrence（含今天未完成）
+  /// 下一次 occurrence（含今天未完成及未来排期）
   TaskOccurrence? nextOccurrence(
     Task task, {
     DateTime? after,
@@ -104,6 +104,48 @@ class RecurrenceEngine {
     );
     for (final occ in all) {
       if (occ.state == OccurrenceState.pending) return occ;
+    }
+    return null;
+  }
+
+  /// 当前可打卡的 occurrence：今天未完成/错过，或过去最早错过的一天（补卡）。
+  /// 不返回未来日期，避免超前打卡。
+  TaskOccurrence? nextCompletableOccurrence(
+    Task task, {
+    List<RecurrenceException> exceptions = const [],
+    List<TaskCompletion> completions = const [],
+    DateTime? now,
+    int lookbackDays = 365,
+  }) {
+    if (!task.isRecurring) return null;
+
+    final today = calendarDay(now ?? DateTime.now());
+    final todayOccs = expandOccurrences(
+      task,
+      from: today,
+      to: today,
+      exceptions: exceptions,
+      completions: completions,
+      now: now,
+    );
+    for (final occ in todayOccs) {
+      if (occ.state != OccurrenceState.completed) return occ;
+    }
+
+    final from = today.subtract(Duration(days: lookbackDays));
+    final yesterday = today.subtract(const Duration(days: 1));
+    if (yesterday.isBefore(from)) return null;
+
+    final pastOccs = expandOccurrences(
+      task,
+      from: from,
+      to: yesterday,
+      exceptions: exceptions,
+      completions: completions,
+      now: now,
+    );
+    for (final occ in pastOccs) {
+      if (occ.state == OccurrenceState.missed) return occ;
     }
     return null;
   }
@@ -135,6 +177,7 @@ class RecurrenceEngine {
         longest: 0,
         completedCount: 0,
         scheduledCount: 0,
+        seriesCompleted: 0,
       );
     }
 
@@ -154,6 +197,23 @@ class RecurrenceEngine {
         .toList();
     final completedCount =
         scheduled.where((o) => o.state == OccurrenceState.completed).length;
+
+    final seriesTotal = task.recurrenceCount;
+    var seriesCompleted = 0;
+    if (seriesTotal != null) {
+      final anchor = task.dueDate != null ? calendarDay(task.dueDate!) : today;
+      final seriesOccs = expandOccurrences(
+        task,
+        from: anchor,
+        to: anchor.add(const Duration(days: 365 * 5)),
+        exceptions: exceptions,
+        completions: completions,
+        now: now,
+      );
+      seriesCompleted = seriesOccs
+          .where((o) => o.state == OccurrenceState.completed)
+          .length;
+    }
 
     var current = 0;
     var longest = 0;
@@ -182,6 +242,8 @@ class RecurrenceEngine {
       longest: longest,
       completedCount: completedCount,
       scheduledCount: scheduled.length,
+      seriesTotal: seriesTotal,
+      seriesCompleted: seriesCompleted,
     );
   }
 

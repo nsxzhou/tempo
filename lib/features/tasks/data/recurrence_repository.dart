@@ -240,6 +240,29 @@ class RecurrenceRepository {
     }
   }
 
+  /// 强制全量同步本地 completions 到 Supabase（不依赖 syncPending 标记）。
+  /// 用于修复因 syncPending 标记异常导致的同步遗漏。
+  Future<void> forceSyncCompletions() async {
+    final guard = SyncGuard(_connectivity, _userId);
+    await guard.executeIfCanSync((userId) async {
+      final allCompletions = await _localDb.select(_localDb.taskCompletions).get();
+      for (final row in allCompletions) {
+        try {
+          await _syncCompletionToCloud(row.taskId, row.occurrenceDate, row.completedAt);
+          if (row.syncPending) {
+            await (_localDb.update(_localDb.taskCompletions)
+                  ..where((c) =>
+                      c.taskId.equals(row.taskId) &
+                      c.occurrenceDate.equals(row.occurrenceDate)))
+                .write(const db.TaskCompletionsCompanion(syncPending: Value(false)));
+          }
+        } catch (_) {
+          // 单条失败不影响其余
+        }
+      }
+    });
+  }
+
   Future<void> pushPending() async {
     final guard = SyncGuard(_connectivity, _userId);
     await guard.executeIfCanSync((userId) async {

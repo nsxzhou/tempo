@@ -39,13 +39,14 @@ function inputStyle(): string {
   return `
     width:100%;
     box-sizing:border-box;
-    border:0.8px solid var(--tempo-border-strong);
+    border:1px solid var(--tempo-border-strong);
     border-radius:var(--tempo-radius-md);
     padding:10px 12px;
-    font-size:14px;
+    font-size:13px;
     font-family:var(--tempo-font-sans);
     background:var(--tempo-bg);
     color:var(--tempo-fg);
+    transition: border-color var(--tempo-duration-fast) ease;
   `;
 }
 
@@ -81,7 +82,7 @@ export function openTaskFormDialog(options: {
       ${fieldLabel('重复')}
       <div id="tempo-repeat-wrap" style="border:0.8px solid var(--tempo-border-strong);border-radius:var(--tempo-radius-md);padding:12px;">
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--tempo-fg);margin-bottom:10px;">
-          <input id="tempo-repeat-enabled" type="checkbox" />
+          <input id="tempo-repeat-enabled" type="checkbox" style="width:16px;height:16px;accent-color:var(--tempo-fg);" />
           启用重复
         </label>
         <div id="tempo-repeat-fields" style="display:none;flex-direction:column;gap:10px;">
@@ -113,7 +114,6 @@ export function openTaskFormDialog(options: {
     </div>
     <div class="b3-dialog__action">
       <button class="b3-button b3-button--cancel">取消</button>
-      <div class="fn__space"></div>
       <button class="b3-button b3-button--text" id="tempo-save">${isEdit ? '保存' : '创建'}</button>
     </div>`,
     width: '520px',

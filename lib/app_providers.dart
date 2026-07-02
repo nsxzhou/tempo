@@ -255,7 +255,15 @@ final taskBackgroundByTaskIdProvider =
 final statsSnapshotProvider = Provider.family<StatsSnapshot, int>((ref, days) {
   final tasks = ref.watch(taskListProvider).valueOrNull ?? [];
   if (tasks.isEmpty) return StatsSnapshot.empty(days);
-  return ref.read(statsRepositoryProvider).computeSnapshot(tasks, days);
+  final completions = ref.watch(taskCompletionsProvider).valueOrNull ?? [];
+  final exceptions =
+      ref.watch(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
+  return ref.read(statsRepositoryProvider).computeSnapshot(
+    tasks: tasks,
+    completions: completions,
+    exceptions: exceptions,
+    days: days,
+  );
 }, name: 'statsSnapshotProvider');
 
 /// 单次遍历的任务计数（Bento + 分类筛选共用）。

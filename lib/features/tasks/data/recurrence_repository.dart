@@ -8,6 +8,8 @@ import 'package:drift/drift.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/extensions/task_filter.dart';
+import '../../../core/utils/sync_guard.dart';
 import '../../../database/database.dart' as db;
 import '../domain/recurrence_engine.dart';
 import '../domain/recurrence_models.dart';
@@ -177,8 +179,8 @@ class RecurrenceRepository {
   }) {
     return _engine.computeStreak(
       task,
-      completions: completions.where((c) => c.taskId == task.id).toList(),
-      exceptions: exceptions.where((e) => e.taskId == task.id).toList(),
+      completions: completions.forTask(task.id, (c) => c.taskId),
+      exceptions: exceptions.forTask(task.id, (e) => e.taskId),
     );
   }
 
@@ -239,51 +241,50 @@ class RecurrenceRepository {
   }
 
   Future<void> pushPending() async {
-    final isOnline = await _connectivity.isOnline;
-    final userId = _userId;
-    if (!isOnline || userId == null) return;
+    final guard = SyncGuard(_connectivity, _userId);
+    await guard.executeIfCanSync((userId) async {
+      final pendingCompletions = await (_localDb.select(
+        _localDb.taskCompletions,
+      )..where((c) => c.syncPending.equals(true))).get();
 
-    final pendingCompletions = await (_localDb.select(
-      _localDb.taskCompletions,
-    )..where((c) => c.syncPending.equals(true))).get();
+      for (final row in pendingCompletions) {
+        try {
+          await _syncCompletionToCloud(
+            row.taskId,
+            row.occurrenceDate,
+            row.completedAt,
+          );
+          await (_localDb.update(_localDb.taskCompletions)
+                ..where(
+                  (c) =>
+                      c.taskId.equals(row.taskId) &
+                      c.occurrenceDate.equals(row.occurrenceDate),
+                ))
+              .write(const db.TaskCompletionsCompanion(syncPending: Value(false)));
+        } catch (_) {}
+      }
 
-    for (final row in pendingCompletions) {
-      try {
-        await _syncCompletionToCloud(
-          row.taskId,
-          row.occurrenceDate,
-          row.completedAt,
-        );
-        await (_localDb.update(_localDb.taskCompletions)
-              ..where(
-                (c) =>
-                    c.taskId.equals(row.taskId) &
-                    c.occurrenceDate.equals(row.occurrenceDate),
-              ))
-            .write(const db.TaskCompletionsCompanion(syncPending: Value(false)));
-      } catch (_) {}
-    }
+      final pendingExceptions = await (_localDb.select(
+        _localDb.taskRecurrenceExceptions,
+      )..where((e) => e.syncPending.equals(true))).get();
 
-    final pendingExceptions = await (_localDb.select(
-      _localDb.taskRecurrenceExceptions,
-    )..where((e) => e.syncPending.equals(true))).get();
-
-    for (final row in pendingExceptions) {
-      try {
-        await _syncExceptionToCloud(_mapException(row));
-        await (_localDb.update(_localDb.taskRecurrenceExceptions)
-              ..where(
-                (e) =>
-                    e.taskId.equals(row.taskId) &
-                    e.exceptionDate.equals(row.exceptionDate),
-              ))
-            .write(
-              const db.TaskRecurrenceExceptionsCompanion(
-                syncPending: Value(false),
-              ),
-            );
-      } catch (_) {}
-    }
+      for (final row in pendingExceptions) {
+        try {
+          await _syncExceptionToCloud(_mapException(row));
+          await (_localDb.update(_localDb.taskRecurrenceExceptions)
+                ..where(
+                  (e) =>
+                      e.taskId.equals(row.taskId) &
+                      e.exceptionDate.equals(row.exceptionDate),
+                ))
+              .write(
+                const db.TaskRecurrenceExceptionsCompanion(
+                  syncPending: Value(false),
+                ),
+              );
+        } catch (_) {}
+      }
+    });
   }
 
   Future<void> _syncCompletionToCloud(
@@ -291,13 +292,13 @@ class RecurrenceRepository {
     DateTime occurrenceDate,
     DateTime completedAt,
   ) async {
-    final isOnline = await _connectivity.isOnline;
-    if (!isOnline || _userId == null) return;
-
-    await _supabase.from(AppConstants.tableTaskCompletions).upsert({
-      'task_id': taskId,
-      'occurrence_date': _dateOnly(occurrenceDate),
-      'completed_at': completedAt.toUtc().toIso8601String(),
+    final guard = SyncGuard(_connectivity, _userId);
+    await guard.executeIfCanSync((userId) async {
+      await _supabase.from(AppConstants.tableTaskCompletions).upsert({
+        'task_id': taskId,
+        'occurrence_date': _dateOnly(occurrenceDate),
+        'completed_at': completedAt.toUtc().toIso8601String(),
+      });
     });
   }
 
@@ -339,7 +340,7 @@ class RecurrenceRepository {
 
   TaskCompletion _mapCompletion(db.TaskCompletion row) => TaskCompletion(
     taskId: row.taskId,
-    occurrenceDate: row.occurrenceDate,
+    occurrenceDate: RecurrenceEngine.calendarDay(row.occurrenceDate),
     completedAt: row.completedAt,
     syncPending: row.syncPending,
   );

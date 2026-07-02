@@ -218,7 +218,12 @@ void main() {
       ),
     ];
 
-    final snapshot = repository.computeSnapshot(tasks, 7);
+    final snapshot = repository.computeSnapshot(
+      tasks: tasks,
+      completions: const [],
+      exceptions: const [],
+      days: 7,
+    );
 
     expect(snapshot.health.pending, 3);
     expect(snapshot.health.overdue, 1);

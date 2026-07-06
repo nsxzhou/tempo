@@ -51,18 +51,16 @@ class TaskDetailActions {
           occDate,
           complete: complete,
         );
-        if (complete) {
-          await notificationService.cancelOccurrenceReminder(task.id, occDate);
-        } else {
-          final raw = ref.read(taskMapProvider)[task.id] ?? task;
-          unawaited(
-            notificationService.scheduleRecurringReminders(
-              raw,
-              completions: const [],
-              exceptions: const [],
-            ),
-          );
-        }
+        final raw = ref.read(taskMapProvider)[task.id] ?? task;
+        await notificationService.scheduleRecurringReminders(
+          raw,
+          completions: _completionSnapshotAfterToggle(
+            task.id,
+            occDate,
+            complete,
+          ),
+          exceptions: _exceptionsForTask(task.id),
+        );
         if (!context.mounted) return;
         // 详情页本地 state 仍由父 widget 通过 onTaskChanged 反映；
         // 这里仅刷新 saving 状态，列表/连续统计由 stream 推动。
@@ -90,8 +88,7 @@ class TaskDetailActions {
   /// 兜底到 task.dueDate 当天。
   DateTime? _resolveRecurringOccurrenceDate(Task task) {
     const engine = RecurrenceEngine();
-    final completions =
-        ref.read(taskCompletionsProvider).valueOrNull ?? [];
+    final completions = ref.read(taskCompletionsProvider).valueOrNull ?? [];
     final exceptions =
         ref.read(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
     final next = engine.nextCompletableOccurrence(
@@ -102,6 +99,39 @@ class TaskDetailActions {
     );
     if (next != null) return next.occurrenceDate;
     return null;
+  }
+
+  List<TaskCompletion> _completionSnapshotAfterToggle(
+    String taskId,
+    DateTime occurrenceDate,
+    bool complete,
+  ) {
+    final day = RecurrenceEngine.calendarDay(occurrenceDate);
+    final existing = ref
+        .read(taskCompletionsProvider)
+        .valueOrNull
+        ?.forTask(taskId, (c) => c.taskId);
+    final completions = [
+      for (final completion in existing ?? const <TaskCompletion>[])
+        if (RecurrenceEngine.calendarDay(completion.occurrenceDate) != day)
+          completion,
+    ];
+    if (complete) {
+      completions.add(
+        TaskCompletion(
+          taskId: taskId,
+          occurrenceDate: day,
+          completedAt: DateTime.now(),
+        ),
+      );
+    }
+    return completions;
+  }
+
+  List<RecurrenceException> _exceptionsForTask(String taskId) {
+    return (ref.read(taskRecurrenceExceptionsProvider).valueOrNull ??
+            const <RecurrenceException>[])
+        .forTask(taskId, (e) => e.taskId);
   }
 
   Future<void> saveDescription(String value) async {
@@ -262,7 +292,9 @@ class TaskDetailActions {
       final truncated = ref
           .read(recurrenceRepositoryProvider)
           .truncateSeriesAt(task, DateTime.now());
-      final saved = await ref.read(taskRepositoryProvider).updateTask(truncated);
+      final saved = await ref
+          .read(taskRepositoryProvider)
+          .updateTask(truncated);
       if (!context.mounted) return;
       onTaskChanged(saved);
       onSavingChanged(false);

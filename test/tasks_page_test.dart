@@ -223,6 +223,74 @@ void main() {
   });
 
   testWidgets(
+    'completing recurring task reschedules with adjusted completions',
+    (tester) async {
+      final repository = FakeTaskRepository();
+      final session = FakeStreamingVoiceSession();
+      final parseService = FakeTextParseService();
+      final notifications = _RecordingNotificationService();
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day, 23);
+      final previousDay = today.subtract(const Duration(days: 1));
+
+      await repository.createTask(
+        title: '喝水',
+        dueDate: today,
+        recurrenceRule: 'FREQ=DAILY',
+      );
+
+      await _pumpTasksPage(
+        tester,
+        repository: repository,
+        session: session,
+        parseService: parseService,
+        notificationService: notifications,
+        completions: [
+          TaskCompletion(
+            taskId: 'task-0',
+            occurrenceDate: previousDay,
+            completedAt: previousDay.add(const Duration(hours: 1)),
+          ),
+        ],
+      );
+
+      expect(find.text('喝水'), findsOneWidget);
+      await tester.tap(find.byType(TempoCheckbox).first);
+      await tester.pump(AppTheme.durationFast + AppTheme.durationMedium);
+
+      expect(repository.occurrenceToggles.single.complete, isTrue);
+      expect(notifications.recurringCalls, hasLength(1));
+      final completionDays = notifications.recurringCalls.single.completions
+          .map((completion) => completion.calendarDay)
+          .toSet();
+      expect(
+        completionDays,
+        contains(
+          TaskCompletion(
+            taskId: 'task-0',
+            occurrenceDate: previousDay,
+            completedAt: previousDay,
+          ).calendarDay,
+        ),
+      );
+      expect(
+        completionDays,
+        contains(
+          TaskCompletion(
+            taskId: 'task-0',
+            occurrenceDate: today,
+            completedAt: today,
+          ).calendarDay,
+        ),
+      );
+
+      await _settleAnimations(tester);
+      await repository.dispose();
+      await session.dispose();
+    },
+  );
+
+  testWidgets(
     'task page has no category filter and keeps all pending visible',
     (tester) async {
       final repository = FakeTaskRepository();
@@ -419,6 +487,9 @@ Future<void> _pumpTasksPage(
   required FakeTaskRepository repository,
   required FakeStreamingVoiceSession session,
   required FakeTextParseService parseService,
+  NotificationService? notificationService,
+  List<TaskCompletion> completions = const [],
+  List<RecurrenceException> exceptions = const [],
 }) async {
   tester.view.physicalSize = const Size(800, 1600);
   tester.view.devicePixelRatio = 1.0;
@@ -434,7 +505,13 @@ Future<void> _pumpTasksPage(
         streamingVoiceSessionProvider.overrideWithValue(session),
         textParseServiceProvider.overrideWithValue(parseService),
         notificationServiceProvider.overrideWithValue(
-          _NoopNotificationService(),
+          notificationService ?? _NoopNotificationService(),
+        ),
+        taskCompletionsProvider.overrideWith(
+          (ref) => Stream.value(completions),
+        ),
+        taskRecurrenceExceptionsProvider.overrideWith(
+          (ref) => Stream.value(exceptions),
         ),
         appNavigatorKeyProvider.overrideWithValue(navigatorKey),
         taskBackgroundRepositoryProvider.overrideWithValue(
@@ -503,7 +580,11 @@ class _NoopNotificationService implements NotificationService {
   ) async {}
 
   @override
-  Future<void> scheduleTaskReminder(Task task) async {}
+  Future<void> scheduleTaskReminder(
+    Task task, {
+    List<TaskCompletion> completions = const [],
+    List<RecurrenceException> exceptions = const [],
+  }) async {}
 
   @override
   Future<void> scheduleRecurringReminders(
@@ -528,5 +609,22 @@ class _NoopNotificationService implements NotificationService {
   Future<void> setRemindersEnabled(bool enabled) async {}
 
   @override
-  Future<void> rescheduleAllTasks(Iterable<Task> tasks) async {}
+  Future<void> rescheduleAllTasks(
+    Iterable<Task> tasks, {
+    List<TaskCompletion> completions = const [],
+    List<RecurrenceException> exceptions = const [],
+  }) async {}
+}
+
+class _RecordingNotificationService extends _NoopNotificationService {
+  final recurringCalls = <({Task task, List<TaskCompletion> completions})>[];
+
+  @override
+  Future<void> scheduleRecurringReminders(
+    Task task, {
+    List<TaskCompletion> completions = const [],
+    List<RecurrenceException> exceptions = const [],
+  }) async {
+    recurringCalls.add((task: task, completions: List.of(completions)));
+  }
 }

@@ -48,7 +48,11 @@ class _NoopNotificationService implements NotificationService {
   ) async {}
 
   @override
-  Future<void> scheduleTaskReminder(Task task) async {}
+  Future<void> scheduleTaskReminder(
+    Task task, {
+    List<TaskCompletion> completions = const [],
+    List<RecurrenceException> exceptions = const [],
+  }) async {}
 
   @override
   Future<void> scheduleRecurringReminders(
@@ -73,5 +77,9 @@ class _NoopNotificationService implements NotificationService {
   Future<void> setRemindersEnabled(bool enabled) async {}
 
   @override
-  Future<void> rescheduleAllTasks(Iterable<Task> tasks) async {}
+  Future<void> rescheduleAllTasks(
+    Iterable<Task> tasks, {
+    List<TaskCompletion> completions = const [],
+    List<RecurrenceException> exceptions = const [],
+  }) async {}
 }

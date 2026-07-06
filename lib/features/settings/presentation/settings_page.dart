@@ -214,7 +214,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     if (value) {
       await notificationService.requestPermissions();
       final tasks = ref.read(taskListProvider).valueOrNull ?? [];
-      await notificationService.rescheduleAllTasks(tasks);
+      final completions = ref.read(taskCompletionsProvider).valueOrNull ?? [];
+      final exceptions =
+          ref.read(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
+      await notificationService.rescheduleAllTasks(
+        tasks,
+        completions: completions,
+        exceptions: exceptions,
+      );
     }
   }
 

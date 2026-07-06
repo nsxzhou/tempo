@@ -54,10 +54,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.occurrenceToggles, hasLength(1));
-    expect(
-      repository.occurrenceToggles.single.occurrenceDate,
-      yesterday,
-    );
+    expect(repository.occurrenceToggles.single.occurrenceDate, yesterday);
     expect(repository.occurrenceToggles.single.complete, isTrue);
     await repository.dispose();
   });
@@ -92,31 +89,32 @@ void main() {
     await repository.dispose();
   });
 
-  testWidgets('recurring detail shows next occurrence instead of overdue anchor', (
-    tester,
-  ) async {
-    final repository = FakeTaskRepository();
-    final now = DateTime.now();
-    final anchor = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ).subtract(const Duration(days: 1));
+  testWidgets(
+    'recurring detail shows next occurrence instead of overdue anchor',
+    (tester) async {
+      final repository = FakeTaskRepository();
+      final now = DateTime.now();
+      final anchor = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).subtract(const Duration(days: 1));
 
-    final task = await repository.createTask(
-      title: '死虫式',
-      dueDate: anchor,
-      isAllDay: true,
-      recurrenceRule: 'FREQ=DAILY;INTERVAL=1',
-    );
+      final task = await repository.createTask(
+        title: '死虫式',
+        dueDate: anchor,
+        isAllDay: true,
+        recurrenceRule: 'FREQ=DAILY;INTERVAL=1',
+      );
 
-    await _pumpDetailPage(tester, repository: repository, task: task);
+      await _pumpDetailPage(tester, repository: repository, task: task);
 
-    expect(find.text('下次'), findsOneWidget);
-    expect(find.text('已延误'), findsNothing);
-    expect(find.text('${now.month}月${now.day}日'), findsOneWidget);
-    await repository.dispose();
-  });
+      expect(find.text('下次'), findsOneWidget);
+      expect(find.text('已延误'), findsNothing);
+      expect(find.text('${now.month}月${now.day}日'), findsOneWidget);
+      await repository.dispose();
+    },
+  );
 
   testWidgets('active recurring detail shows end recurrence menu item', (
     tester,
@@ -312,10 +310,7 @@ Future<void> _pumpDetailPage(
       overrides: overrides,
       child: MaterialApp(
         navigatorKey: navigatorKey,
-        home: TaskDetailPage(
-          taskId: task.id,
-          occurrenceDate: occurrenceDate,
-        ),
+        home: TaskDetailPage(taskId: task.id, occurrenceDate: occurrenceDate),
       ),
     ),
   );
@@ -372,7 +367,11 @@ class _NoopNotificationService implements NotificationService {
   ) async {}
 
   @override
-  Future<void> scheduleTaskReminder(Task task) async {}
+  Future<void> scheduleTaskReminder(
+    Task task, {
+    List<TaskCompletion> completions = const [],
+    List<RecurrenceException> exceptions = const [],
+  }) async {}
 
   @override
   Future<void> scheduleRecurringReminders(
@@ -397,5 +396,9 @@ class _NoopNotificationService implements NotificationService {
   Future<void> setRemindersEnabled(bool enabled) async {}
 
   @override
-  Future<void> rescheduleAllTasks(Iterable<Task> tasks) async {}
+  Future<void> rescheduleAllTasks(
+    Iterable<Task> tasks, {
+    List<TaskCompletion> completions = const [],
+    List<RecurrenceException> exceptions = const [],
+  }) async {}
 }

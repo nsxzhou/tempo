@@ -164,10 +164,8 @@ class _TasksPageState extends ConsumerState<TasksPage>
           occDate = engine
               .nextCompletableOccurrence(
                 raw!,
-                completions:
-                    completions.forTask(raw.id, (c) => c.taskId),
-                exceptions:
-                    exceptions.forTask(raw.id, (e) => e.taskId),
+                completions: completions.forTask(raw.id, (c) => c.taskId),
+                exceptions: exceptions.forTask(raw.id, (e) => e.taskId),
                 now: DateTime.now(),
               )
               ?.occurrenceDate;
@@ -185,19 +183,17 @@ class _TasksPageState extends ConsumerState<TasksPage>
           occDate,
           complete: complete,
         );
-        if (complete) {
-          unawaited(
-            notificationService.cancelOccurrenceReminder(task.id, occDate),
-          );
-        } else {
-          unawaited(
-            notificationService.scheduleRecurringReminders(
-              raw!,
-              completions: const [],
-              exceptions: const [],
+        unawaited(
+          notificationService.scheduleRecurringReminders(
+            raw!,
+            completions: _completionSnapshotAfterToggle(
+              task.id,
+              occDate,
+              complete,
             ),
-          );
-        }
+            exceptions: _exceptionsForTask(task.id),
+          ),
+        );
       } else {
         final updated = await repository.toggleComplete(task.id);
         if (updated.isCompleted) {
@@ -210,6 +206,39 @@ class _TasksPageState extends ConsumerState<TasksPage>
       if (!mounted) return;
       TempoSnackbar.show(context, message: '操作失败:$error');
     }
+  }
+
+  List<TaskCompletion> _completionSnapshotAfterToggle(
+    String taskId,
+    DateTime occurrenceDate,
+    bool complete,
+  ) {
+    final day = RecurrenceEngine.calendarDay(occurrenceDate);
+    final existing = ref
+        .read(taskCompletionsProvider)
+        .valueOrNull
+        ?.forTask(taskId, (c) => c.taskId);
+    final completions = [
+      for (final completion in existing ?? const <TaskCompletion>[])
+        if (RecurrenceEngine.calendarDay(completion.occurrenceDate) != day)
+          completion,
+    ];
+    if (complete) {
+      completions.add(
+        TaskCompletion(
+          taskId: taskId,
+          occurrenceDate: day,
+          completedAt: DateTime.now(),
+        ),
+      );
+    }
+    return completions;
+  }
+
+  List<RecurrenceException> _exceptionsForTask(String taskId) {
+    return (ref.read(taskRecurrenceExceptionsProvider).valueOrNull ??
+            const <RecurrenceException>[])
+        .forTask(taskId, (e) => e.taskId);
   }
 
   void _navigateToDetail(Task task) {

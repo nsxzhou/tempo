@@ -57,6 +57,21 @@ class _TempoAppState extends ConsumerState<TempoApp> {
 
       final tasks = await ref.read(taskRepositoryProvider).watchTasks().first;
       if (tasks.isNotEmpty) {
+        if (tasks.any((task) => task.isRecurring)) {
+          final recurrenceRepository = ref.read(recurrenceRepositoryProvider);
+          final completions = await recurrenceRepository
+              .watchCompletions()
+              .first;
+          final exceptions = await recurrenceRepository.watchExceptions().first;
+          unawaited(
+            notificationService.rescheduleAllTasks(
+              tasks,
+              completions: completions,
+              exceptions: exceptions,
+            ),
+          );
+          return;
+        }
         unawaited(notificationService.rescheduleAllTasks(tasks));
       }
     } catch (e, stack) {

@@ -281,7 +281,11 @@ class _RecordingNotificationService implements NotificationService {
   ) async {}
 
   @override
-  Future<void> scheduleTaskReminder(Task task) async {
+  Future<void> scheduleTaskReminder(
+    Task task, {
+    List<TaskCompletion> completions = const [],
+    List<RecurrenceException> exceptions = const [],
+  }) async {
     if (task.dueDate == null || task.isCompleted) return;
     scheduledTaskIds.add(task.id);
   }
@@ -312,9 +316,17 @@ class _RecordingNotificationService implements NotificationService {
   Future<void> setRemindersEnabled(bool enabled) async {}
 
   @override
-  Future<void> rescheduleAllTasks(Iterable<Task> tasks) async {
+  Future<void> rescheduleAllTasks(
+    Iterable<Task> tasks, {
+    List<TaskCompletion> completions = const [],
+    List<RecurrenceException> exceptions = const [],
+  }) async {
     for (final task in tasks) {
-      await scheduleTaskReminder(task);
+      await scheduleTaskReminder(
+        task,
+        completions: completions,
+        exceptions: exceptions,
+      );
     }
   }
 }

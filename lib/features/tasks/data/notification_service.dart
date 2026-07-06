@@ -4,6 +4,7 @@
 // ============================================================
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -13,6 +14,7 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/extensions/task_filter.dart';
 import '../domain/recurrence_engine.dart';
 import '../domain/recurrence_models.dart';
 import '../domain/task.dart';
@@ -25,6 +27,33 @@ DateTime todoReminderDateTime(Task task, [DateTime? occurrenceDue]) {
     return DateTime(due.year, due.month, due.day, 8);
   }
   return due;
+}
+
+@visibleForTesting
+int stableNotificationIdForKey(String key) {
+  const fnvOffset = 0x811c9dc5;
+  const fnvPrime = 0x01000193;
+  var hash = fnvOffset;
+  for (final byte in utf8.encode(key)) {
+    hash ^= byte;
+    hash = (hash * fnvPrime) & 0xffffffff;
+  }
+  return hash & 0x7fffffff;
+}
+
+@visibleForTesting
+String? taskIdFromNotificationPayload(String? payload) {
+  if (payload == null || payload.isEmpty) return null;
+  try {
+    final decoded = jsonDecode(payload);
+    if (decoded is Map<String, dynamic>) {
+      final taskId = decoded['taskId'];
+      if (taskId is String && taskId.isNotEmpty) return taskId;
+    }
+  } catch (_) {
+    // Legacy payloads were the raw task id.
+  }
+  return payload;
 }
 
 class NotificationService {
@@ -124,16 +153,34 @@ class NotificationService {
     }
   }
 
-  Future<void> rescheduleAllTasks(Iterable<Task> tasks) async {
+  Future<void> rescheduleAllTasks(
+    Iterable<Task> tasks, {
+    List<TaskCompletion> completions = const [],
+    List<RecurrenceException> exceptions = const [],
+  }) async {
     if (!await isRemindersEnabled()) return;
     for (final task in tasks) {
-      unawaited(scheduleTaskReminder(task));
+      unawaited(
+        scheduleTaskReminder(
+          task,
+          completions: completions.forTask(task.id, (c) => c.taskId),
+          exceptions: exceptions.forTask(task.id, (e) => e.taskId),
+        ),
+      );
     }
   }
 
-  Future<void> scheduleTaskReminder(Task task) async {
+  Future<void> scheduleTaskReminder(
+    Task task, {
+    List<TaskCompletion> completions = const [],
+    List<RecurrenceException> exceptions = const [],
+  }) async {
     if (task.isRecurring) {
-      await scheduleRecurringReminders(task);
+      await scheduleRecurringReminders(
+        task,
+        completions: completions,
+        exceptions: exceptions,
+      );
       return;
     }
     await _scheduleSingle(task, task.dueDate, task.id);
@@ -187,11 +234,20 @@ class NotificationService {
     DateTime occurrenceDate,
   ) async {
     await _safeCancel(_occurrenceNotificationId(taskId, occurrenceDate));
+    await _cancelPendingWhere(
+      (request) =>
+          taskIdFromNotificationPayload(request.payload) == taskId &&
+          _occurrenceDateFromNotificationPayload(request.payload) ==
+              _formatCalendarDay(occurrenceDate),
+    );
   }
 
   Future<void> cancelTaskReminders(String taskId) async {
     await _safeCancel(_notificationId(taskId));
-    // 取消预调度的 occurrence 通知（id 基于日期 hash）
+    await _cancelPendingWhere(
+      (request) => taskIdFromNotificationPayload(request.payload) == taskId,
+    );
+    // 兼容无法读取 pending notification 的平台：仍尝试取消当前稳定 ID 窗口。
     for (var i = 0; i < _recurringHorizon; i++) {
       final day = DateTime.now().add(Duration(days: i));
       await _safeCancel(_occurrenceNotificationId(taskId, day));
@@ -204,6 +260,21 @@ class NotificationService {
     } catch (e) {
       // 对不存在通知 ID 的取消操作静默忽略
       debugPrint('[Tempo] cancel($id) ignored: $e');
+    }
+  }
+
+  Future<void> _cancelPendingWhere(
+    bool Function(PendingNotificationRequest request) matches,
+  ) async {
+    try {
+      final pending = await _plugin.pendingNotificationRequests();
+      for (final request in pending) {
+        if (matches(request)) {
+          await _safeCancel(request.id);
+        }
+      }
+    } catch (e) {
+      debugPrint('[Tempo] pendingNotificationRequests ignored: $e');
     }
   }
 
@@ -235,7 +306,7 @@ class NotificationService {
         title: '待办提醒',
         body: task.title,
         scheduledTime: reminderAt,
-        payload: payloadTaskId,
+        payload: _notificationPayload(payloadTaskId, occurrenceDate),
       );
     } catch (e, stack) {
       _debugPrintNotificationFailure(
@@ -320,16 +391,50 @@ class NotificationService {
   }
 
   void _onNotificationResponse(NotificationResponse response) {
-    final payload = response.payload;
-    if (payload != null && onNotificationTap != null) {
-      onNotificationTap!(payload);
+    final taskId = taskIdFromNotificationPayload(response.payload);
+    if (taskId != null && onNotificationTap != null) {
+      onNotificationTap!(taskId);
     }
   }
 
-  int _notificationId(String taskId) => taskId.hashCode;
+  int _notificationId(String taskId) =>
+      stableNotificationIdForKey('task:$taskId');
 
   int _occurrenceNotificationId(String taskId, DateTime occurrenceDate) {
-    final day = RecurrenceEngine.calendarDay(occurrenceDate);
-    return Object.hash(taskId, day.year, day.month, day.day);
+    return stableNotificationIdForKey(
+      'occ:$taskId:${_formatCalendarDay(occurrenceDate)}',
+    );
+  }
+
+  String _notificationPayload(String taskId, DateTime? occurrenceDate) {
+    final payload = <String, Object?>{'v': 1, 'taskId': taskId};
+    if (occurrenceDate != null) {
+      payload['occurrenceDate'] = _formatCalendarDay(occurrenceDate);
+    }
+    return jsonEncode(payload);
+  }
+
+  String _formatCalendarDay(DateTime date) {
+    final day = RecurrenceEngine.calendarDay(date);
+    final year = day.year.toString().padLeft(4, '0');
+    final month = day.month.toString().padLeft(2, '0');
+    final datePart = day.day.toString().padLeft(2, '0');
+    return '$year-$month-$datePart';
+  }
+
+  String? _occurrenceDateFromNotificationPayload(String? payload) {
+    if (payload == null || payload.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is Map<String, dynamic>) {
+        final occurrenceDate = decoded['occurrenceDate'];
+        if (occurrenceDate is String && occurrenceDate.isNotEmpty) {
+          return occurrenceDate;
+        }
+      }
+    } catch (_) {
+      return null;
+    }
+    return null;
   }
 }

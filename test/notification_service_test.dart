@@ -1,8 +1,15 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tempo/core/constants/app_constants.dart';
 import 'package:tempo/features/tasks/data/notification_service.dart';
+import 'package:tempo/features/tasks/domain/recurrence_engine.dart';
+import 'package:tempo/features/tasks/domain/recurrence_models.dart';
 import 'package:tempo/features/tasks/domain/task.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -89,4 +96,197 @@ void main() {
       await expectLater(service.scheduleTaskReminder(task), completes);
     });
   });
+
+  group('NotificationService recurring reminders', () {
+    late _FakeIOSNotificationsPlugin platform;
+    late NotificationService service;
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      platform = _FakeIOSNotificationsPlugin();
+      FlutterLocalNotificationsPlatform.instance = platform;
+      service = NotificationService();
+      await service.setRemindersEnabled(true);
+    });
+
+    tearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    test('uses stable notification ids for the same key', () {
+      expect(
+        stableNotificationIdForKey('occ:task-1:2026-07-04'),
+        stableNotificationIdForKey('occ:task-1:2026-07-04'),
+      );
+      expect(
+        stableNotificationIdForKey('task:task-1'),
+        isNot(stableNotificationIdForKey('task:task-2')),
+      );
+    });
+
+    test(
+      'cancelTaskReminders cancels pending legacy payloads for task',
+      () async {
+        platform.pending.addAll([
+          const PendingNotificationRequest(91, '待办提醒', '喝水', 'task-1'),
+          const PendingNotificationRequest(92, '待办提醒', '喝水', 'task-1'),
+          const PendingNotificationRequest(93, '待办提醒', '读书', 'task-2'),
+        ]);
+
+        await service.cancelTaskReminders('task-1');
+
+        expect(platform.cancelledIds, containsAll([91, 92]));
+        expect(platform.cancelledIds, isNot(contains(93)));
+      },
+    );
+
+    test('scheduleRecurringReminders skips completed occurrence', () async {
+      final now = DateTime.now();
+      final today = RecurrenceEngine.calendarDay(now);
+      final task = _recurringTask(
+        dueDate: DateTime(today.year, today.month, today.day, 23, 0),
+      );
+
+      await service.scheduleRecurringReminders(
+        task,
+        completions: [
+          TaskCompletion(
+            taskId: task.id,
+            occurrenceDate: today,
+            completedAt: now,
+          ),
+        ],
+      );
+
+      final scheduledOccurrenceDates = platform.scheduled
+          .map((notification) => jsonDecode(notification.payload!) as Map)
+          .map((payload) => payload['occurrenceDate'])
+          .toList();
+
+      expect(scheduledOccurrenceDates, isNot(contains(_formatDay(today))));
+      expect(
+        scheduledOccurrenceDates,
+        contains(_formatDay(today.add(const Duration(days: 1)))),
+      );
+    });
+
+    test(
+      'scheduleRecurringReminders clears legacy pending before scheduling',
+      () async {
+        platform.pending.addAll([
+          const PendingNotificationRequest(101, '待办提醒', '喝水', 'task-1'),
+          const PendingNotificationRequest(102, '待办提醒', '喝水', 'task-1'),
+          const PendingNotificationRequest(201, '待办提醒', '读书', 'task-2'),
+        ]);
+
+        await service.scheduleRecurringReminders(
+          _recurringTask(dueDate: DateTime.now().add(const Duration(days: 1))),
+        );
+
+        expect(platform.cancelledIds, containsAll([101, 102]));
+        expect(platform.cancelledIds, isNot(contains(201)));
+        expect(platform.scheduled, isNotEmpty);
+        expect(
+          platform.scheduled
+              .map(
+                (notification) =>
+                    taskIdFromNotificationPayload(notification.payload),
+              )
+              .toSet(),
+          {'task-1'},
+        );
+      },
+    );
+  });
+}
+
+Task _recurringTask({required DateTime dueDate}) {
+  return Task(
+    id: 'task-1',
+    listId: 'inbox',
+    title: '喝水',
+    dueDate: dueDate,
+    recurrenceRule: 'FREQ=DAILY',
+    createdAt: DateTime(2026, 6, 1),
+    updatedAt: DateTime(2026, 6, 1),
+  );
+}
+
+String _formatDay(DateTime date) {
+  final day = RecurrenceEngine.calendarDay(date);
+  final year = day.year.toString().padLeft(4, '0');
+  final month = day.month.toString().padLeft(2, '0');
+  final datePart = day.day.toString().padLeft(2, '0');
+  return '$year-$month-$datePart';
+}
+
+class _ScheduledNotification {
+  const _ScheduledNotification({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.scheduledDate,
+    required this.payload,
+  });
+
+  final int id;
+  final String? title;
+  final String? body;
+  final tz.TZDateTime scheduledDate;
+  final String? payload;
+}
+
+class _FakeIOSNotificationsPlugin extends IOSFlutterLocalNotificationsPlugin {
+  final pending = <PendingNotificationRequest>[];
+  final cancelledIds = <int>[];
+  final scheduled = <_ScheduledNotification>[];
+
+  @override
+  Future<bool?> initialize({
+    required DarwinInitializationSettings settings,
+    DidReceiveNotificationResponseCallback? onDidReceiveNotificationResponse,
+    DidReceiveBackgroundNotificationResponseCallback?
+    onDidReceiveBackgroundNotificationResponse,
+  }) async {
+    return true;
+  }
+
+  @override
+  Future<List<PendingNotificationRequest>> pendingNotificationRequests() async {
+    return List.of(pending);
+  }
+
+  @override
+  Future<void> cancel({required int id}) async {
+    cancelledIds.add(id);
+    pending.removeWhere((request) => request.id == id);
+  }
+
+  @override
+  Future<void> cancelAll() async {
+    pending.clear();
+  }
+
+  @override
+  Future<void> zonedSchedule({
+    required int id,
+    String? title,
+    String? body,
+    required tz.TZDateTime scheduledDate,
+    String? payload,
+    DateTimeComponents? matchDateTimeComponents,
+    DarwinNotificationDetails? notificationDetails,
+  }) async {
+    scheduled.add(
+      _ScheduledNotification(
+        id: id,
+        title: title,
+        body: body,
+        scheduledDate: scheduledDate,
+        payload: payload,
+      ),
+    );
+    pending.add(PendingNotificationRequest(id, title, body, payload));
+  }
 }

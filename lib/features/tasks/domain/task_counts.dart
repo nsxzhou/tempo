@@ -3,6 +3,19 @@ import '../../../core/utils/date_utils.dart';
 import 'recurrence_models.dart';
 import 'task.dart';
 
+/// 判断重复任务今日是否已打卡。
+bool _isRecurringTaskCompletedToday({
+  required Task task,
+  required List<TaskCompletion> completions,
+  required DateTime now,
+}) {
+  if (!task.isRecurring) return false;
+  final today = calendarDay(now);
+  return completions.any(
+    (c) => c.taskId == task.id && c.occurrenceDate == today,
+  );
+}
+
 /// 列表 scope 筛选 badge 计数（含重复系列结束语义）。
 class TaskScopeCounts {
   final int pending;
@@ -24,7 +37,11 @@ class TaskScopeCounts {
     all: 0,
   );
 
-  factory TaskScopeCounts.from(List<Task> tasks, {DateTime? now}) {
+  factory TaskScopeCounts.from(
+    List<Task> tasks, {
+    DateTime? now,
+    List<TaskCompletion> completions = const [],
+  }) {
     if (tasks.isEmpty) return TaskScopeCounts.empty;
 
     final current = now ?? DateTime.now();
@@ -34,19 +51,26 @@ class TaskScopeCounts {
 
     for (final task in tasks) {
       final ended = task.isRecurrenceEnded(current);
-      if (!task.isCompleted && !ended) pending++;
+      // 判断重复任务今日是否已完成
+      final effectivelyCompleted = task.isCompleted ||
+          _isRecurringTaskCompletedToday(
+            task: task,
+            completions: completions,
+            now: current,
+          );
+      if (!effectivelyCompleted && !ended) pending++;
       final due = task.dueDate;
       if (!ended &&
           due != null &&
           isTaskOverdue(
             dueDate: due,
             isAllDay: task.isAllDay,
-            isCompleted: task.isCompleted,
+            isCompleted: effectivelyCompleted,
             now: current,
           )) {
         overdue++;
       }
-      if (!task.isCompleted &&
+      if (!effectivelyCompleted &&
           !ended &&
           due != null &&
           isDueInWeekRange(due, current)) {
@@ -147,7 +171,11 @@ class TaskCounts {
   int get life => allCategories.life;
   int get untagged => allCategories.untagged;
 
-  factory TaskCounts.from(List<Task> tasks, {DateTime? now}) {
+  factory TaskCounts.from(
+    List<Task> tasks, {
+    DateTime? now,
+    List<TaskCompletion> completions = const [],
+  }) {
     if (tasks.isEmpty) return TaskCounts.empty;
 
     var pending = 0;
@@ -161,15 +189,22 @@ class TaskCounts {
 
     for (final task in tasks) {
       final ended = task.isRecurrenceEnded(current);
+      // 判断重复任务今日是否已完成
+      final effectivelyCompleted = task.isCompleted ||
+          _isRecurringTaskCompletedToday(
+            task: task,
+            completions: completions,
+            now: current,
+          );
       allCategories = allCategories.increment(task.tag);
-      if (task.isCompleted) {
+      if (effectivelyCompleted) {
         completed++;
       } else if (!ended) {
         pending++;
         activeCategories = activeCategories.increment(task.tag);
       }
       if (task.dueDate != null &&
-          !task.isCompleted &&
+          !effectivelyCompleted &&
           !ended &&
           isDueOnDate(task.dueDate!, current)) {
         todayDue++;
@@ -179,12 +214,12 @@ class TaskCounts {
           isTaskOverdue(
             dueDate: task.dueDate!,
             isAllDay: task.isAllDay,
-            isCompleted: task.isCompleted,
+            isCompleted: effectivelyCompleted,
             now: current,
           )) {
         overdue++;
       }
-      if (!task.isCompleted &&
+      if (!effectivelyCompleted &&
           !ended &&
           task.dueDate != null &&
           isDueInWeekRange(task.dueDate!, current)) {

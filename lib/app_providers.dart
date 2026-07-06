@@ -252,7 +252,8 @@ final taskBackgroundByTaskIdProvider =
 /// 单次遍历的任务计数（Bento + 分类筛选共用）。
 final taskCountsProvider = Provider<TaskCounts>((ref) {
   final tasks = ref.watch(displayTaskListProvider);
-  return TaskCounts.from(tasks);
+  final completions = ref.watch(taskCompletionsProvider).valueOrNull ?? [];
+  return TaskCounts.from(tasks, completions: completions);
 });
 
 final taskAiEnhancementStateProvider =

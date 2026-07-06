@@ -13,6 +13,19 @@ import 'widgets/task_tile.dart';
 
 enum TaskScope { pending, overdue, week, all }
 
+/// 判断重复任务今日是否已打卡。
+bool _isRecurringTaskCompletedToday({
+  required Task task,
+  required List<TaskCompletion> completions,
+  required DateTime now,
+}) {
+  if (!task.isRecurring) return false;
+  final today = calendarDay(now);
+  return completions.any(
+    (c) => c.taskId == task.id && c.occurrenceDate == today,
+  );
+}
+
 class TaskListGroups {
   final List<Task> active;
   final List<Task> completed;
@@ -32,10 +45,12 @@ typedef TaskFilterKey = ({TaskScope scope, String search});
 final taskFilterSnapshotProvider =
     Provider.family<TaskFilterSnapshot, TaskFilterKey>((ref, key) {
       final allTasks = ref.watch(displayTaskListProvider);
+      final completions = ref.watch(taskCompletionsProvider).valueOrNull ?? [];
       return buildTaskFilterSnapshot(
         allTasks: allTasks,
         scope: key.scope,
         searchQuery: key.search,
+        completions: completions,
       );
     });
 
@@ -43,6 +58,7 @@ TaskFilterSnapshot buildTaskFilterSnapshot({
   required List<Task> allTasks,
   required TaskScope scope,
   required String searchQuery,
+  List<TaskCompletion> completions = const [],
 }) {
   final searched = <Task>[];
   final active = <Task>[];
@@ -53,7 +69,7 @@ TaskFilterSnapshot buildTaskFilterSnapshot({
   for (final task in allTasks) {
     if (!matchesTaskSearch(task, q)) continue;
     searched.add(task);
-    if (!matchesTaskScope(task, scope, now)) continue;
+    if (!matchesTaskScope(task, scope, now, completions)) continue;
     if (task.isCompleted) {
       completed.add(task);
     } else {
@@ -62,7 +78,7 @@ TaskFilterSnapshot buildTaskFilterSnapshot({
   }
 
   return TaskFilterSnapshot(
-    scopeCounts: TaskScopeCounts.from(searched, now: now),
+    scopeCounts: TaskScopeCounts.from(searched, now: now, completions: completions),
     groups: TaskListGroups(active: active, completed: completed),
   );
 }
@@ -73,22 +89,34 @@ bool matchesTaskSearch(Task task, String q) {
       (task.description?.toLowerCase().contains(q) ?? false);
 }
 
-bool matchesTaskScope(Task task, TaskScope scope, DateTime now) {
+bool matchesTaskScope(
+  Task task,
+  TaskScope scope,
+  DateTime now, [
+  List<TaskCompletion> completions = const [],
+]) {
   final due = task.dueDate;
   final ended = task.isRecurrenceEnded(now);
+  // 判断重复任务今日是否已完成
+  final effectivelyCompleted = task.isCompleted ||
+      _isRecurringTaskCompletedToday(
+        task: task,
+        completions: completions,
+        now: now,
+      );
   return switch (scope) {
-    TaskScope.pending => !task.isCompleted && !ended,
+    TaskScope.pending => !effectivelyCompleted && !ended,
     TaskScope.overdue =>
       !ended &&
           due != null &&
           isTaskOverdue(
             dueDate: due,
             isAllDay: task.isAllDay,
-            isCompleted: task.isCompleted,
+            isCompleted: effectivelyCompleted,
             now: now,
           ),
     TaskScope.week =>
-      !task.isCompleted &&
+      !effectivelyCompleted &&
           !ended &&
           due != null &&
           isDueInWeekRange(due, now),

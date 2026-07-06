@@ -21,10 +21,10 @@ export function openSettingsDialog(options: { onUnbind: () => void }): void {
       <div style="height:12px"></div>
       <div style="font-size:12px;color:var(--tempo-fg-muted);line-height:1.6;">若 Tab 栏 × 无法关闭 Tempo，请先在左侧打开一篇文档，再点「关闭 Tempo 页签」或 Tab 上的 ×。</div>
     </div>
-    <div class="b3-dialog__action">
-      <button class="b3-button b3-button--cancel">关闭</button>
-      <button class="b3-button b3-button--text" id="tempo-close-tab">关闭 Tempo 页签</button>
-      <button class="b3-button b3-button--text" id="tempo-unbind" style="background:var(--tempo-p0-bg);color:var(--tempo-p0);border-color:var(--tempo-p0-border);">解绑</button>
+    <div class="b3-dialog__action tempo-dialog-actions">
+      <button class="b3-button b3-button--cancel tempo-dialog-button tempo-dialog-button--secondary">关闭</button>
+      <button class="b3-button b3-button--text tempo-dialog-button tempo-dialog-button--secondary" id="tempo-close-tab">关闭 Tempo 页签</button>
+      <button class="b3-button b3-button--text tempo-dialog-button tempo-dialog-button--danger" id="tempo-unbind">解绑</button>
     </div>`,
     width: '420px',
   });

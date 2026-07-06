@@ -1,5 +1,6 @@
 .tempo-tab-root,
-.tempo-dialog-inner {
+.tempo-dialog-inner,
+.tempo-dialog-actions {
   --tempo-bg: #ffffff;
   --tempo-bg-subtle: #fafafa;
   --tempo-bg-muted: #f4f4f5;

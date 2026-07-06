@@ -112,9 +112,9 @@ export function openTaskFormDialog(options: {
       ${fieldLabel('分类')}
       <div id="tempo-tag" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
     </div>
-    <div class="b3-dialog__action">
-      <button class="b3-button b3-button--cancel">取消</button>
-      <button class="b3-button b3-button--text" id="tempo-save">${isEdit ? '保存' : '创建'}</button>
+    <div class="b3-dialog__action tempo-dialog-actions">
+      <button class="b3-button b3-button--cancel tempo-dialog-button tempo-dialog-button--secondary">取消</button>
+      <button class="b3-button b3-button--text tempo-dialog-button tempo-dialog-button--primary" id="tempo-save">${isEdit ? '保存' : '创建'}</button>
     </div>`,
     width: '520px',
   });

@@ -1,13 +1,20 @@
 import { RRule } from 'rrule';
 import { Task } from '../models/task';
 import { isOccurrenceCompleted } from '../models/completion';
-import { isTaskRecurring } from './recurrence_config';
+import { isTaskRecurring, isTaskRecurrenceEnded } from './recurrence_config';
 import { startOfDay } from './date_filter';
 
 export interface ExpandedTask {
   seriesTask: Task;
   occurrenceDate: Date;
   displayTask: Task;
+}
+
+export interface TaskListItem {
+  seriesTask: Task;
+  displayTask: Task;
+  occurrenceDate?: Date;
+  isSeriesEnded: boolean;
 }
 
 function toRRuleDtstart(d: Date): Date {
@@ -168,6 +175,88 @@ export function hasTasksOnDate(
   return tasksForDate(tasks, date, completions).some(
     (task) => !task.isCompleted
   );
+}
+
+function itemFromOccurrence(item: ExpandedTask): TaskListItem {
+  return {
+    seriesTask: item.seriesTask,
+    displayTask: item.displayTask,
+    occurrenceDate: item.occurrenceDate,
+    isSeriesEnded: false,
+  };
+}
+
+export function buildTaskListItem(
+  task: Task,
+  completions: Set<string> = new Set(),
+  now = new Date()
+): TaskListItem {
+  if (!isTaskRecurring(task) || !task.dueDate) {
+    return {
+      seriesTask: task,
+      displayTask: task,
+      isSeriesEnded: false,
+    };
+  }
+
+  if (isTaskRecurrenceEnded(task, now)) {
+    return {
+      seriesTask: task,
+      displayTask: {
+        ...task,
+        dueDate: null,
+        isCompleted: false,
+        completedAt: null,
+      },
+      isSeriesEnded: true,
+    };
+  }
+
+  const today = startOfDay(now);
+  const todayOccurrences = expandTaskOccurrences(
+    task,
+    today,
+    today,
+    completions
+  );
+  if (todayOccurrences.length > 0) {
+    return itemFromOccurrence(todayOccurrences[0]);
+  }
+
+  const futureEnd = new Date(today);
+  futureEnd.setFullYear(futureEnd.getFullYear() + 1);
+  const futureOccurrences = expandTaskOccurrences(
+    task,
+    today,
+    futureEnd,
+    completions
+  );
+  const nextPending = futureOccurrences.find(
+    (item) => !item.displayTask.isCompleted
+  );
+  if (nextPending) {
+    return itemFromOccurrence(nextPending);
+  }
+
+  if (task.recurrenceEnd || task.recurrenceCount != null) {
+    return {
+      seriesTask: task,
+      displayTask: {
+        ...task,
+        dueDate: null,
+        isCompleted: false,
+        completedAt: null,
+      },
+      isSeriesEnded: true,
+    };
+  }
+
+  return {
+    seriesTask: task,
+    displayTask: task,
+    occurrenceDate: startOfDay(task.dueDate),
+    isSeriesEnded: false,
+  };
 }
 
 /** 列表勾选重复任务时，优先打卡今日/下一次 pending occurrence */

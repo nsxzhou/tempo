@@ -1,10 +1,10 @@
-import { Task } from '../models/task';
 import { formatHeaderDate } from '../utils/date_filter';
 import {
   TaskScope,
   TaskStore,
 } from '../data/task_store';
 import type { TaskFormInput } from '../data/task_repository';
+import type { TaskListItem } from '../utils/rrule_expand';
 import { createTaskRow } from './components/task_row';
 import { openSettingsDialog } from './dialogs/settings';
 import { openTaskFormDialog } from './dialogs/task_form';
@@ -189,8 +189,8 @@ function buildTaskList(store: TaskStore): HTMLElement {
     wrap.appendChild(sectionHeader(`待办 · ${active.length}`));
     const list = document.createElement('div');
     list.className = 'tempo-task-list';
-    for (const task of active) {
-      list.appendChild(buildRow(store, task));
+    for (const item of active) {
+      list.appendChild(buildRow(store, item));
     }
     wrap.appendChild(list);
   }
@@ -199,8 +199,8 @@ function buildTaskList(store: TaskStore): HTMLElement {
     wrap.appendChild(sectionHeader(`已完成 · ${completed.length}`));
     const list = document.createElement('div');
     list.className = 'tempo-task-list';
-    for (const task of completed) {
-      list.appendChild(buildRow(store, task));
+    for (const item of completed) {
+      list.appendChild(buildRow(store, item));
     }
     wrap.appendChild(list);
   }
@@ -215,22 +215,23 @@ function sectionHeader(label: string): HTMLElement {
   return header;
 }
 
-function buildRow(store: TaskStore, task: Task): HTMLElement {
+function buildRow(store: TaskStore, item: TaskListItem): HTMLElement {
+  const { displayTask, seriesTask, occurrenceDate } = item;
   return createTaskRow({
-    task,
+    task: displayTask,
     onTap: () => {
       openTaskFormDialog({
-        task,
+        task: seriesTask,
         onSubmit: async (input) => {
-          await store.editTask(task, input);
+          await store.editTask(seriesTask, input);
         },
       });
     },
     onToggleComplete: () => {
-      void store.toggleComplete(task);
+      void store.toggleComplete(seriesTask, occurrenceDate);
     },
     onDelete: () => {
-      void store.removeTask(task.id);
+      void store.removeTask(seriesTask.id);
     },
   });
 }

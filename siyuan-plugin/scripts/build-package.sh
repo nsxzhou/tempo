@@ -54,7 +54,7 @@ rm -f "$ZIP" "$LEGACY_ZIP"
 (cd "$STAGE" && zip -r "$ZIP" "$PLUGIN_NAME")
 cp "$ZIP" "$LEGACY_ZIP"
 
-if ! unzip -Z1 "$ZIP" | grep -qx "${PLUGIN_NAME}/plugin.json"; then
+if ! unzip -Z1 "$ZIP" | grep -Fx "${PLUGIN_NAME}/plugin.json" >/dev/null; then
   echo "ERROR: zip must contain ${PLUGIN_NAME}/plugin.json (folder name must match plugin.json name)"
   exit 1
 fi

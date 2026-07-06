@@ -1,5 +1,5 @@
 import { Task } from '../models/task';
-import { isDueInWeekRange, isTaskOverdue, startOfDay } from '../utils/date_filter';
+import { isDueInWeekRange, isTaskOverdue } from '../utils/date_filter';
 import {
   createTask,
   deleteTask,
@@ -11,9 +11,13 @@ import {
   type TaskFormInput,
   type UpdateTaskInput,
 } from './task_repository';
-import { isTaskRecurring, isTaskRecurrenceEnded } from '../utils/recurrence_config';
-import { resolveToggleOccurrenceDate } from '../utils/rrule_expand';
-import { completionKey, isOccurrenceCompleted } from '../models/completion';
+import { isTaskRecurring } from '../utils/recurrence_config';
+import {
+  buildTaskListItem,
+  resolveToggleOccurrenceDate,
+  type TaskListItem,
+} from '../utils/rrule_expand';
+import { completionKey } from '../models/completion';
 
 export type TaskScope = 'pending' | 'overdue' | 'week' | 'all';
 
@@ -87,44 +91,40 @@ export class TaskStore {
     this.listeners.clear();
   }
 
-  /**
-   * 判断任务是否"事实上已完成"。
-   * 非重复任务：直接看 isCompleted。
-   * 重复任务：isCompleted 始终为 false，需检查今日 occurrence 是否已打卡。
-   */
-  private isEffectivelyCompleted(task: Task, now: Date): boolean {
-    if (task.isCompleted) return true;
-    if (isTaskRecurring(task)) {
-      return isOccurrenceCompleted(task.id, startOfDay(now), this.completions);
-    }
-    return false;
+  private getListItems(now: Date): TaskListItem[] {
+    return this.tasks.map((task) =>
+      buildTaskListItem(task, this.completions, now)
+    );
   }
 
-  getFilteredTasks(): { active: Task[]; completed: Task[] } {
-    let tasks = [...this.tasks];
+  getFilteredTasks(): { active: TaskListItem[]; completed: TaskListItem[] } {
     const now = new Date();
+    let items = this.getListItems(now);
 
     switch (this.scope) {
       case 'pending':
-        tasks = tasks.filter((task) => !this.isEffectivelyCompleted(task, now));
+        items = items.filter(
+          (item) => !item.isSeriesEnded && !item.displayTask.isCompleted
+        );
         break;
       case 'week':
-        tasks = tasks.filter(
-          (task) =>
-            !this.isEffectivelyCompleted(task, now) &&
-            task.dueDate &&
-            isDueInWeekRange(task.dueDate, now)
+        items = items.filter(
+          (item) =>
+            !item.isSeriesEnded &&
+            !item.displayTask.isCompleted &&
+            item.displayTask.dueDate &&
+            isDueInWeekRange(item.displayTask.dueDate, now)
         );
         break;
       case 'overdue':
-        tasks = tasks.filter(
-          (task) =>
-            task.dueDate &&
-            !isTaskRecurrenceEnded(task, now) &&
+        items = items.filter(
+          (item) =>
+            !item.isSeriesEnded &&
+            item.displayTask.dueDate &&
             isTaskOverdue({
-              dueDate: task.dueDate,
-              isAllDay: task.isAllDay,
-              isCompleted: this.isEffectivelyCompleted(task, now),
+              dueDate: item.displayTask.dueDate,
+              isAllDay: item.displayTask.isAllDay,
+              isCompleted: item.displayTask.isCompleted,
               now,
             })
         );
@@ -133,8 +133,8 @@ export class TaskStore {
         break;
     }
 
-    const active = tasks.filter((task) => !this.isEffectivelyCompleted(task, now));
-    const completed = tasks.filter((task) => this.isEffectivelyCompleted(task, now));
+    const active = items.filter((item) => !item.displayTask.isCompleted);
+    const completed = items.filter((item) => item.displayTask.isCompleted);
     return { active, completed };
   }
 
@@ -145,32 +145,34 @@ export class TaskStore {
     all: number;
   } {
     const now = new Date();
-    const pending = this.tasks.filter(
-      (task) => !this.isEffectivelyCompleted(task, now)
+    const items = this.getListItems(now);
+    const pending = items.filter(
+      (item) => !item.isSeriesEnded && !item.displayTask.isCompleted
     ).length;
-    const overdue = this.tasks.filter(
-      (task) =>
-        task.dueDate &&
-        !isTaskRecurrenceEnded(task, now) &&
+    const overdue = items.filter(
+      (item) =>
+        !item.isSeriesEnded &&
+        item.displayTask.dueDate &&
         isTaskOverdue({
-          dueDate: task.dueDate,
-          isAllDay: task.isAllDay,
-          isCompleted: this.isEffectivelyCompleted(task, now),
+          dueDate: item.displayTask.dueDate,
+          isAllDay: item.displayTask.isAllDay,
+          isCompleted: item.displayTask.isCompleted,
           now,
         })
     ).length;
-    const weekCount = this.tasks.filter(
-      (task) =>
-        !this.isEffectivelyCompleted(task, now) &&
-        task.dueDate &&
-        isDueInWeekRange(task.dueDate, now)
+    const weekCount = items.filter(
+      (item) =>
+        !item.isSeriesEnded &&
+        !item.displayTask.isCompleted &&
+        item.displayTask.dueDate &&
+        isDueInWeekRange(item.displayTask.dueDate, now)
     ).length;
 
     return {
       pending,
       overdue,
       week: weekCount,
-      all: this.tasks.length,
+      all: items.length,
     };
   }
 

@@ -386,45 +386,62 @@
 }
 
 /* Dialog action bar overrides */
-.b3-dialog__action {
+.tempo-dialog-actions {
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
   padding: 16px 24px;
-  border-top: 0.8px solid var(--tempo-border-subtle);
+  border-top: none;
+  flex-wrap: wrap;
 }
 
-.b3-dialog__action .b3-button {
+.tempo-dialog-actions .tempo-dialog-button {
+  appearance: none;
   border: 1px solid var(--tempo-border-strong);
-  border-radius: var(--tempo-radius-md);
-  padding: 8px 16px;
+  border-radius: var(--tempo-radius-sm);
+  padding: 8px 20px;
+  min-height: 36px;
   font-size: 13px;
   font-weight: 600;
   font-family: var(--tempo-font-sans);
   cursor: pointer;
-  transition: background var(--tempo-duration-fast) ease, color var(--tempo-duration-fast) ease, border-color var(--tempo-duration-fast) ease;
+  transition:
+    background var(--tempo-duration-fast) ease,
+    color var(--tempo-duration-fast) ease,
+    border-color var(--tempo-duration-fast) ease,
+    opacity var(--tempo-duration-fast) ease;
   white-space: nowrap;
 }
 
-.b3-dialog__action .b3-button--cancel {
+.tempo-dialog-actions .tempo-dialog-button--secondary {
   background: var(--tempo-bg);
   color: var(--tempo-fg-muted);
   border-color: var(--tempo-border-strong);
 }
 
-.b3-dialog__action .b3-button--cancel:hover {
+.tempo-dialog-actions .tempo-dialog-button--secondary:hover {
   background: var(--tempo-bg-subtle);
 }
 
-.b3-dialog__action .b3-button--text {
+.tempo-dialog-actions .tempo-dialog-button--primary {
   background: var(--tempo-fg);
   color: #fff;
   border-color: var(--tempo-fg);
 }
 
-.b3-dialog__action .b3-button--text:hover {
+.tempo-dialog-actions .tempo-dialog-button--primary:hover {
   opacity: 0.88;
+}
+
+.tempo-dialog-actions .tempo-dialog-button--danger {
+  background: var(--tempo-p0-bg);
+  color: var(--tempo-p0);
+  border-color: var(--tempo-p0-border);
+}
+
+.tempo-dialog-actions .tempo-dialog-button--danger:hover {
+  background: #fee2e2;
 }
 
 /* Dialog content padding */

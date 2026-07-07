@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +19,8 @@ import 'package:tempo/database/database.dart' hide Task, TaskCompletion;
 import 'package:tempo/app_providers.dart';
 import 'package:tempo/core/router/app_router.dart';
 import 'package:tempo/features/tasks/data/notification_service.dart';
+import 'package:tempo/features/tasks/data/sync_service.dart';
+import 'package:tempo/features/tasks/data/task_repository.dart';
 import 'package:tempo/features/tasks/data/voice_task_parse_result.dart';
 import 'package:tempo/features/tasks/domain/recurrence_models.dart';
 import 'package:tempo/features/tasks/domain/task.dart';
@@ -217,6 +222,32 @@ void main() {
 
     expect(repository.tasks, hasLength(1));
     expect(repository.tasks.single.title, '面包');
+    await _settleAnimations(tester);
+    await repository.dispose();
+    await session.dispose();
+  });
+
+  testWidgets('pull to refresh pushes pending before remote refresh', (
+    tester,
+  ) async {
+    final repository = FakeTaskRepository();
+    final session = FakeStreamingVoiceSession();
+    final parseService = FakeTextParseService();
+
+    await repository.createTask(title: '刷新目标');
+    await _pumpTasksPage(
+      tester,
+      repository: repository,
+      session: session,
+      parseService: parseService,
+    );
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 500));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(repository.pushPendingCalls, 1);
+    expect(repository.refreshNowCalls, 1);
     await _settleAnimations(tester);
     await repository.dispose();
     await session.dispose();
@@ -502,6 +533,12 @@ Future<void> _pumpTasksPage(
     ProviderScope(
       overrides: [
         taskRepositoryProvider.overrideWithValue(repository),
+        syncServiceProvider.overrideWithValue(
+          SyncService(
+            repository: repository,
+            connectivity: _AlwaysOnlineConnectivity(),
+          ),
+        ),
         streamingVoiceSessionProvider.overrideWithValue(session),
         textParseServiceProvider.overrideWithValue(parseService),
         notificationServiceProvider.overrideWithValue(
@@ -527,6 +564,14 @@ Future<void> _pumpTasksPage(
     ),
   );
   await tester.pump();
+}
+
+class _AlwaysOnlineConnectivity extends ConnectivityService {
+  @override
+  Future<bool> get isOnline async => true;
+
+  @override
+  Stream<ConnectivityResult> get onConnectivityChanged => const Stream.empty();
 }
 
 Future<void> _submitVoice(WidgetTester tester) async {

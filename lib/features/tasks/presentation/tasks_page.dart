@@ -82,39 +82,44 @@ class _TasksPageState extends ConsumerState<TasksPage>
               child: SlidableAutoCloseBehavior(
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 100),
-                  child: CustomScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    slivers: [
-                      SliverToBoxAdapter(
-                        child: TasksPageHeader(
-                          showSearch: _showSearch,
-                          onSearchToggle: () =>
-                              setState(() => _showSearch = !_showSearch),
-                        ),
+                  child: RefreshIndicator(
+                    onRefresh: _refreshTasks,
+                    child: CustomScrollView(
+                      physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
                       ),
-                      SliverToBoxAdapter(
-                        child: TasksSearchBar(
-                          visible: _showSearch,
-                          onChanged: _onSearchChanged,
+                      slivers: [
+                        SliverToBoxAdapter(
+                          child: TasksPageHeader(
+                            showSearch: _showSearch,
+                            onSearchToggle: () =>
+                                setState(() => _showSearch = !_showSearch),
+                          ),
                         ),
-                      ),
-                      SliverToBoxAdapter(
-                        child: TaskScopeSection(
+                        SliverToBoxAdapter(
+                          child: TasksSearchBar(
+                            visible: _showSearch,
+                            onChanged: _onSearchChanged,
+                          ),
+                        ),
+                        SliverToBoxAdapter(
+                          child: TaskScopeSection(
+                            scope: _scope,
+                            searchQuery: _debouncedSearchQuery,
+                            onScopeChanged: (scope) =>
+                                setState(() => _scope = scope),
+                          ),
+                        ),
+                        TaskListSection(
                           scope: _scope,
                           searchQuery: _debouncedSearchQuery,
-                          onScopeChanged: (scope) =>
-                              setState(() => _scope = scope),
+                          onTap: _navigateToDetail,
+                          onToggle: _toggleTask,
+                          onDelete: _deleteTask,
                         ),
-                      ),
-                      TaskListSection(
-                        scope: _scope,
-                        searchQuery: _debouncedSearchQuery,
-                        onTap: _navigateToDetail,
-                        onToggle: _toggleTask,
-                        onDelete: _deleteTask,
-                      ),
-                      const SliverToBoxAdapter(child: SizedBox(height: 80)),
-                    ],
+                        const SliverToBoxAdapter(child: SizedBox(height: 80)),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -136,6 +141,15 @@ class _TasksPageState extends ConsumerState<TasksPage>
         ],
       ),
     );
+  }
+
+  Future<void> _refreshTasks() async {
+    try {
+      await ref.read(syncServiceProvider).refreshNow();
+    } catch (error) {
+      if (!mounted) return;
+      TempoSnackbar.show(context, message: '刷新失败:$error');
+    }
   }
 
   Future<void> _toggleTask(Task task) async {

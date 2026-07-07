@@ -34,6 +34,8 @@ void main() {
 
   SyncTaskRepository buildRepository({
     Future<Task> Function(Task task, String userId)? remoteTaskUpsert,
+    Future<List<Map<String, dynamic>>> Function(String userId)? remoteTaskFetch,
+    Future<void> Function(String taskId)? remoteTaskDelete,
   }) {
     return SyncTaskRepository(
       localDb: db,
@@ -45,6 +47,8 @@ void main() {
       listId: AppConstants.defaultListId,
       connectivity: connectivity,
       remoteTaskUpsert: remoteTaskUpsert,
+      remoteTaskFetch: remoteTaskFetch,
+      remoteTaskDelete: remoteTaskDelete,
     );
   }
 
@@ -157,6 +161,56 @@ void main() {
       expect(repository, isNotNull);
     },
   );
+
+  test('refreshNow does not resurrect a task pending remote delete', () async {
+    connectivity.online = false;
+    late Task deletedTask;
+    var fetchCount = 0;
+    final repository = buildRepository(
+      remoteTaskFetch: (_) async {
+        fetchCount += 1;
+        return [_remoteRow(deletedTask)];
+      },
+    );
+
+    deletedTask = await repository.createTask(title: 'Delete offline');
+    await repository.deleteTask(deletedTask.id);
+    expect(await repository.getTaskById(deletedTask.id), isNull);
+
+    connectivity.online = true;
+    await repository.refreshNow();
+
+    expect(fetchCount, 1);
+    expect(await repository.getTaskById(deletedTask.id), isNull);
+  });
+
+  test('pushPending sends queued deletes once after reconnect', () async {
+    connectivity.online = false;
+    final deletedIds = <String>[];
+    final repository = buildRepository(
+      remoteTaskDelete: (taskId) async {
+        deletedIds.add(taskId);
+      },
+    );
+
+    final task = await repository.createTask(title: 'Delete when online');
+    await repository.deleteTask(task.id);
+
+    connectivity.online = true;
+    await repository.pushPending();
+    await repository.pushPending();
+
+    expect(deletedIds, [task.id]);
+    expect(await repository.getTaskById(task.id), isNull);
+  });
+}
+
+Map<String, dynamic> _remoteRow(Task task) {
+  return {
+    ...task.toSupabaseJson(userId: 'user-1'),
+    'created_at': task.createdAt.toUtc().toIso8601String(),
+    'updated_at': task.updatedAt.toUtc().toIso8601String(),
+  };
 }
 
 class _TestConnectivityService extends ConnectivityService {

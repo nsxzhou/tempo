@@ -56,7 +56,8 @@ class Tasks extends Table {
 
 /// 重复任务例外（EXDATE / 单次 override）
 class TaskRecurrenceExceptions extends Table {
-  TextColumn get taskId => text().references(Tasks, #id, onDelete: KeyAction.cascade)();
+  TextColumn get taskId =>
+      text().references(Tasks, #id, onDelete: KeyAction.cascade)();
   DateTimeColumn get exceptionDate => dateTime()();
   DateTimeColumn get overrideDue => dateTime().nullable()();
   TextColumn get overrideTitle => text().nullable()();
@@ -69,13 +70,28 @@ class TaskRecurrenceExceptions extends Table {
 
 /// 重复任务打卡完成记录
 class TaskCompletions extends Table {
-  TextColumn get taskId => text().references(Tasks, #id, onDelete: KeyAction.cascade)();
+  TextColumn get taskId =>
+      text().references(Tasks, #id, onDelete: KeyAction.cascade)();
   DateTimeColumn get occurrenceDate => dateTime()();
-  DateTimeColumn get completedAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get completedAt =>
+      dateTime().withDefault(currentDateAndTime)();
   BoolColumn get syncPending => boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {taskId, occurrenceDate};
+}
+
+/// 本地删除同步队列。
+///
+/// 任务本地优先删除后，原任务行会立即移除；这里保留待推送到 Supabase
+/// 的删除 tombstone，避免下次远端刷新把已删任务重新写回本地。
+class TaskDeletionOutbox extends Table {
+  TextColumn get taskId => text()();
+  DateTimeColumn get deletedAt => dateTime().withDefault(currentDateAndTime)();
+  BoolColumn get syncPending => boolean().withDefault(const Constant(true))();
+
+  @override
+  Set<Column> get primaryKey => {taskId};
 }
 
 /// 本机待办背景图。

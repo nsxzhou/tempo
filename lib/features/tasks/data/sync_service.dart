@@ -55,6 +55,12 @@ class SyncService {
     }
   }
 
+  /// 手动刷新：先推送本地 pending，再拉取远端最新数据。
+  Future<void> refreshNow() async {
+    await pushPending();
+    await _repository.refreshNow();
+  }
+
   /// 网络恢复回调：推送 pending 记录。
   void _onNetworkRestored() {
     pushPending();

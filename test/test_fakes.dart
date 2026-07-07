@@ -21,6 +21,9 @@ class FakeTaskRepository implements TaskRepository {
       StreamController<List<Task>>.broadcast();
   int _nextId = 0;
   Object? createError;
+  int pushPendingCalls = 0;
+  int refreshNowCalls = 0;
+  int requestRefreshCalls = 0;
 
   @override
   Stream<List<Task>> watchTasks() {
@@ -137,6 +140,7 @@ class FakeTaskRepository implements TaskRepository {
 
   @override
   Future<void> pushPending() async {
+    pushPendingCalls += 1;
     for (var i = 0; i < tasks.length; i++) {
       if (tasks[i].syncPending) {
         tasks[i] = tasks[i].copyWith(syncPending: false);
@@ -147,7 +151,13 @@ class FakeTaskRepository implements TaskRepository {
 
   @override
   void requestRefresh() {
+    requestRefreshCalls += 1;
     // 测试 fake 不触发真实远端刷新。
+  }
+
+  @override
+  Future<void> refreshNow() async {
+    refreshNowCalls += 1;
   }
 
   Future<void> dispose() {

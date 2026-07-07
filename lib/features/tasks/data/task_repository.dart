@@ -67,6 +67,9 @@ abstract class TaskRepository {
 
   /// 请求一次后台远端刷新（连接恢复 / 用户变更 / 下拉刷新触发）。
   void requestRefresh();
+
+  /// 立即执行一次同步刷新（下拉刷新等需要等待完成的交互触发）。
+  Future<void> refreshNow();
 }
 
 /// 网络连接服务封装。
@@ -117,11 +120,18 @@ class SyncTaskRepository implements TaskRepository {
   final Uuid _uuid;
   final Future<domain.Task> Function(domain.Task task, String userId)?
   _remoteTaskUpsert;
-  final Future<void> Function(String taskId, DateTime occurrenceDate, bool complete)?
+  final Future<List<Map<String, dynamic>>> Function(String userId)?
+  _remoteTaskFetch;
+  final Future<void> Function(String taskId)? _remoteTaskDelete;
+  final Future<void> Function(
+    String taskId,
+    DateTime occurrenceDate,
+    bool complete,
+  )?
   _occurrenceToggle;
   final Future<void> Function(List<String> taskIds)? _recurrenceRefresh;
   Timer? _refreshDebounce;
-  bool _refreshInFlight = false;
+  Future<void>? _refreshInFlight;
 
   SyncTaskRepository({
     required db.AppDatabase localDb,
@@ -132,7 +142,13 @@ class SyncTaskRepository implements TaskRepository {
     Uuid? uuid,
     Future<domain.Task> Function(domain.Task task, String userId)?
     remoteTaskUpsert,
-    Future<void> Function(String taskId, DateTime occurrenceDate, bool complete)?
+    Future<List<Map<String, dynamic>>> Function(String userId)? remoteTaskFetch,
+    Future<void> Function(String taskId)? remoteTaskDelete,
+    Future<void> Function(
+      String taskId,
+      DateTime occurrenceDate,
+      bool complete,
+    )?
     occurrenceToggle,
     Future<void> Function(List<String> taskIds)? recurrenceRefresh,
   }) : _localDb = localDb,
@@ -142,6 +158,8 @@ class SyncTaskRepository implements TaskRepository {
        _connectivity = connectivity,
        _uuid = uuid ?? const Uuid(),
        _remoteTaskUpsert = remoteTaskUpsert,
+       _remoteTaskFetch = remoteTaskFetch,
+       _remoteTaskDelete = remoteTaskDelete,
        _occurrenceToggle = occurrenceToggle,
        _recurrenceRefresh = recurrenceRefresh;
 
@@ -289,7 +307,22 @@ class SyncTaskRepository implements TaskRepository {
 
   @override
   Future<void> deleteTask(String id) async {
-    await (_localDb.delete(_localDb.tasks)..where((t) => t.id.equals(id))).go();
+    await _localDb.transaction(() async {
+      if (_userId != null) {
+        await _localDb
+            .into(_localDb.taskDeletionOutbox)
+            .insertOnConflictUpdate(
+              db.TaskDeletionOutboxCompanion.insert(
+                taskId: id,
+                deletedAt: Value(DateTime.now()),
+                syncPending: const Value(true),
+              ),
+            );
+      }
+      await (_localDb.delete(
+        _localDb.tasks,
+      )..where((t) => t.id.equals(id))).go();
+    });
 
     unawaited(_syncDeleteToCloud(id));
   }
@@ -298,7 +331,10 @@ class SyncTaskRepository implements TaskRepository {
     final guard = SyncGuard(_connectivity, _userId);
     await guard.executeIfCanSync((userId) async {
       try {
-        await _supabase.from(AppConstants.tableTasks).delete().eq('id', id);
+        await _deleteRemoteTask(id);
+        await (_localDb.delete(
+          _localDb.taskDeletionOutbox,
+        )..where((d) => d.taskId.equals(id))).go();
       } catch (_) {
         // 静默忽略：本地已删除
       }
@@ -321,11 +357,9 @@ class SyncTaskRepository implements TaskRepository {
 
   /// 修复 dueDate 为空但有 recurrenceRule 的脏数据（用 createdAt 作锚点）。
   Future<void> repairRecurringTasksMissingDueDate() async {
-    final rows =
-        await (_localDb.select(_localDb.tasks)..where(
-              (t) => t.recurrenceRule.isNotNull() & t.dueDate.isNull(),
-            ))
-            .get();
+    final rows = await (_localDb.select(
+      _localDb.tasks,
+    )..where((t) => t.recurrenceRule.isNotNull() & t.dueDate.isNull())).get();
 
     for (final row in rows) {
       final rule = row.recurrenceRule?.trim();
@@ -394,10 +428,30 @@ class SyncTaskRepository implements TaskRepository {
     _scheduleRefreshFromRemote();
   }
 
+  @override
+  Future<void> refreshNow() async {
+    _refreshDebounce?.cancel();
+    final inFlight = _refreshInFlight;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+
+    final refresh = _refreshFromRemote();
+    _refreshInFlight = refresh;
+    try {
+      await refresh;
+    } finally {
+      if (identical(_refreshInFlight, refresh)) {
+        _refreshInFlight = null;
+      }
+    }
+  }
+
   void _scheduleRefreshFromRemote() {
     _refreshDebounce?.cancel();
     _refreshDebounce = Timer(const Duration(milliseconds: 300), () {
-      unawaited(_refreshFromRemote());
+      unawaited(refreshNow());
     });
   }
 
@@ -420,8 +474,6 @@ class SyncTaskRepository implements TaskRepository {
         _localDb.tasks,
       )..where((t) => t.syncPending.equals(true))).get();
 
-      if (pending.isEmpty) return;
-
       final clearedIds = <String>[];
       for (final row in pending) {
         try {
@@ -434,17 +486,19 @@ class SyncTaskRepository implements TaskRepository {
         }
       }
 
-      if (clearedIds.isEmpty) return;
+      if (clearedIds.isNotEmpty) {
+        await _localDb.batch((batch) {
+          for (final id in clearedIds) {
+            batch.update(
+              _localDb.tasks,
+              const db.TasksCompanion(syncPending: Value(false)),
+              where: (t) => t.id.equals(id),
+            );
+          }
+        });
+      }
 
-      await _localDb.batch((batch) {
-        for (final id in clearedIds) {
-          batch.update(
-            _localDb.tasks,
-            const db.TasksCompanion(syncPending: Value(false)),
-            where: (t) => t.id.equals(id),
-          );
-        }
-      });
+      await _pushPendingDeletes();
     });
   }
 
@@ -464,30 +518,72 @@ class SyncTaskRepository implements TaskRepository {
     return domain.TaskSupabase.fromSupabaseJson(row);
   }
 
+  Future<List<Map<String, dynamic>>> _fetchRemoteTasks(String userId) async {
+    final injected = _remoteTaskFetch;
+    if (injected != null) {
+      return injected(userId);
+    }
+
+    final rows = await _supabase
+        .from(AppConstants.tableTasks)
+        .select()
+        .eq('user_id', userId);
+    return (rows as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> _deleteRemoteTask(String taskId) async {
+    final injected = _remoteTaskDelete;
+    if (injected != null) {
+      await injected(taskId);
+      return;
+    }
+
+    await _supabase.from(AppConstants.tableTasks).delete().eq('id', taskId);
+  }
+
+  Future<void> _pushPendingDeletes() async {
+    final pendingDeletes = await (_localDb.select(
+      _localDb.taskDeletionOutbox,
+    )..where((d) => d.syncPending.equals(true))).get();
+
+    for (final row in pendingDeletes) {
+      try {
+        await _deleteRemoteTask(row.taskId);
+        await (_localDb.delete(
+          _localDb.taskDeletionOutbox,
+        )..where((d) => d.taskId.equals(row.taskId))).go();
+      } catch (_) {
+        // 保留 tombstone，下次网络恢复或手动刷新时重试。
+      }
+    }
+  }
+
   /// 后台静默刷新云端数据到本地缓存。
   Future<void> _refreshFromRemote() async {
-    if (_refreshInFlight) return;
-    _refreshInFlight = true;
     try {
       final guard = SyncGuard(_connectivity, _userId);
       await guard.executeIfCanSync((userId) async {
-        final rows = await _supabase
-            .from(AppConstants.tableTasks)
-            .select()
-            .eq('user_id', userId);
+        final rows = await _fetchRemoteTasks(userId);
 
         final pendingIds = await (_localDb.select(
           _localDb.tasks,
         )..where((t) => t.syncPending.equals(true))).map((r) => r.id).get();
         final pendingSet = pendingIds.toSet();
 
+        final pendingDeleteIds = await (_localDb.select(
+          _localDb.taskDeletionOutbox,
+        )..where((d) => d.syncPending.equals(true))).map((r) => r.taskId).get();
+        final pendingDeleteSet = pendingDeleteIds.toSet();
+
         final recurringIds = <String>[];
 
         await _localDb.batch((batch) {
-          for (final row in rows as List) {
-            final map = row as Map<String, dynamic>;
+          for (final map in rows) {
             final remote = domain.TaskSupabase.fromSupabaseJson(map);
-            if (pendingSet.contains(remote.id)) continue;
+            if (pendingSet.contains(remote.id) ||
+                pendingDeleteSet.contains(remote.id)) {
+              continue;
+            }
             batch.insert(
               _localDb.tasks,
               _companionFor(remote),
@@ -506,8 +602,6 @@ class SyncTaskRepository implements TaskRepository {
       });
     } catch (_) {
       // 静默失败，下次重试
-    } finally {
-      _refreshInFlight = false;
     }
   }
 

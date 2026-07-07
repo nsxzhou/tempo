@@ -2423,6 +2423,279 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
   }
 }
 
+class $TaskDeletionOutboxTable extends TaskDeletionOutbox
+    with TableInfo<$TaskDeletionOutboxTable, TaskDeletionOutboxData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TaskDeletionOutboxTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _taskIdMeta = const VerificationMeta('taskId');
+  @override
+  late final GeneratedColumn<String> taskId = GeneratedColumn<String>(
+    'task_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _syncPendingMeta = const VerificationMeta(
+    'syncPending',
+  );
+  @override
+  late final GeneratedColumn<bool> syncPending = GeneratedColumn<bool>(
+    'sync_pending',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("sync_pending" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [taskId, deletedAt, syncPending];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'task_deletion_outbox';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TaskDeletionOutboxData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('task_id')) {
+      context.handle(
+        _taskIdMeta,
+        taskId.isAcceptableOrUnknown(data['task_id']!, _taskIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_taskIdMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('sync_pending')) {
+      context.handle(
+        _syncPendingMeta,
+        syncPending.isAcceptableOrUnknown(
+          data['sync_pending']!,
+          _syncPendingMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {taskId};
+  @override
+  TaskDeletionOutboxData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TaskDeletionOutboxData(
+      taskId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}task_id'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      )!,
+      syncPending: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}sync_pending'],
+      )!,
+    );
+  }
+
+  @override
+  $TaskDeletionOutboxTable createAlias(String alias) {
+    return $TaskDeletionOutboxTable(attachedDatabase, alias);
+  }
+}
+
+class TaskDeletionOutboxData extends DataClass
+    implements Insertable<TaskDeletionOutboxData> {
+  final String taskId;
+  final DateTime deletedAt;
+  final bool syncPending;
+  const TaskDeletionOutboxData({
+    required this.taskId,
+    required this.deletedAt,
+    required this.syncPending,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['task_id'] = Variable<String>(taskId);
+    map['deleted_at'] = Variable<DateTime>(deletedAt);
+    map['sync_pending'] = Variable<bool>(syncPending);
+    return map;
+  }
+
+  TaskDeletionOutboxCompanion toCompanion(bool nullToAbsent) {
+    return TaskDeletionOutboxCompanion(
+      taskId: Value(taskId),
+      deletedAt: Value(deletedAt),
+      syncPending: Value(syncPending),
+    );
+  }
+
+  factory TaskDeletionOutboxData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TaskDeletionOutboxData(
+      taskId: serializer.fromJson<String>(json['taskId']),
+      deletedAt: serializer.fromJson<DateTime>(json['deletedAt']),
+      syncPending: serializer.fromJson<bool>(json['syncPending']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'taskId': serializer.toJson<String>(taskId),
+      'deletedAt': serializer.toJson<DateTime>(deletedAt),
+      'syncPending': serializer.toJson<bool>(syncPending),
+    };
+  }
+
+  TaskDeletionOutboxData copyWith({
+    String? taskId,
+    DateTime? deletedAt,
+    bool? syncPending,
+  }) => TaskDeletionOutboxData(
+    taskId: taskId ?? this.taskId,
+    deletedAt: deletedAt ?? this.deletedAt,
+    syncPending: syncPending ?? this.syncPending,
+  );
+  TaskDeletionOutboxData copyWithCompanion(TaskDeletionOutboxCompanion data) {
+    return TaskDeletionOutboxData(
+      taskId: data.taskId.present ? data.taskId.value : this.taskId,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      syncPending: data.syncPending.present
+          ? data.syncPending.value
+          : this.syncPending,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TaskDeletionOutboxData(')
+          ..write('taskId: $taskId, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('syncPending: $syncPending')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(taskId, deletedAt, syncPending);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TaskDeletionOutboxData &&
+          other.taskId == this.taskId &&
+          other.deletedAt == this.deletedAt &&
+          other.syncPending == this.syncPending);
+}
+
+class TaskDeletionOutboxCompanion
+    extends UpdateCompanion<TaskDeletionOutboxData> {
+  final Value<String> taskId;
+  final Value<DateTime> deletedAt;
+  final Value<bool> syncPending;
+  final Value<int> rowid;
+  const TaskDeletionOutboxCompanion({
+    this.taskId = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.syncPending = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TaskDeletionOutboxCompanion.insert({
+    required String taskId,
+    this.deletedAt = const Value.absent(),
+    this.syncPending = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : taskId = Value(taskId);
+  static Insertable<TaskDeletionOutboxData> custom({
+    Expression<String>? taskId,
+    Expression<DateTime>? deletedAt,
+    Expression<bool>? syncPending,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (taskId != null) 'task_id': taskId,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (syncPending != null) 'sync_pending': syncPending,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TaskDeletionOutboxCompanion copyWith({
+    Value<String>? taskId,
+    Value<DateTime>? deletedAt,
+    Value<bool>? syncPending,
+    Value<int>? rowid,
+  }) {
+    return TaskDeletionOutboxCompanion(
+      taskId: taskId ?? this.taskId,
+      deletedAt: deletedAt ?? this.deletedAt,
+      syncPending: syncPending ?? this.syncPending,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (taskId.present) {
+      map['task_id'] = Variable<String>(taskId.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (syncPending.present) {
+      map['sync_pending'] = Variable<bool>(syncPending.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TaskDeletionOutboxCompanion(')
+          ..write('taskId: $taskId, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('syncPending: $syncPending, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $TaskBackgroundsTable extends TaskBackgrounds
     with TableInfo<$TaskBackgroundsTable, TaskBackground> {
   @override
@@ -2750,6 +3023,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $TaskCompletionsTable taskCompletions = $TaskCompletionsTable(
     this,
   );
+  late final $TaskDeletionOutboxTable taskDeletionOutbox =
+      $TaskDeletionOutboxTable(this);
   late final $TaskBackgroundsTable taskBackgrounds = $TaskBackgroundsTable(
     this,
   );
@@ -2762,6 +3037,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     tasks,
     taskRecurrenceExceptions,
     taskCompletions,
+    taskDeletionOutbox,
     taskBackgrounds,
   ];
   @override
@@ -2821,7 +3097,7 @@ final class $$TaskListsTableReferences
     _$AppDatabase db,
   ) => MultiTypedResultKey.fromTable(
     db.tasks,
-    aliasName: $_aliasNameGenerator(db.taskLists.id, db.tasks.listId),
+    aliasName: 'task_lists__id__tasks__list_id',
   );
 
   $$TasksTableProcessedTableManager get tasksRefs {
@@ -3162,8 +3438,8 @@ final class $$TasksTableReferences
     extends BaseReferences<_$AppDatabase, $TasksTable, Task> {
   $$TasksTableReferences(super.$_db, super.$_table, super.$_typedResult);
 
-  static $TaskListsTable _listIdTable(_$AppDatabase db) => db.taskLists
-      .createAlias($_aliasNameGenerator(db.tasks.listId, db.taskLists.id));
+  static $TaskListsTable _listIdTable(_$AppDatabase db) =>
+      db.taskLists.createAlias('tasks__list_id__task_lists__id');
 
   $$TaskListsTableProcessedTableManager get listId {
     final $_column = $_itemColumn<String>('list_id')!;
@@ -3186,10 +3462,7 @@ final class $$TasksTableReferences
   _taskRecurrenceExceptionsRefsTable(_$AppDatabase db) =>
       MultiTypedResultKey.fromTable(
         db.taskRecurrenceExceptions,
-        aliasName: $_aliasNameGenerator(
-          db.tasks.id,
-          db.taskRecurrenceExceptions.taskId,
-        ),
+        aliasName: 'tasks__id__task_recurrence_exceptions__task_id',
       );
 
   $$TaskRecurrenceExceptionsTableProcessedTableManager
@@ -3210,7 +3483,7 @@ final class $$TasksTableReferences
   static MultiTypedResultKey<$TaskCompletionsTable, List<TaskCompletion>>
   _taskCompletionsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.taskCompletions,
-    aliasName: $_aliasNameGenerator(db.tasks.id, db.taskCompletions.taskId),
+    aliasName: 'tasks__id__task_completions__task_id',
   );
 
   $$TaskCompletionsTableProcessedTableManager get taskCompletionsRefs {
@@ -3230,7 +3503,7 @@ final class $$TasksTableReferences
   static MultiTypedResultKey<$TaskBackgroundsTable, List<TaskBackground>>
   _taskBackgroundsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.taskBackgrounds,
-    aliasName: $_aliasNameGenerator(db.tasks.id, db.taskBackgrounds.taskId),
+    aliasName: 'tasks__id__task_backgrounds__task_id',
   );
 
   $$TaskBackgroundsTableProcessedTableManager get taskBackgroundsRefs {
@@ -4088,9 +4361,8 @@ final class $$TaskRecurrenceExceptionsTableReferences
     super.$_typedResult,
   );
 
-  static $TasksTable _taskIdTable(_$AppDatabase db) => db.tasks.createAlias(
-    $_aliasNameGenerator(db.taskRecurrenceExceptions.taskId, db.tasks.id),
-  );
+  static $TasksTable _taskIdTable(_$AppDatabase db) =>
+      db.tasks.createAlias('task_recurrence_exceptions__task_id__tasks__id');
 
   $$TasksTableProcessedTableManager get taskId {
     final $_column = $_itemColumn<String>('task_id')!;
@@ -4449,9 +4721,8 @@ final class $$TaskCompletionsTableReferences
     super.$_typedResult,
   );
 
-  static $TasksTable _taskIdTable(_$AppDatabase db) => db.tasks.createAlias(
-    $_aliasNameGenerator(db.taskCompletions.taskId, db.tasks.id),
-  );
+  static $TasksTable _taskIdTable(_$AppDatabase db) =>
+      db.tasks.createAlias('task_completions__task_id__tasks__id');
 
   $$TasksTableProcessedTableManager get taskId {
     final $_column = $_itemColumn<String>('task_id')!;
@@ -4737,6 +5008,183 @@ typedef $$TaskCompletionsTableProcessedTableManager =
       TaskCompletion,
       PrefetchHooks Function({bool taskId})
     >;
+typedef $$TaskDeletionOutboxTableCreateCompanionBuilder =
+    TaskDeletionOutboxCompanion Function({
+      required String taskId,
+      Value<DateTime> deletedAt,
+      Value<bool> syncPending,
+      Value<int> rowid,
+    });
+typedef $$TaskDeletionOutboxTableUpdateCompanionBuilder =
+    TaskDeletionOutboxCompanion Function({
+      Value<String> taskId,
+      Value<DateTime> deletedAt,
+      Value<bool> syncPending,
+      Value<int> rowid,
+    });
+
+class $$TaskDeletionOutboxTableFilterComposer
+    extends Composer<_$AppDatabase, $TaskDeletionOutboxTable> {
+  $$TaskDeletionOutboxTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get taskId => $composableBuilder(
+    column: $table.taskId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get syncPending => $composableBuilder(
+    column: $table.syncPending,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$TaskDeletionOutboxTableOrderingComposer
+    extends Composer<_$AppDatabase, $TaskDeletionOutboxTable> {
+  $$TaskDeletionOutboxTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get taskId => $composableBuilder(
+    column: $table.taskId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get syncPending => $composableBuilder(
+    column: $table.syncPending,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TaskDeletionOutboxTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TaskDeletionOutboxTable> {
+  $$TaskDeletionOutboxTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get taskId =>
+      $composableBuilder(column: $table.taskId, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get syncPending => $composableBuilder(
+    column: $table.syncPending,
+    builder: (column) => column,
+  );
+}
+
+class $$TaskDeletionOutboxTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TaskDeletionOutboxTable,
+          TaskDeletionOutboxData,
+          $$TaskDeletionOutboxTableFilterComposer,
+          $$TaskDeletionOutboxTableOrderingComposer,
+          $$TaskDeletionOutboxTableAnnotationComposer,
+          $$TaskDeletionOutboxTableCreateCompanionBuilder,
+          $$TaskDeletionOutboxTableUpdateCompanionBuilder,
+          (
+            TaskDeletionOutboxData,
+            BaseReferences<
+              _$AppDatabase,
+              $TaskDeletionOutboxTable,
+              TaskDeletionOutboxData
+            >,
+          ),
+          TaskDeletionOutboxData,
+          PrefetchHooks Function()
+        > {
+  $$TaskDeletionOutboxTableTableManager(
+    _$AppDatabase db,
+    $TaskDeletionOutboxTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TaskDeletionOutboxTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TaskDeletionOutboxTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TaskDeletionOutboxTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> taskId = const Value.absent(),
+                Value<DateTime> deletedAt = const Value.absent(),
+                Value<bool> syncPending = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TaskDeletionOutboxCompanion(
+                taskId: taskId,
+                deletedAt: deletedAt,
+                syncPending: syncPending,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String taskId,
+                Value<DateTime> deletedAt = const Value.absent(),
+                Value<bool> syncPending = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TaskDeletionOutboxCompanion.insert(
+                taskId: taskId,
+                deletedAt: deletedAt,
+                syncPending: syncPending,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TaskDeletionOutboxTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TaskDeletionOutboxTable,
+      TaskDeletionOutboxData,
+      $$TaskDeletionOutboxTableFilterComposer,
+      $$TaskDeletionOutboxTableOrderingComposer,
+      $$TaskDeletionOutboxTableAnnotationComposer,
+      $$TaskDeletionOutboxTableCreateCompanionBuilder,
+      $$TaskDeletionOutboxTableUpdateCompanionBuilder,
+      (
+        TaskDeletionOutboxData,
+        BaseReferences<
+          _$AppDatabase,
+          $TaskDeletionOutboxTable,
+          TaskDeletionOutboxData
+        >,
+      ),
+      TaskDeletionOutboxData,
+      PrefetchHooks Function()
+    >;
 typedef $$TaskBackgroundsTableCreateCompanionBuilder =
     TaskBackgroundsCompanion Function({
       required String taskId,
@@ -4763,9 +5211,8 @@ final class $$TaskBackgroundsTableReferences
     super.$_typedResult,
   );
 
-  static $TasksTable _taskIdTable(_$AppDatabase db) => db.tasks.createAlias(
-    $_aliasNameGenerator(db.taskBackgrounds.taskId, db.tasks.id),
-  );
+  static $TasksTable _taskIdTable(_$AppDatabase db) =>
+      db.tasks.createAlias('task_backgrounds__task_id__tasks__id');
 
   $$TasksTableProcessedTableManager get taskId {
     final $_column = $_itemColumn<String>('task_id')!;
@@ -5060,6 +5507,8 @@ class $AppDatabaseManager {
       );
   $$TaskCompletionsTableTableManager get taskCompletions =>
       $$TaskCompletionsTableTableManager(_db, _db.taskCompletions);
+  $$TaskDeletionOutboxTableTableManager get taskDeletionOutbox =>
+      $$TaskDeletionOutboxTableTableManager(_db, _db.taskDeletionOutbox);
   $$TaskBackgroundsTableTableManager get taskBackgrounds =>
       $$TaskBackgroundsTableTableManager(_db, _db.taskBackgrounds);
 }

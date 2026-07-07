@@ -7,7 +7,7 @@ import 'package:drift/native.dart';
 import 'package:tempo/database/database.dart';
 
 void main() {
-  test('migrates from schema v6 to v7 and adds recurrence tables', () async {
+  test('migrates from schema v6 to v8 and adds sync tables', () async {
     final file = File(
       '${Directory.systemTemp.path}/tempo_v5_${DateTime.now().microsecondsSinceEpoch}.db',
     );
@@ -22,10 +22,8 @@ void main() {
     final db = AppDatabase.forTesting(NativeDatabase(file));
     addTearDown(db.close);
 
-    final versionRow = await db
-        .customSelect('PRAGMA user_version')
-        .getSingle();
-    expect(versionRow.read<int>('user_version'), 7);
+    final versionRow = await db.customSelect('PRAGMA user_version').getSingle();
+    expect(versionRow.read<int>('user_version'), 8);
 
     await db
         .into(db.taskLists)
@@ -82,6 +80,15 @@ void main() {
       db.taskBackgrounds,
     )..where((row) => row.taskId.equals('task-1'))).getSingleOrNull();
     expect(saved?.imagePath, imagePath.path);
+
+    await db
+        .into(db.taskDeletionOutbox)
+        .insert(TaskDeletionOutboxCompanion.insert(taskId: 'task-1'));
+
+    final deleted = await (db.select(
+      db.taskDeletionOutbox,
+    )..where((row) => row.taskId.equals('task-1'))).getSingleOrNull();
+    expect(deleted, isNotNull);
   });
 }
 
@@ -131,6 +138,6 @@ void _createV5Schema(String path) {
     ''');
     db.execute('PRAGMA user_version = 6');
   } finally {
-    db.dispose();
+    db.close();
   }
 }

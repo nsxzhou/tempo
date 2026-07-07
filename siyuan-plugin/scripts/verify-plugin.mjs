@@ -224,6 +224,17 @@ function priorityFromValue(value) {
   }
 }
 
+function isInvalidRefreshToken(status, body) {
+  if (![400, 401, 403].includes(status)) return false;
+  const text = body.toLowerCase();
+  return (
+    text.includes('refresh') ||
+    text.includes('invalid') ||
+    text.includes('expired') ||
+    text.includes('not found')
+  );
+}
+
 function taskFromSupabaseJson(json) {
   return {
     id: json.id,
@@ -390,6 +401,25 @@ function isDueOnDate(dueDate, date) {
   assert.deepEqual(
     filterByScope([recurring], 'pending', now, completions).map((task) => task.id),
     []
+  );
+}
+
+{
+  assert.equal(
+    isInvalidRefreshToken(400, '{"error":"invalid refresh token"}'),
+    true
+  );
+  assert.equal(
+    isInvalidRefreshToken(401, '{"error":"refresh token expired"}'),
+    true
+  );
+  assert.equal(
+    isInvalidRefreshToken(500, '{"error":"temporary upstream failure"}'),
+    false
+  );
+  assert.equal(
+    isInvalidRefreshToken(0, 'network request failed'),
+    false
   );
 }
 

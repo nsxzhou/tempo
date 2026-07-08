@@ -9,10 +9,9 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:timezone/data/latest_all.dart' as tz;
-
 import 'app.dart';
 import 'core/constants/app_constants.dart';
+import 'core/utils/notification_timezone.dart';
 import 'core/providers/rebuild_observer.dart';
 
 Future<void> main() async {
@@ -30,8 +29,8 @@ Future<void> main() async {
     // redirect URL 在 Auth 配置中设置为 tempo://login-callback
   );
 
-  // 3) 初始化 timezone 数据（本地通知 zonedSchedule 需要）
-  tz.initializeTimeZones();
+  // 3) 初始化本地时区（本地通知 zonedSchedule 需要）
+  await configureNotificationTimezone();
 
   // 4) 初始化 intl locale 数据(tasks_page / calendar_page 用了 zh_CN 的 DateFormat)
   await initializeDateFormatting('zh_CN');

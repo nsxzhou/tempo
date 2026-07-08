@@ -10,8 +10,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timezone/data/latest_all.dart' as tz;
-import 'package:timezone/timezone.dart' as tz;
+
+import '../../../core/utils/notification_timezone.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/extensions/task_filter.dart';
@@ -79,7 +79,7 @@ class NotificationService {
   Future<void> init() async {
     if (_initialized) return;
 
-    tz.initializeTimeZones();
+    await configureNotificationTimezone();
 
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/ic_launcher',
@@ -199,10 +199,11 @@ class NotificationService {
       await cancelTaskReminders(task.id);
 
       final now = DateTime.now();
+      final fromDay = RecurrenceEngine.calendarDay(now);
       final occs = _engine.expandOccurrences(
         task,
-        from: now,
-        to: now.add(const Duration(days: 60)),
+        from: fromDay,
+        to: fromDay.add(const Duration(days: 60)),
         completions: completions,
         exceptions: exceptions,
         now: now,
@@ -366,7 +367,7 @@ class NotificationService {
     required DateTime scheduledTime,
     String? payload,
   }) async {
-    final tzTime = tz.TZDateTime.from(scheduledTime.toUtc(), tz.UTC);
+    final tzTime = reminderAtToZonedDateTime(scheduledTime);
     final androidScheduleMode = await _androidScheduleMode();
 
     await _plugin.zonedSchedule(

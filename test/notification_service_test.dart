@@ -5,6 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tempo/core/constants/app_constants.dart';
+import 'package:tempo/core/utils/notification_timezone.dart';
 import 'package:tempo/features/tasks/data/notification_service.dart';
 import 'package:tempo/features/tasks/domain/recurrence_engine.dart';
 import 'package:tempo/features/tasks/domain/recurrence_models.dart';
@@ -62,6 +63,23 @@ void main() {
     });
   });
 
+  group('reminderAtToZonedDateTime', () {
+    setUp(() {
+      configureNotificationTimezoneForTest('Asia/Shanghai');
+    });
+
+    tearDown(resetNotificationTimezoneForTest);
+
+    test('maps local reminder wall clock into tz.local', () {
+      final zoned = reminderAtToZonedDateTime(DateTime(2026, 7, 8, 8));
+      expect(zoned.year, 2026);
+      expect(zoned.month, 7);
+      expect(zoned.day, 8);
+      expect(zoned.hour, 8);
+      expect(zoned.location, tz.local);
+    });
+  });
+
   group('NotificationService preferences', () {
     late NotificationService service;
 
@@ -103,6 +121,7 @@ void main() {
 
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
+      configureNotificationTimezoneForTest('Asia/Shanghai');
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
       platform = _FakeIOSNotificationsPlugin();
       FlutterLocalNotificationsPlatform.instance = platform;
@@ -112,6 +131,7 @@ void main() {
 
     tearDown(() {
       debugDefaultTargetPlatformOverride = null;
+      resetNotificationTimezoneForTest();
     });
 
     test('uses stable notification ids for the same key', () {
@@ -170,6 +190,34 @@ void main() {
         contains(_formatDay(today.add(const Duration(days: 1)))),
       );
     });
+
+    test(
+      'scheduleRecurringReminders schedules all-day series at 08:00 local',
+      () async {
+        final anchor = RecurrenceEngine.calendarDay(
+          DateTime.now().add(const Duration(days: 2)),
+        );
+        final task = Task(
+          id: 'task-1',
+          listId: 'inbox',
+          title: '死虫式',
+          dueDate: anchor,
+          isAllDay: true,
+          recurrenceRule: 'FREQ=DAILY',
+          recurrenceCount: 15,
+          createdAt: anchor,
+          updatedAt: anchor,
+        );
+
+        await service.scheduleRecurringReminders(task);
+
+        expect(platform.scheduled, isNotEmpty);
+        final first = platform.scheduled.first;
+        expect(first.scheduledDate.hour, 8);
+        expect(first.scheduledDate.minute, 0);
+        expect(first.scheduledDate.location, tz.local);
+      },
+    );
 
     test(
       'scheduleRecurringReminders clears legacy pending before scheduling',

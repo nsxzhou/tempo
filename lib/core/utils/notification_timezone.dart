@@ -36,7 +36,6 @@ void resetNotificationTimezoneForTest() {
   _configured = false;
 }
 
-@visibleForTesting
 tz.TZDateTime reminderAtToZonedDateTime(DateTime reminderAt) {
   return tz.TZDateTime(
     tz.local,

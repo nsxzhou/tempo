@@ -59,10 +59,13 @@ String? taskIdFromNotificationPayload(String? payload) {
 class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin;
   final RecurrenceEngine _engine;
+  final DateTime Function() _now;
   bool _initialized = false;
   static SharedPreferences? _prefsCache;
 
   static const _recurringHorizon = 14;
+  static const _cancelLookbackDays = 60;
+  static const _cancelLookaheadDays = 60;
 
   static Future<SharedPreferences> _prefs() async {
     return _prefsCache ??= await SharedPreferences.getInstance();
@@ -73,8 +76,10 @@ class NotificationService {
   NotificationService({
     FlutterLocalNotificationsPlugin? plugin,
     RecurrenceEngine? engine,
+    DateTime Function()? now,
   }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin(),
-       _engine = engine ?? const RecurrenceEngine();
+       _engine = engine ?? const RecurrenceEngine(),
+       _now = now ?? DateTime.now;
 
   Future<void> init() async {
     if (_initialized) return;
@@ -159,13 +164,14 @@ class NotificationService {
     List<RecurrenceException> exceptions = const [],
   }) async {
     if (!await isRemindersEnabled()) return;
+    if (!_initialized) await init();
+
+    await cancelAll();
     for (final task in tasks) {
-      unawaited(
-        scheduleTaskReminder(
-          task,
-          completions: completions.forTask(task.id, (c) => c.taskId),
-          exceptions: exceptions.forTask(task.id, (e) => e.taskId),
-        ),
+      await scheduleTaskReminder(
+        task,
+        completions: completions.forTask(task.id, (c) => c.taskId),
+        exceptions: exceptions.forTask(task.id, (e) => e.taskId),
       );
     }
   }
@@ -175,6 +181,11 @@ class NotificationService {
     List<TaskCompletion> completions = const [],
     List<RecurrenceException> exceptions = const [],
   }) async {
+    if (!await isRemindersEnabled()) return;
+    if (task.isCompleted || task.dueDate == null) {
+      await cancelTaskReminders(task.id);
+      return;
+    }
     if (task.isRecurring) {
       await scheduleRecurringReminders(
         task,
@@ -198,7 +209,7 @@ class NotificationService {
 
       await cancelTaskReminders(task.id);
 
-      final now = DateTime.now();
+      final now = _now();
       final fromDay = RecurrenceEngine.calendarDay(now);
       final occs = _engine.expandOccurrences(
         task,
@@ -248,9 +259,10 @@ class NotificationService {
     await _cancelPendingWhere(
       (request) => taskIdFromNotificationPayload(request.payload) == taskId,
     );
-    // 兼容无法读取 pending notification 的平台：仍尝试取消当前稳定 ID 窗口。
-    for (var i = 0; i < _recurringHorizon; i++) {
-      final day = DateTime.now().add(Duration(days: i));
+    // 兼容无法读取 pending notification 的平台，并清理旧版本留下的已展示/过去 occurrence。
+    final today = RecurrenceEngine.calendarDay(_now());
+    for (var i = -_cancelLookbackDays; i <= _cancelLookaheadDays; i++) {
+      final day = today.add(Duration(days: i));
       await _safeCancel(_occurrenceNotificationId(taskId, day));
     }
   }
@@ -294,7 +306,7 @@ class NotificationService {
       if (!await isRemindersEnabled()) return;
       if (due == null) return;
 
-      final now = DateTime.now();
+      final now = _now();
       final reminderAt = todoReminderDateTime(task, due);
       if (!reminderAt.isAfter(now)) return;
 

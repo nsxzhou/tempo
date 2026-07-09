@@ -161,6 +161,79 @@ void main() {
       },
     );
 
+    test('scheduleTaskReminder skips completed single task', () async {
+      final now = DateTime(2026, 7, 9, 7);
+      service = NotificationService(now: () => now);
+      final task = Task(
+        id: 'task-1',
+        listId: 'inbox',
+        title: '测试提醒',
+        dueDate: now.add(const Duration(days: 1)),
+        isCompleted: true,
+        completedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      await service.scheduleTaskReminder(task);
+
+      expect(platform.scheduled, isEmpty);
+      expect(
+        platform.cancelledIds,
+        contains(stableNotificationIdForKey('task:task-1')),
+      );
+    });
+
+    test(
+      'scheduleTaskReminder does not backfill missed all-day reminder',
+      () async {
+        final now = DateTime(2026, 7, 9, 10, 50);
+        service = NotificationService(now: () => now);
+        final task = Task(
+          id: 'task-1',
+          listId: 'inbox',
+          title: '死虫式',
+          dueDate: DateTime(2026, 7, 9),
+          isAllDay: true,
+          createdAt: DateTime(2026, 7, 8),
+          updatedAt: DateTime(2026, 7, 8),
+        );
+
+        await service.scheduleTaskReminder(task);
+
+        expect(platform.scheduled, isEmpty);
+      },
+    );
+
+    test(
+      'rescheduleAllTasks clears old notifications before rebuilding',
+      () async {
+        final now = DateTime(2026, 7, 9, 7);
+        service = NotificationService(now: () => now);
+        platform.pending.addAll([
+          const PendingNotificationRequest(91, '待办提醒', '旧提醒', 'old-task'),
+          const PendingNotificationRequest(92, '待办提醒', '旧重复', 'old-repeat'),
+        ]);
+        final task = Task(
+          id: 'task-1',
+          listId: 'inbox',
+          title: '明天提醒',
+          dueDate: DateTime(2026, 7, 10),
+          isAllDay: true,
+          createdAt: now,
+          updatedAt: now,
+        );
+
+        await service.rescheduleAllTasks([task]);
+
+        final pendingIds = platform.pending.map((request) => request.id);
+        expect(pendingIds, isNot(contains(91)));
+        expect(pendingIds, isNot(contains(92)));
+        expect(platform.scheduled, hasLength(1));
+        expect(platform.scheduled.single.scheduledDate.hour, 8);
+      },
+    );
+
     test('scheduleRecurringReminders skips completed occurrence', () async {
       final now = DateTime.now();
       final today = RecurrenceEngine.calendarDay(now);

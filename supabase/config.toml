@@ -55,5 +55,8 @@ verify_jwt = false
 [functions.asr-relay]
 verify_jwt = false
 
+[functions.send-task-reminders]
+verify_jwt = false
+
 [edge_runtime]
 policy = "per_worker"

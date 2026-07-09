@@ -210,7 +210,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   Future<void> _toggleNotification(bool value) async {
     setState(() => _notificationEnabled = value);
     final notificationService = ref.read(notificationServiceProvider);
+    final remoteNotificationService = ref.read(
+      remoteNotificationServiceProvider,
+    );
     await notificationService.setRemindersEnabled(value);
+    await remoteNotificationService.setRemindersEnabled(value);
     if (value) {
       await notificationService.requestPermissions();
       final tasks = ref.read(taskListProvider).valueOrNull ?? [];

@@ -32,28 +32,40 @@ class _TempoAppState extends ConsumerState<TempoApp> {
     super.initState();
 
     final notificationService = ref.read(notificationServiceProvider);
-    final router = ref.read(routerProvider);
-    notificationService.onNotificationTap = (taskId) {
-      router.go(AppConstants.routeTasks);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(taskDetailOverlayProvider.notifier).state = true;
-        router.push('/tasks/$taskId').whenComplete(() {
-          ref.read(taskDetailOverlayProvider.notifier).state = false;
-        });
-      });
-    };
+    notificationService.onNotificationTap = _openTaskFromNotification;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_bootstrapNotifications());
     });
   }
 
+  void _openTaskFromNotification(String taskId) {
+    final router = ref.read(routerProvider);
+    router.go(AppConstants.routeTasks);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(taskDetailOverlayProvider.notifier).state = true;
+      router.push('/tasks/$taskId').whenComplete(() {
+        ref.read(taskDetailOverlayProvider.notifier).state = false;
+      });
+    });
+  }
+
   Future<void> _bootstrapNotifications() async {
     try {
       final notificationService = ref.read(notificationServiceProvider);
+      final remoteNotificationService = ref.read(
+        remoteNotificationServiceProvider,
+      );
+      remoteNotificationService.onNotificationTap = _openTaskFromNotification;
       await notificationService.init();
+      final remindersEnabled = await notificationService.isRemindersEnabled();
+      await remoteNotificationService.init(
+        onNotificationTap: _openTaskFromNotification,
+      );
+      await remoteNotificationService.syncDevice(enabled: remindersEnabled);
+      if (!remindersEnabled) return;
+
       await notificationService.requestPermissions();
-      if (!await notificationService.isRemindersEnabled()) return;
 
       final tasks = await ref.read(taskRepositoryProvider).watchTasks().first;
       if (tasks.isNotEmpty) {
@@ -76,6 +88,7 @@ class _TempoAppState extends ConsumerState<TempoApp> {
       }
     } catch (e, stack) {
       assert(() {
+        if (e is AssertionError) return true;
         debugPrint('[Tempo] bootstrapNotifications failed: $e');
         debugPrintStack(stackTrace: stack);
         return true;

@@ -18,6 +18,7 @@ import 'features/settings/data/feedback_service.dart';
 import 'features/settings/data/siyuan_pairing_service.dart';
 import 'features/tasks/data/notification_service.dart';
 import 'features/tasks/data/recurrence_repository.dart';
+import 'features/tasks/data/remote_notification_service.dart';
 import 'features/tasks/data/sync_service.dart';
 import 'features/tasks/data/task_background_repository.dart';
 import 'features/tasks/data/task_repository.dart';
@@ -319,6 +320,18 @@ final syncServiceProvider = Provider<SyncService>((ref) {
 
 final notificationServiceProvider = Provider<NotificationService>((ref) {
   return NotificationService();
+});
+
+final remoteNotificationServiceProvider = Provider<RemoteNotificationService>((
+  ref,
+) {
+  final service = RemoteNotificationService(
+    supabase: ref.watch(supabaseProvider),
+  );
+  ref.onDispose(() {
+    unawaited(service.dispose());
+  });
+  return service;
 });
 
 // ── TextParseService ──

@@ -104,6 +104,7 @@ class AppConstants {
   static const String tableSiyuanPairingCodes = 'siyuan_pairing_codes';
   static const String tableSiyuanBindings = 'siyuan_bindings';
   static const String tableFeedback = 'feedback';
+  static const String tableNotificationDevices = 'notification_devices';
 
   // ── 默认列表 ──
   static const String defaultListName = 'Inbox';

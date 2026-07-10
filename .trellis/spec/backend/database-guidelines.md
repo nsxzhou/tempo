@@ -215,79 +215,23 @@ flutter test
 - Bumping schema structure without bumping `schemaVersion`.
 - Creating additional `AppDatabase()` instances outside the provider lifecycle.
 
-## Cloud Reminder Ownership Contract
+## Local Reminder Ownership
 
-### Scope / Trigger
+Tempo reminders are device-local and must not depend on task sync success,
+Firebase, an Edge Function, or a server Cron.
 
-Apply this contract whenever task persistence, sync state, local notifications,
-FCM payloads, or `notification_deliveries` change.
+- Every incomplete local task with a due date is owned by
+  `NotificationService` on that device.
+- Single tasks schedule one stable notification keyed by `taskId`.
+- Recurring tasks schedule future occurrences for a rolling 90-day window,
+  keyed by `taskId + occurrenceDate`.
+- Never schedule `reminderAt <= now`; missed reminders are not backfilled.
+- All-day tasks remind at 08:00 in the device timezone.
+- Completion, cancellation, reschedule, deletion, logout, and recurrence
+  exceptions must update local schedules.
+- Cross-device changes are scheduled only after that device next opens Tempo
+  and synchronizes. Android force-stop is outside the delivery guarantee.
 
-### Signatures
-
-- `SyncTaskRepository(..., onTaskSynced: Future<void> Function(String taskId)?)`
-- `NotificationService.markTaskSynced(String taskId)` cancels the temporary
-  local reminder after a successful cloud upsert.
-- `notification_deliveries.attempt_count INT NOT NULL DEFAULT 1`
-- `notification_deliveries.last_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now()`
-- `claim_notification_delivery_retry(device, task, occurrence, reminder_at, now)`
-  returns whether a failed delivery was atomically claimed for retry.
-
-### Contracts
-
-- Unsynced (`syncPending=true`) tasks own a local reminder.
-- A synced task becomes cloud-owned only after its FCM token is successfully
-  written to `notification_devices`; login state alone is not sufficient.
-- If Firebase initialization, token retrieval, or device upsert fails, synced
-  tasks retain local scheduled reminders.
-- A recurring local fallback schedules only the next pending occurrence.
-- FCM data includes `reminderKey`, `taskId`, `occurrenceDate`, and `reminderAt`.
-- The reminder Edge Function only considers reminders in the previous two
-  minutes through the actual invocation time. It never sends future reminders
-  early and never backfills older reminders.
-
-### Validation & Error Matrix
-
-| Condition | Required behavior |
-|---|---|
-| task cloud upsert succeeds, FCM registered | persist `syncPending=false`, then cancel local reminder |
-| task cloud upsert succeeds, FCM unavailable | retain the existing local fallback |
-| task cloud upsert fails | retain `syncPending=true` and local fallback |
-| FCM succeeds | mark delivery `sent`; unique key prevents another send |
-| transient FCM failure within 2 minutes | mark `failed`; RPC may claim at most two retries |
-| failure is older than 2 minutes | keep failed record; do not resend |
-| invalid FCM token | record failure and remove the device token |
-| user signs out | disable the current token and clear local schedules |
-
-### Good / Base / Bad Cases
-
-- Good: offline task gets one local reminder; sync success cancels it; FCM owns
-  all later occurrences.
-- Base: Cron runs late by one minute and retries the same failed delivery once.
-- Bad: scheduling 14 local occurrences for a cloud-owned repeating task, which
-  can leave stale notifications and duplicate FCM.
-
-### Tests Required
-
-- Assert recurring local fallback creates exactly one pending notification.
-- Assert cloud-owned tasks create no local schedule.
-- Assert sync success invokes `onTaskSynced` for immediate and queued upserts.
-- Assert recurrence COUNT counts actual occurrences, including multi-day weekly
-  rules.
-- Assert the server window excludes future reminders and reminders older than
-  two minutes.
-- Assert foreground FCM is converted to one system notification using the
-  stable reminder key.
-
-### Wrong vs Correct
-
-```dart
-// Wrong: cloud-owned series also reserves many local alarms.
-for (final occurrence in futureOccurrences.take(14)) {
-  await schedule(occurrence);
-}
-
-// Correct: only an unsynced/local-owned task gets the next fallback alarm.
-if (task.syncPending) {
-  await schedule(engine.nextOccurrence(task));
-}
-```
+Supabase must not contain notification device tokens, delivery ledgers, or a
+reminder Cron/Edge Function. Historical migrations remain immutable; schema
+removal is performed by a later migration.

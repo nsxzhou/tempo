@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 6
+- **Total Sessions**: 7
 - **Last Active**: 2026-07-10
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~216 | Active |
+| `journal-1.md` | ~249 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 7 | 2026-07-10 | 修复 FCM 注册失败兜底 | `1421370` | `main` |
 | 6 | 2026-07-10 | 修复 Android 云端任务提醒 | `a32e43d`, `eea1314` | `main` |
 | 5 | 2026-07-07 | 同步刷新与思源绑定优化 | `88a7598`, `49b3c1e`, `9e3efc7` | `main` |
 | 4 | 2026-07-02 | 删除统计页面 | `3fa68ec` | `main` |

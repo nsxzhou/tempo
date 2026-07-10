@@ -214,3 +214,36 @@ P0 fixes, full deploy, 8 atomic commits, archive all 8 Trellis tasks
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: 修复 FCM 注册失败兜底
+
+**Date**: 2026-07-10
+**Task**: 修复 FCM 注册失败兜底
+**Branch**: `main`
+
+### Summary
+
+根据线上 notification_devices 始终为 0 的诊断，改为只有 FCM token 成功注册后才切换云端提醒；Firebase/token/upsert 失败时保留 Android 本地系统提醒，并修正同步成功回调无条件取消本地提醒的问题。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1421370` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

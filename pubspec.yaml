@@ -1,7 +1,7 @@
 name: tempo
 description: "Tempo — 智能待办 App + 思源笔记集成"
 publish_to: 'none'
-version: 0.1.1+2
+version: 0.1.2+3
 
 environment:
   sdk: ^3.11.4
@@ -43,8 +43,6 @@ dependencies:
   flutter_timezone: ^5.0.1
   image_picker: ^1.2.2
   rrule: ^0.2.18
-  firebase_core: ^4.11.0
-  firebase_messaging: ^16.4.1
 
 dev_dependencies:
   flutter_test:

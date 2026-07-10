@@ -247,3 +247,47 @@ P0 fixes, full deploy, 8 atomic commits, archive all 8 Trellis tasks
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: 将提醒系统改为完全本地通知
+
+**Date**: 2026-07-10
+**Task**: 将提醒系统改为完全本地通知
+**Branch**: `main`
+
+### Summary
+
+Tempo 提醒切换为本地 AlarmManager，移除 FCM/Supabase 定时提醒，完成真机进程退出提醒验收和云端清理。
+
+### Main Changes
+
+- 将 Android 提醒切换为完全本地 AlarmManager / flutter_local_notifications，并串行协调排程。
+- 重复任务仅滚动排定未来 90 天，不补发历史提醒；支持完成、取消、改期和标题覆盖。
+- 删除 FCM、Firebase 客户端配置、Supabase 定时函数、Cron、通知表和相关密钥。
+- 默认启用提醒，首次进入任务页申请权限，并在权限或精确闹钟能力异常时显示恢复提示。
+- 完成 Android 16 真机进程退出提醒验收，并安装 0.1.2+3 release APK。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `196e32d` | feat(reminders): switch to local-only scheduling |
+| `02eac7a` | chore(notifications): remove Firebase reminder backend |
+| `3a4ea83` | docs(reminders): document local notification ownership |
+
+### Testing
+
+- [OK] `flutter analyze`
+- [OK] `flutter test`（170 项）
+- [OK] `flutter build apk --release`
+- [OK] 小米 Android 16 真机：App 退出进程后本地提醒成功展示
+- [OK] ADB 确认 exact RTC_WAKEUP AlarmManager 条目存在
+- [OK] Supabase 通知表、函数、Cron、Secret 与 Firebase 项目清理完成
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

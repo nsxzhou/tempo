@@ -170,7 +170,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                   TempoPreferenceRow(
                     icon: LucideIcons.bell,
                     title: '待办提醒',
-                    subtitle: '有日期的待办，在对应日当天早上 8:00 推送',
+                    subtitle: '具体时间按时提醒，全天任务当天 08:00 提醒',
                     trailing: Switch(
                       value: _notificationEnabled,
                       onChanged: _toggleNotification,
@@ -292,6 +292,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     );
     if (confirmed != true || !mounted) return;
     try {
+      await ref.read(remoteNotificationServiceProvider).disableCurrentDevice();
+      await ref.read(notificationServiceProvider).cancelAll();
       await ref.read(authServiceProvider).signOut();
       if (!mounted) return;
       context.go(AppConstants.routeLogin);

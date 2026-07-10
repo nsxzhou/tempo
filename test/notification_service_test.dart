@@ -264,6 +264,55 @@ void main() {
       );
     });
 
+    test('scheduleRecurringReminders only schedules next occurrence', () async {
+      final now = DateTime(2026, 7, 10, 8, 0);
+      service = NotificationService(now: () => now);
+      final task = Task(
+        id: 'task-1',
+        listId: 'inbox',
+        title: '死虫式',
+        dueDate: DateTime(2026, 7, 10, 9),
+        recurrenceRule: 'FREQ=DAILY;INTERVAL=1;COUNT=7',
+        recurrenceCount: 7,
+        syncPending: true,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      await service.scheduleRecurringReminders(task);
+
+      expect(platform.scheduled, hasLength(1));
+      final payload =
+          jsonDecode(platform.scheduled.single.payload!)
+              as Map<String, dynamic>;
+      expect(payload['occurrenceDate'], '2026-07-10');
+    });
+
+    test('synced cloud task does not keep local reminder', () async {
+      final now = DateTime(2026, 7, 10, 8);
+      service = NotificationService(
+        now: () => now,
+        cloudRemindersAvailable: () => true,
+      );
+      final task = Task(
+        id: 'task-1',
+        listId: 'inbox',
+        title: '云端任务',
+        dueDate: DateTime(2026, 7, 10, 9),
+        syncPending: false,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      await service.scheduleTaskReminder(task);
+
+      expect(platform.scheduled, isEmpty);
+      expect(
+        platform.cancelledIds,
+        contains(stableNotificationIdForKey('task:task-1')),
+      );
+    });
+
     test(
       'scheduleRecurringReminders schedules all-day series at 08:00 local',
       () async {
@@ -291,6 +340,29 @@ void main() {
         expect(first.scheduledDate.location, tz.local);
       },
     );
+
+    test('showRemoteReminder uses stable id and payload', () async {
+      await service.showRemoteReminder(
+        reminderKey: 'task-1:2026-07-10:2026-07-10T01:00:00.000Z',
+        taskId: 'task-1',
+        title: '待办提醒',
+        body: '死虫式',
+        occurrenceDate: '2026-07-10',
+        reminderAt: '2026-07-10T01:00:00.000Z',
+      );
+
+      expect(platform.shown, hasLength(1));
+      final shown = platform.shown.single;
+      expect(
+        shown.id,
+        stableNotificationIdForKey(
+          'remote:task-1:2026-07-10:2026-07-10T01:00:00.000Z',
+        ),
+      );
+      final payload = jsonDecode(shown.payload!) as Map<String, dynamic>;
+      expect(payload['taskId'], 'task-1');
+      expect(payload['occurrenceDate'], '2026-07-10');
+    });
 
     test(
       'scheduleRecurringReminders clears legacy pending before scheduling',
@@ -358,10 +430,18 @@ class _ScheduledNotification {
   final String? payload;
 }
 
+class _ShownNotification {
+  const _ShownNotification({required this.id, required this.payload});
+
+  final int id;
+  final String? payload;
+}
+
 class _FakeIOSNotificationsPlugin extends IOSFlutterLocalNotificationsPlugin {
   final pending = <PendingNotificationRequest>[];
   final cancelledIds = <int>[];
   final scheduled = <_ScheduledNotification>[];
+  final shown = <_ShownNotification>[];
 
   @override
   Future<bool?> initialize({
@@ -387,6 +467,17 @@ class _FakeIOSNotificationsPlugin extends IOSFlutterLocalNotificationsPlugin {
   @override
   Future<void> cancelAll() async {
     pending.clear();
+  }
+
+  @override
+  Future<void> show({
+    required int id,
+    String? title,
+    String? body,
+    DarwinNotificationDetails? notificationDetails,
+    String? payload,
+  }) async {
+    shown.add(_ShownNotification(id: id, payload: payload));
   }
 
   @override

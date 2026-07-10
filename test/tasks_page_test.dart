@@ -645,6 +645,21 @@ class _NoopNotificationService implements NotificationService {
   Future<void> init() async {}
 
   @override
+  Future<void> markTaskSynced(String taskId) async {
+    await cancelTaskReminders(taskId);
+  }
+
+  @override
+  Future<void> showRemoteReminder({
+    required String reminderKey,
+    required String taskId,
+    required String title,
+    required String body,
+    String? occurrenceDate,
+    String? reminderAt,
+  }) async {}
+
+  @override
   Future<void> cancelAll() async {}
 
   @override

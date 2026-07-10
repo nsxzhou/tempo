@@ -13,17 +13,40 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/app_constants.dart';
 
+typedef ForegroundReminderHandler =
+    Future<void> Function({
+      required String reminderKey,
+      required String taskId,
+      required String title,
+      required String body,
+      String? occurrenceDate,
+      String? reminderAt,
+    });
+
 class RemoteNotificationService {
   RemoteNotificationService({
     required SupabaseClient supabase,
     FirebaseMessaging? messaging,
+    ForegroundReminderHandler? showForegroundReminder,
+    Stream<RemoteMessage>? foregroundMessages,
+    Stream<RemoteMessage>? openedMessages,
+    Future<bool> Function()? ensureFirebaseInitialized,
   }) : _supabase = supabase,
-       _messaging = messaging ?? FirebaseMessaging.instance;
+       _messaging = messaging ?? FirebaseMessaging.instance,
+       _showForegroundReminder = showForegroundReminder,
+       _foregroundMessages = foregroundMessages ?? FirebaseMessaging.onMessage,
+       _openedMessages = openedMessages ?? FirebaseMessaging.onMessageOpenedApp,
+       _ensureFirebase = ensureFirebaseInitialized;
 
   final SupabaseClient _supabase;
   final FirebaseMessaging _messaging;
+  final ForegroundReminderHandler? _showForegroundReminder;
+  final Stream<RemoteMessage> _foregroundMessages;
+  final Stream<RemoteMessage> _openedMessages;
+  final Future<bool> Function()? _ensureFirebase;
   StreamSubscription<String>? _tokenRefreshSubscription;
   StreamSubscription<RemoteMessage>? _openedSubscription;
+  StreamSubscription<RemoteMessage>? _foregroundSubscription;
   bool _initialized = false;
   bool _firebaseAvailable = false;
   bool _lastEnabled = true;
@@ -36,7 +59,8 @@ class RemoteNotificationService {
     }
     if (_initialized) return;
 
-    _firebaseAvailable = await _ensureFirebaseInitialized();
+    _firebaseAvailable =
+        await (_ensureFirebase?.call() ?? _ensureFirebaseInitialized());
     if (!_firebaseAvailable) {
       _initialized = true;
       return;
@@ -44,8 +68,9 @@ class RemoteNotificationService {
 
     await _messaging.requestPermission(alert: true, badge: true, sound: true);
 
-    _openedSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
-      _handleMessageTap,
+    _openedSubscription = _openedMessages.listen(_handleMessageTap);
+    _foregroundSubscription = _foregroundMessages.listen(
+      _handleForegroundMessage,
     );
     final initialMessage = await _messaging.getInitialMessage();
     if (initialMessage != null) {
@@ -72,9 +97,19 @@ class RemoteNotificationService {
     await syncDevice(enabled: enabled);
   }
 
+  Future<void> disableCurrentDevice() async {
+    _lastEnabled = false;
+    if (!_initialized) await init();
+    if (!_firebaseAvailable) return;
+    final token = await _messaging.getToken();
+    if (token == null || token.isEmpty) return;
+    await _upsertToken(token: token, enabled: false);
+  }
+
   Future<void> dispose() async {
     await _tokenRefreshSubscription?.cancel();
     await _openedSubscription?.cancel();
+    await _foregroundSubscription?.cancel();
   }
 
   Future<bool> _ensureFirebaseInitialized() async {
@@ -117,6 +152,32 @@ class RemoteNotificationService {
         return true;
       }());
     }
+  }
+
+  Future<void> _handleForegroundMessage(RemoteMessage message) async {
+    final handler = _showForegroundReminder;
+    if (handler == null) return;
+    final taskId = message.data['taskId'];
+    final reminderKey = message.data['reminderKey'];
+    if (taskId is! String ||
+        taskId.isEmpty ||
+        reminderKey is! String ||
+        reminderKey.isEmpty) {
+      return;
+    }
+    await handler(
+      reminderKey: reminderKey,
+      taskId: taskId,
+      title: message.notification?.title ?? '待办提醒',
+      body: message.notification?.body ?? '',
+      occurrenceDate: _stringData(message, 'occurrenceDate'),
+      reminderAt: _stringData(message, 'reminderAt'),
+    );
+  }
+
+  String? _stringData(RemoteMessage message, String key) {
+    final value = message.data[key];
+    return value is String && value.isNotEmpty ? value : null;
   }
 
   void _handleMessageTap(RemoteMessage message) {

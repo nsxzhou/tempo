@@ -130,6 +130,7 @@ class SyncTaskRepository implements TaskRepository {
   )?
   _occurrenceToggle;
   final Future<void> Function(List<String> taskIds)? _recurrenceRefresh;
+  final Future<void> Function(String taskId)? _onTaskSynced;
   Timer? _refreshDebounce;
   Future<void>? _refreshInFlight;
 
@@ -151,6 +152,7 @@ class SyncTaskRepository implements TaskRepository {
     )?
     occurrenceToggle,
     Future<void> Function(List<String> taskIds)? recurrenceRefresh,
+    Future<void> Function(String taskId)? onTaskSynced,
   }) : _localDb = localDb,
        _supabase = supabase,
        _userId = userId,
@@ -161,7 +163,8 @@ class SyncTaskRepository implements TaskRepository {
        _remoteTaskFetch = remoteTaskFetch,
        _remoteTaskDelete = remoteTaskDelete,
        _occurrenceToggle = occurrenceToggle,
-       _recurrenceRefresh = recurrenceRefresh;
+       _recurrenceRefresh = recurrenceRefresh,
+       _onTaskSynced = onTaskSynced;
 
   // ── 写入路径 ──
 
@@ -347,6 +350,7 @@ class SyncTaskRepository implements TaskRepository {
       try {
         final remote = await _upsertRemoteTask(task, userId);
         await _upsertLocal(remote.copyWith(syncPending: false));
+        await _onTaskSynced?.call(task.id);
       } catch (_) {
         // Keep syncPending=true; SyncService.pushPending retries later.
       }
@@ -480,6 +484,7 @@ class SyncTaskRepository implements TaskRepository {
           final task = _mapTask(row);
           final remote = await _upsertRemoteTask(task, userId);
           await _upsertLocal(remote.copyWith(syncPending: false));
+          await _onTaskSynced?.call(row.id);
           clearedIds.add(row.id);
         } catch (_) {
           // 保留 pending，下次重试

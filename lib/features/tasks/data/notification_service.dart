@@ -60,10 +60,11 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin;
   final RecurrenceEngine _engine;
   final DateTime Function() _now;
+  final bool Function() _cloudRemindersAvailable;
   bool _initialized = false;
+  final Set<String> _cloudSyncedTaskIds = <String>{};
   static SharedPreferences? _prefsCache;
 
-  static const _recurringHorizon = 14;
   static const _cancelLookbackDays = 60;
   static const _cancelLookaheadDays = 60;
 
@@ -77,9 +78,11 @@ class NotificationService {
     FlutterLocalNotificationsPlugin? plugin,
     RecurrenceEngine? engine,
     DateTime Function()? now,
+    bool Function()? cloudRemindersAvailable,
   }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin(),
        _engine = engine ?? const RecurrenceEngine(),
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now,
+       _cloudRemindersAvailable = cloudRemindersAvailable ?? (() => false);
 
   Future<void> init() async {
     if (_initialized) return;
@@ -182,7 +185,10 @@ class NotificationService {
     List<RecurrenceException> exceptions = const [],
   }) async {
     if (!await isRemindersEnabled()) return;
-    if (task.isCompleted || task.dueDate == null) {
+    if (task.isCompleted ||
+        task.dueDate == null ||
+        (_cloudRemindersAvailable() &&
+            (!task.syncPending || _cloudSyncedTaskIds.contains(task.id)))) {
       await cancelTaskReminders(task.id);
       return;
     }
@@ -209,29 +215,26 @@ class NotificationService {
 
       await cancelTaskReminders(task.id);
 
+      if (_cloudRemindersAvailable() &&
+          (!task.syncPending || _cloudSyncedTaskIds.contains(task.id))) {
+        return;
+      }
+
       final now = _now();
-      final fromDay = RecurrenceEngine.calendarDay(now);
-      final occs = _engine.expandOccurrences(
+      final occurrence = _engine.nextOccurrence(
         task,
-        from: fromDay,
-        to: fromDay.add(const Duration(days: 60)),
         completions: completions,
         exceptions: exceptions,
         now: now,
       );
+      if (occurrence == null) return;
 
-      var scheduled = 0;
-      for (final occ in occs) {
-        if (occ.state != OccurrenceState.pending) continue;
-        if (scheduled >= _recurringHorizon) break;
-        await _scheduleSingle(
-          task,
-          occ.effectiveDue,
-          task.id,
-          occurrenceDate: occ.occurrenceDate,
-        );
-        scheduled++;
-      }
+      await _scheduleSingle(
+        task,
+        occurrence.effectiveDue,
+        task.id,
+        occurrenceDate: occurrence.occurrenceDate,
+      );
     } catch (e, stack) {
       _debugPrintNotificationFailure(
         'scheduleRecurringReminders failed for ${task.id}',
@@ -239,6 +242,11 @@ class NotificationService {
         stack,
       );
     }
+  }
+
+  Future<void> markTaskSynced(String taskId) async {
+    _cloudSyncedTaskIds.add(taskId);
+    await cancelTaskReminders(taskId);
   }
 
   Future<void> cancelOccurrenceReminder(
@@ -399,6 +407,45 @@ class NotificationService {
       androidScheduleMode: androidScheduleMode,
       title: title,
       body: body,
+      payload: payload,
+    );
+  }
+
+  Future<void> showRemoteReminder({
+    required String reminderKey,
+    required String taskId,
+    required String title,
+    required String body,
+    String? occurrenceDate,
+    String? reminderAt,
+  }) async {
+    if (!await isRemindersEnabled()) return;
+    if (!_initialized) await init();
+
+    final payload = jsonEncode({
+      'v': 1,
+      'reminderKey': reminderKey,
+      'taskId': taskId,
+      if (occurrenceDate != null && occurrenceDate.isNotEmpty)
+        'occurrenceDate': occurrenceDate,
+      if (reminderAt != null && reminderAt.isNotEmpty) 'reminderAt': reminderAt,
+    });
+    await _plugin.show(
+      id: stableNotificationIdForKey('remote:$reminderKey'),
+      title: title,
+      body: body,
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          AppConstants.notificationChannelId,
+          AppConstants.notificationChannelName,
+          channelDescription: AppConstants.notificationChannelDesc,
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+          tag: reminderKey,
+        ),
+        iOS: const DarwinNotificationDetails(),
+      ),
       payload: payload,
     );
   }

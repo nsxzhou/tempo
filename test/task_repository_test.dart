@@ -36,6 +36,7 @@ void main() {
     Future<Task> Function(Task task, String userId)? remoteTaskUpsert,
     Future<List<Map<String, dynamic>>> Function(String userId)? remoteTaskFetch,
     Future<void> Function(String taskId)? remoteTaskDelete,
+    Future<void> Function(String taskId)? onTaskSynced,
   }) {
     return SyncTaskRepository(
       localDb: db,
@@ -49,6 +50,7 @@ void main() {
       remoteTaskUpsert: remoteTaskUpsert,
       remoteTaskFetch: remoteTaskFetch,
       remoteTaskDelete: remoteTaskDelete,
+      onTaskSynced: onTaskSynced,
     );
   }
 
@@ -87,6 +89,22 @@ void main() {
     final synced = await repository.getTaskById(created.id);
     expect(upsertedIds, [created.id]);
     expect(synced?.syncPending, isFalse);
+  });
+
+  test('pushPending notifies after cloud sync succeeds', () async {
+    connectivity.online = false;
+    final syncedIds = <String>[];
+    final repository = buildRepository(
+      remoteTaskUpsert: (task, userId) async =>
+          task.copyWith(syncPending: false),
+      onTaskSynced: (taskId) async => syncedIds.add(taskId),
+    );
+    final created = await repository.createTask(title: 'Local fallback');
+
+    connectivity.online = true;
+    await repository.pushPending();
+
+    expect(syncedIds, [created.id]);
   });
 
   test('toggleComplete flips completion in a single local update', () async {

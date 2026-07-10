@@ -26,13 +26,19 @@ class TempoApp extends ConsumerStatefulWidget {
   ConsumerState<TempoApp> createState() => _TempoAppState();
 }
 
-class _TempoAppState extends ConsumerState<TempoApp> {
+class _TempoAppState extends ConsumerState<TempoApp>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     final notificationService = ref.read(notificationServiceProvider);
     notificationService.onNotificationTap = _openTaskFromNotification;
+    ref.listenManual<String?>(currentUserIdProvider, (previous, next) {
+      if (previous == next) return;
+      unawaited(_handleUserChanged());
+    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_bootstrapNotifications());
@@ -48,6 +54,40 @@ class _TempoAppState extends ConsumerState<TempoApp> {
         ref.read(taskDetailOverlayProvider.notifier).state = false;
       });
     });
+  }
+
+  Future<void> _syncRemoteNotificationDevice() async {
+    final notificationService = ref.read(notificationServiceProvider);
+    final enabled = await notificationService.isRemindersEnabled();
+    await ref
+        .read(remoteNotificationServiceProvider)
+        .syncDevice(enabled: enabled);
+  }
+
+  Future<void> _handleUserChanged() async {
+    await _syncRemoteNotificationDevice();
+    await _rebuildLocalReminders();
+  }
+
+  Future<void> _rebuildLocalReminders() async {
+    final notificationService = ref.read(notificationServiceProvider);
+    if (ref.read(currentUserIdProvider) == null) {
+      await notificationService.cancelAll();
+      return;
+    }
+    final tasks = await ref.read(taskRepositoryProvider).watchTasks().first;
+    if (tasks.any((task) => task.isRecurring)) {
+      final recurrenceRepository = ref.read(recurrenceRepositoryProvider);
+      final completions = await recurrenceRepository.watchCompletions().first;
+      final exceptions = await recurrenceRepository.watchExceptions().first;
+      await notificationService.rescheduleAllTasks(
+        tasks,
+        completions: completions,
+        exceptions: exceptions,
+      );
+      return;
+    }
+    await notificationService.rescheduleAllTasks(tasks);
   }
 
   Future<void> _bootstrapNotifications() async {
@@ -67,25 +107,7 @@ class _TempoAppState extends ConsumerState<TempoApp> {
 
       await notificationService.requestPermissions();
 
-      final tasks = await ref.read(taskRepositoryProvider).watchTasks().first;
-      if (tasks.isNotEmpty) {
-        if (tasks.any((task) => task.isRecurring)) {
-          final recurrenceRepository = ref.read(recurrenceRepositoryProvider);
-          final completions = await recurrenceRepository
-              .watchCompletions()
-              .first;
-          final exceptions = await recurrenceRepository.watchExceptions().first;
-          unawaited(
-            notificationService.rescheduleAllTasks(
-              tasks,
-              completions: completions,
-              exceptions: exceptions,
-            ),
-          );
-          return;
-        }
-        unawaited(notificationService.rescheduleAllTasks(tasks));
-      }
+      await _rebuildLocalReminders();
     } catch (e, stack) {
       assert(() {
         if (e is AssertionError) return true;
@@ -94,6 +116,19 @@ class _TempoAppState extends ConsumerState<TempoApp> {
         return true;
       }());
     }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_syncRemoteNotificationDevice());
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   @override

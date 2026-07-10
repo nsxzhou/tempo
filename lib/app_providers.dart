@@ -148,6 +148,8 @@ final taskRepositoryProvider = Provider<TaskRepository>((ref) {
       }
     },
     recurrenceRefresh: recurrenceRepo.refreshFromRemote,
+    onTaskSynced: (taskId) =>
+        ref.read(notificationServiceProvider).markTaskSynced(taskId),
   );
 
   unawaited(repository.repairRecurringTasksMissingDueDate());
@@ -319,7 +321,9 @@ final syncServiceProvider = Provider<SyncService>((ref) {
 // ── NotificationService ──
 
 final notificationServiceProvider = Provider<NotificationService>((ref) {
-  return NotificationService();
+  return NotificationService(
+    cloudRemindersAvailable: () => ref.read(currentUserIdProvider) != null,
+  );
 });
 
 final remoteNotificationServiceProvider = Provider<RemoteNotificationService>((
@@ -327,6 +331,24 @@ final remoteNotificationServiceProvider = Provider<RemoteNotificationService>((
 ) {
   final service = RemoteNotificationService(
     supabase: ref.watch(supabaseProvider),
+    showForegroundReminder:
+        ({
+          required reminderKey,
+          required taskId,
+          required title,
+          required body,
+          occurrenceDate,
+          reminderAt,
+        }) => ref
+            .read(notificationServiceProvider)
+            .showRemoteReminder(
+              reminderKey: reminderKey,
+              taskId: taskId,
+              title: title,
+              body: body,
+              occurrenceDate: occurrenceDate,
+              reminderAt: reminderAt,
+            ),
   );
   ref.onDispose(() {
     unawaited(service.dispose());

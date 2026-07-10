@@ -8,11 +8,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app_providers.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/extensions/task_filter.dart';
 import '../../../core/theme/theme_manager.dart';
+import '../../../core/theme/tempo_theme_extension.dart';
 import '../../../core/widgets/tempo/tempo.dart';
+import '../data/notification_service.dart';
 import '../domain/recurrence_engine.dart';
 import '../domain/recurrence_models.dart';
 import '../domain/task.dart';
@@ -46,6 +50,7 @@ class _TasksPageState extends ConsumerState<TasksPage>
       if (!mounted) return;
       unawaited(ref.read(streamingVoiceSessionProvider).prepare());
       unawaited(ref.read(streamingVoiceSessionProvider).ensureMicPermission());
+      unawaited(_maybeExplainNotificationPermission());
     });
   }
 
@@ -70,6 +75,13 @@ class _TasksPageState extends ConsumerState<TasksPage>
   Widget build(BuildContext context) {
     super.build(context);
     final scaffoldBg = ref.watch(scaffoldBackgroundProvider);
+    final tasks = ref.watch(taskListProvider).valueOrNull ?? const <Task>[];
+    final capability = ref.watch(notificationCapabilityProvider).valueOrNull;
+    final hasScheduledTasks = tasks.any(
+      (task) => !task.isCompleted && task.dueDate != null,
+    );
+    final showNotificationWarning =
+        hasScheduledTasks && capability != null && !capability.isFullyAvailable;
 
     return Scaffold(
       backgroundColor: scaffoldBg,
@@ -102,6 +114,16 @@ class _TasksPageState extends ConsumerState<TasksPage>
                             onChanged: _onSearchChanged,
                           ),
                         ),
+                        if (showNotificationWarning)
+                          SliverToBoxAdapter(
+                            child: _NotificationPermissionBanner(
+                              exactAlarmOnly:
+                                  capability.notificationsAllowed &&
+                                  !capability.exactAlarmsAllowed,
+                              onTap: () =>
+                                  _openNotificationSettings(capability),
+                            ),
+                          ),
                         SliverToBoxAdapter(
                           child: TaskScopeSection(
                             scope: _scope,
@@ -141,6 +163,43 @@ class _TasksPageState extends ConsumerState<TasksPage>
         ],
       ),
     );
+  }
+
+  Future<void> _maybeExplainNotificationPermission() async {
+    final service = ref.read(notificationServiceProvider);
+    final capability = await service.capability();
+    if (capability.notificationsAllowed || !mounted) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(AppConstants.prefNotificationPermissionExplained) ==
+        true) {
+      return;
+    }
+    await prefs.setBool(AppConstants.prefNotificationPermissionExplained, true);
+    if (!mounted) return;
+    final accepted = await TempoConfirmDialog.show(
+      context,
+      title: '开启待办提醒',
+      message: '允许 Tempo 发送通知后，即使返回桌面、锁屏或划掉 App，已安排的待办仍可按时提醒。',
+      confirmLabel: '开启提醒',
+      cancelLabel: '暂不开启',
+      barrierDismissible: false,
+    );
+    if (accepted == true) {
+      await service.requestPermissions();
+      ref.invalidate(notificationCapabilityProvider);
+    }
+  }
+
+  Future<void> _openNotificationSettings(
+    NotificationCapability capability,
+  ) async {
+    final service = ref.read(notificationServiceProvider);
+    if (!capability.notificationsAllowed) {
+      await service.openNotificationSettings();
+    } else {
+      await service.openExactAlarmSettings();
+    }
   }
 
   Future<void> _refreshTasks() async {
@@ -308,5 +367,65 @@ class _TasksPageState extends ConsumerState<TasksPage>
     if (!mounted) return;
     setState(() => _showQuickCreate = false);
     ref.read(shellTabBarVisibleProvider.notifier).state = true;
+  }
+}
+
+class _NotificationPermissionBanner extends StatelessWidget {
+  const _NotificationPermissionBanner({
+    required this.exactAlarmOnly,
+    required this.onTap,
+  });
+
+  final bool exactAlarmOnly;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.tokens;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+      child: Material(
+        key: const ValueKey('notification-permission-banner'),
+        color: tokens.bg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: tokens.borderStrong),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Icon(
+                  exactAlarmOnly
+                      ? LucideIcons.clock_alert
+                      : LucideIcons.bell_off,
+                  size: 16,
+                  color: tokens.fg,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    exactAlarmOnly ? '精确提醒未开启，点击前往系统设置' : '通知权限未开启，待办可能无法提醒',
+                    style: TextStyle(
+                      color: tokens.fg,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Icon(
+                  LucideIcons.chevron_right,
+                  size: 15,
+                  color: tokens.fgMuted,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

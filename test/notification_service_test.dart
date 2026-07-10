@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tempo/core/constants/app_constants.dart';
 import 'package:tempo/core/utils/notification_timezone.dart';
 import 'package:tempo/features/tasks/data/notification_service.dart';
 import 'package:tempo/features/tasks/domain/recurrence_engine.dart';
@@ -80,41 +79,6 @@ void main() {
     });
   });
 
-  group('NotificationService preferences', () {
-    late NotificationService service;
-
-    setUp(() {
-      SharedPreferences.setMockInitialValues({});
-      service = NotificationService();
-    });
-
-    test('isRemindersEnabled defaults to true', () async {
-      expect(await service.isRemindersEnabled(), isTrue);
-    });
-
-    test('setRemindersEnabled persists preference', () async {
-      await service.setRemindersEnabled(false);
-      expect(await service.isRemindersEnabled(), isFalse);
-
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getBool(AppConstants.prefNotificationEnabled), isFalse);
-    });
-
-    test('scheduleTaskReminder skips when reminders disabled', () async {
-      await service.setRemindersEnabled(false);
-      final task = Task(
-        id: 'task-1',
-        listId: 'inbox',
-        title: '开会',
-        dueDate: DateTime.now().add(const Duration(days: 1)),
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
-
-      await expectLater(service.scheduleTaskReminder(task), completes);
-    });
-  });
-
   group('NotificationService recurring reminders', () {
     late _FakeIOSNotificationsPlugin platform;
     late NotificationService service;
@@ -126,7 +90,6 @@ void main() {
       platform = _FakeIOSNotificationsPlugin();
       FlutterLocalNotificationsPlatform.instance = platform;
       service = NotificationService();
-      await service.setRemindersEnabled(true);
     });
 
     tearDown(() {
@@ -206,7 +169,7 @@ void main() {
     );
 
     test(
-      'rescheduleAllTasks clears old notifications before rebuilding',
+      'rescheduleAllTasks rebuilds snapshot without clearing unrelated tasks',
       () async {
         final now = DateTime(2026, 7, 9, 7);
         service = NotificationService(now: () => now);
@@ -227,8 +190,8 @@ void main() {
         await service.rescheduleAllTasks([task]);
 
         final pendingIds = platform.pending.map((request) => request.id);
-        expect(pendingIds, isNot(contains(91)));
-        expect(pendingIds, isNot(contains(92)));
+        expect(pendingIds, contains(91));
+        expect(pendingIds, contains(92));
         expect(platform.scheduled, hasLength(1));
         expect(platform.scheduled.single.scheduledDate.hour, 8);
       },
@@ -264,91 +227,42 @@ void main() {
       );
     });
 
-    test('scheduleRecurringReminders only schedules next occurrence', () async {
-      final now = DateTime(2026, 7, 10, 8, 0);
-      service = NotificationService(now: () => now);
-      final task = Task(
-        id: 'task-1',
-        listId: 'inbox',
-        title: '死虫式',
-        dueDate: DateTime(2026, 7, 10, 9),
-        recurrenceRule: 'FREQ=DAILY;INTERVAL=1;COUNT=7',
-        recurrenceCount: 7,
-        syncPending: true,
-        createdAt: now,
-        updatedAt: now,
-      );
-
-      await service.scheduleRecurringReminders(task);
-
-      expect(platform.scheduled, hasLength(1));
-      final payload =
-          jsonDecode(platform.scheduled.single.payload!)
-              as Map<String, dynamic>;
-      expect(payload['occurrenceDate'], '2026-07-10');
-    });
-
     test(
-      'synced task keeps local reminder when cloud is unavailable',
+      'scheduleRecurringReminders schedules all occurrences in horizon',
       () async {
-        final now = DateTime(2026, 7, 10, 8);
-        service = NotificationService(
-          now: () => now,
-          cloudRemindersAvailable: () => false,
-        );
+        final now = DateTime(2026, 7, 10, 8, 0);
+        service = NotificationService(now: () => now);
         final task = Task(
           id: 'task-1',
           listId: 'inbox',
-          title: '本地兜底',
+          title: '死虫式',
           dueDate: DateTime(2026, 7, 10, 9),
-          syncPending: false,
-          createdAt: now,
-          updatedAt: now,
-        );
-
-        await service.scheduleTaskReminder(task);
-
-        expect(platform.scheduled, hasLength(1));
-      },
-    );
-
-    test(
-      'sync success keeps local fallback when cloud is unavailable',
-      () async {
-        final now = DateTime(2026, 7, 10, 8);
-        service = NotificationService(
-          now: () => now,
-          cloudRemindersAvailable: () => false,
-        );
-        final task = Task(
-          id: 'task-1',
-          listId: 'inbox',
-          title: '同步但无 FCM',
-          dueDate: DateTime(2026, 7, 10, 9),
+          recurrenceRule: 'FREQ=DAILY;INTERVAL=1;COUNT=7',
+          recurrenceCount: 7,
           syncPending: true,
           createdAt: now,
           updatedAt: now,
         );
-        await service.scheduleTaskReminder(task);
-        final cancelledBeforeSync = platform.cancelledIds.length;
 
-        await service.markTaskSynced(task.id);
+        await service.scheduleRecurringReminders(task);
 
-        expect(platform.scheduled, hasLength(1));
-        expect(platform.cancelledIds, hasLength(cancelledBeforeSync));
+        expect(platform.scheduled, hasLength(7));
+        final occurrenceDates = platform.scheduled
+            .map((item) => jsonDecode(item.payload!) as Map<String, dynamic>)
+            .map((payload) => payload['occurrenceDate'])
+            .toList();
+        expect(occurrenceDates.first, '2026-07-10');
+        expect(occurrenceDates.last, '2026-07-16');
       },
     );
 
-    test('synced cloud task does not keep local reminder', () async {
+    test('synced task always keeps a local reminder', () async {
       final now = DateTime(2026, 7, 10, 8);
-      service = NotificationService(
-        now: () => now,
-        cloudRemindersAvailable: () => true,
-      );
+      service = NotificationService(now: () => now);
       final task = Task(
         id: 'task-1',
         listId: 'inbox',
-        title: '云端任务',
+        title: '已同步任务',
         dueDate: DateTime(2026, 7, 10, 9),
         syncPending: false,
         createdAt: now,
@@ -357,11 +271,7 @@ void main() {
 
       await service.scheduleTaskReminder(task);
 
-      expect(platform.scheduled, isEmpty);
-      expect(
-        platform.cancelledIds,
-        contains(stableNotificationIdForKey('task:task-1')),
-      );
+      expect(platform.scheduled, hasLength(1));
     });
 
     test(
@@ -392,27 +302,45 @@ void main() {
       },
     );
 
-    test('showRemoteReminder uses stable id and payload', () async {
-      await service.showRemoteReminder(
-        reminderKey: 'task-1:2026-07-10:2026-07-10T01:00:00.000Z',
-        taskId: 'task-1',
-        title: '待办提醒',
-        body: '死虫式',
-        occurrenceDate: '2026-07-10',
-        reminderAt: '2026-07-10T01:00:00.000Z',
+    test('daily recurrence schedules exactly the next 90 reminders', () async {
+      final now = DateTime(2026, 7, 10, 8);
+      service = NotificationService(now: () => now);
+      final task = Task(
+        id: 'task-90',
+        listId: 'inbox',
+        title: '每日提醒',
+        dueDate: DateTime(2026, 7, 10, 9),
+        recurrenceRule: 'FREQ=DAILY',
+        createdAt: now,
+        updatedAt: now,
       );
 
-      expect(platform.shown, hasLength(1));
-      final shown = platform.shown.single;
+      await service.scheduleRecurringReminders(task);
+
+      expect(platform.scheduled, hasLength(90));
       expect(
-        shown.id,
-        stableNotificationIdForKey(
-          'remote:task-1:2026-07-10:2026-07-10T01:00:00.000Z',
+        platform.scheduled.every(
+          (item) =>
+              item.scheduledDate.isAfter(tz.TZDateTime.from(now, tz.local)),
         ),
+        isTrue,
       );
-      final payload = jsonDecode(shown.payload!) as Map<String, dynamic>;
-      expect(payload['taskId'], 'task-1');
-      expect(payload['occurrenceDate'], '2026-07-10');
+    });
+
+    test('local-only upgrade clears legacy schedules once', () async {
+      SharedPreferences.setMockInitialValues({});
+      platform.pending.add(
+        const PendingNotificationRequest(301, '待办提醒', '旧提醒', 'old-task'),
+      );
+
+      await service.prepareLocalOnlyScheduling();
+      expect(platform.pending, isEmpty);
+      platform.pending.add(
+        const PendingNotificationRequest(302, '待办提醒', '新提醒', 'new-task'),
+      );
+      await service.prepareLocalOnlyScheduling();
+
+      expect(platform.pending.map((item) => item.id), contains(302));
     });
 
     test(

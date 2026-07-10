@@ -7,9 +7,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../app_providers.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/tempo_theme_extension.dart';
@@ -107,24 +105,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     }
   }
 
-  Future<void> _requestNotificationPermission() async {
-    final notificationService = ref.read(notificationServiceProvider);
-    await notificationService.requestPermissions();
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(AppConstants.prefNotificationEnabled, true);
-  }
-
   Future<void> _completeOnboarding() async {
     await ref.read(onboardingManagerProvider).setCompleted();
     if (!mounted) return;
     context.go(AppConstants.routeTasks);
   }
 
-  Future<void> _finishWithPermission() async {
-    await _requestNotificationPermission();
-    await _completeOnboarding();
-  }
+  Future<void> _finishWithPermission() => _completeOnboarding();
 }
 
 /// 单屏内容:mono badge + N/3 + serif italic 标题 + 白色短下划线 + 正文

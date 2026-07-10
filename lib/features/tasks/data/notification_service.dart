@@ -1,6 +1,6 @@
 // ============================================================
 // NotificationService — 本地待办提醒调度
-// 单次任务：1 条通知；重复任务：预调度未来 N 次 occurrence
+// 单次任务：1 条通知；重复任务：滚动预排未来 90 天 occurrence
 // ============================================================
 
 import 'dart:async';
@@ -8,18 +8,18 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../core/utils/notification_timezone.dart';
-
 import '../../../core/constants/app_constants.dart';
 import '../../../core/extensions/task_filter.dart';
+import '../../../core/utils/notification_timezone.dart';
 import '../domain/recurrence_engine.dart';
 import '../domain/recurrence_models.dart';
 import '../domain/task.dart';
 
-/// 计算待办提醒时刻：全天 → 08:00；否则用 due 实际时分
+/// 计算待办提醒时刻：全天 → 08:00；否则用 due 实际时分。
 DateTime todoReminderDateTime(Task task, [DateTime? occurrenceDue]) {
   final due = occurrenceDue ?? task.dueDate;
   if (due == null) return DateTime.now();
@@ -56,144 +56,166 @@ String? taskIdFromNotificationPayload(String? payload) {
   return payload;
 }
 
+class NotificationCapability {
+  const NotificationCapability({
+    required this.notificationsAllowed,
+    required this.exactAlarmsAllowed,
+  });
+
+  final bool notificationsAllowed;
+  final bool exactAlarmsAllowed;
+
+  bool get isFullyAvailable => notificationsAllowed && exactAlarmsAllowed;
+}
+
 class NotificationService {
-  final FlutterLocalNotificationsPlugin _plugin;
-  final RecurrenceEngine _engine;
-  final DateTime Function() _now;
-  final bool Function() _cloudRemindersAvailable;
-  bool _initialized = false;
-  final Set<String> _cloudSyncedTaskIds = <String>{};
-  static SharedPreferences? _prefsCache;
-
-  static const _cancelLookbackDays = 60;
-  static const _cancelLookaheadDays = 60;
-
-  static Future<SharedPreferences> _prefs() async {
-    return _prefsCache ??= await SharedPreferences.getInstance();
-  }
-
-  void Function(String taskId)? onNotificationTap;
-
   NotificationService({
     FlutterLocalNotificationsPlugin? plugin,
     RecurrenceEngine? engine,
     DateTime Function()? now,
-    bool Function()? cloudRemindersAvailable,
   }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin(),
        _engine = engine ?? const RecurrenceEngine(),
-       _now = now ?? DateTime.now,
-       _cloudRemindersAvailable = cloudRemindersAvailable ?? (() => false);
+       _now = now ?? DateTime.now;
+
+  static const _settingsChannel = MethodChannel(
+    'com.tempo.tempo/notifications',
+  );
+  static const _localReminderSchemaKey = 'local_reminder_schema_version';
+  static const _localReminderSchemaVersion = 1;
+  static const recurringScheduleHorizon = Duration(days: 90);
+  static const _cancelLookbackDays = 60;
+  static const _cancelLookaheadDays = 120;
+
+  final FlutterLocalNotificationsPlugin _plugin;
+  final RecurrenceEngine _engine;
+  final DateTime Function() _now;
+  bool _initialized = false;
+  Future<void> _mutationTail = Future<void>.value();
+
+  void Function(String taskId)? onNotificationTap;
 
   Future<void> init() async {
     if (_initialized) return;
 
     await configureNotificationTimezone();
-
-    const androidSettings = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
-    );
-
-    const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: false,
-      requestBadgePermission: false,
-      requestSoundPermission: false,
-    );
-
     const settings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      iOS: DarwinInitializationSettings(
+        requestAlertPermission: false,
+        requestBadgePermission: false,
+        requestSoundPermission: false,
+      ),
     );
-
     await _plugin.initialize(
       settings: settings,
       onDidReceiveNotificationResponse: _onNotificationResponse,
     );
-
     await _createAndroidChannel();
-
     _initialized = true;
   }
 
+  /// 新版首次启动清理 FCM 时代和旧重复策略留下的排程。
+  Future<void> prepareLocalOnlyScheduling() async {
+    await _serialize(() async {
+      if (!_initialized) await init();
+      final prefs = await SharedPreferences.getInstance();
+      final version = prefs.getInt(_localReminderSchemaKey) ?? 0;
+      if (version >= _localReminderSchemaVersion) return;
+      await _plugin.cancelAll();
+      await prefs.setInt(_localReminderSchemaKey, _localReminderSchemaVersion);
+    });
+  }
+
+  /// 只申请通知展示权限；精确闹钟设置通过任务页提示按需打开。
   Future<bool> requestPermissions() async {
     if (!_initialized) await init();
-
     if (Platform.isAndroid) {
-      final android = _plugin
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
-      final notificationsGranted = await android
-          ?.requestNotificationsPermission();
-      final canExact = await android?.canScheduleExactNotifications();
-      if (canExact != true) {
-        await android?.requestExactAlarmsPermission();
-      }
-      return notificationsGranted ?? false;
+      final android = _androidPlugin;
+      return await android?.requestNotificationsPermission() ?? false;
     }
-
-    final iosResult = await _plugin
-        .resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin
-        >()
-        ?.requestPermissions(alert: true, badge: true, sound: true);
-
-    return iosResult ?? true;
+    return await _plugin
+            .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin
+            >()
+            ?.requestPermissions(alert: true, badge: true, sound: true) ??
+        true;
   }
 
-  Future<bool> isRemindersEnabled() async {
-    final prefs = await _prefs();
-    return prefs.getBool(AppConstants.prefNotificationEnabled) ?? true;
-  }
-
-  Future<void> setRemindersEnabled(bool enabled) async {
-    final prefs = await _prefs();
-    await prefs.setBool(AppConstants.prefNotificationEnabled, enabled);
-    if (!enabled) {
-      try {
-        await cancelAll();
-      } catch (e, stack) {
-        _debugPrintNotificationFailure(
-          'cancelAll failed when disabling reminders',
-          e,
-          stack,
-        );
-      }
+  Future<NotificationCapability> capability() async {
+    if (!_initialized) await init();
+    if (!Platform.isAndroid) {
+      return const NotificationCapability(
+        notificationsAllowed: true,
+        exactAlarmsAllowed: true,
+      );
     }
+    final android = _androidPlugin;
+    return NotificationCapability(
+      notificationsAllowed: await android?.areNotificationsEnabled() ?? false,
+      exactAlarmsAllowed:
+          await android?.canScheduleExactNotifications() ?? false,
+    );
   }
 
+  Future<void> openNotificationSettings() async {
+    if (!Platform.isAndroid) return;
+    await _settingsChannel.invokeMethod<void>('openNotificationSettings');
+  }
+
+  Future<void> openExactAlarmSettings() async {
+    if (!Platform.isAndroid) return;
+    await _settingsChannel.invokeMethod<void>('openExactAlarmSettings');
+  }
+
+  Future<int> pendingNotificationCount() async {
+    if (!_initialized) await init();
+    return (await _plugin.pendingNotificationRequests()).length;
+  }
+
+  /// 串行重建当前快照中所有任务的提醒，防止与创建/编辑并发互相取消。
   Future<void> rescheduleAllTasks(
     Iterable<Task> tasks, {
     List<TaskCompletion> completions = const [],
     List<RecurrenceException> exceptions = const [],
-  }) async {
-    if (!await isRemindersEnabled()) return;
-    if (!_initialized) await init();
-
-    await cancelAll();
-    for (final task in tasks) {
-      await scheduleTaskReminder(
-        task,
-        completions: completions.forTask(task.id, (c) => c.taskId),
-        exceptions: exceptions.forTask(task.id, (e) => e.taskId),
-      );
-    }
+  }) {
+    final snapshot = List<Task>.unmodifiable(tasks);
+    return _serialize(() async {
+      if (!_initialized) await init();
+      for (final task in snapshot) {
+        await _cancelTaskReminders(task.id);
+        await _scheduleTaskReminder(
+          task,
+          completions: completions.forTask(task.id, (c) => c.taskId),
+          exceptions: exceptions.forTask(task.id, (e) => e.taskId),
+        );
+      }
+    });
   }
 
   Future<void> scheduleTaskReminder(
     Task task, {
     List<TaskCompletion> completions = const [],
     List<RecurrenceException> exceptions = const [],
+  }) {
+    return _serialize(() async {
+      if (!_initialized) await init();
+      await _cancelTaskReminders(task.id);
+      await _scheduleTaskReminder(
+        task,
+        completions: completions,
+        exceptions: exceptions,
+      );
+    });
+  }
+
+  Future<void> _scheduleTaskReminder(
+    Task task, {
+    List<TaskCompletion> completions = const [],
+    List<RecurrenceException> exceptions = const [],
   }) async {
-    if (!await isRemindersEnabled()) return;
-    if (task.isCompleted ||
-        task.dueDate == null ||
-        (_cloudRemindersAvailable() &&
-            (!task.syncPending || _cloudSyncedTaskIds.contains(task.id)))) {
-      await cancelTaskReminders(task.id);
-      return;
-    }
+    if (task.isCompleted || task.dueDate == null) return;
     if (task.isRecurring) {
-      await scheduleRecurringReminders(
+      await _scheduleRecurringReminders(
         task,
         completions: completions,
         exceptions: exceptions,
@@ -203,108 +225,92 @@ class NotificationService {
     await _scheduleSingle(task, task.dueDate, task.id);
   }
 
-  Future<void> scheduleRecurringReminders(
+  Future<void> _scheduleRecurringReminders(
     Task task, {
-    List<TaskCompletion> completions = const [],
-    List<RecurrenceException> exceptions = const [],
+    required List<TaskCompletion> completions,
+    required List<RecurrenceException> exceptions,
   }) async {
-    try {
-      if (!_initialized) await init();
-      if (!await isRemindersEnabled()) return;
-      if (!task.isRecurring) return;
-
-      await cancelTaskReminders(task.id);
-
-      if (_cloudRemindersAvailable() &&
-          (!task.syncPending || _cloudSyncedTaskIds.contains(task.id))) {
-        return;
-      }
-
-      final now = _now();
-      final occurrence = _engine.nextOccurrence(
-        task,
-        completions: completions,
-        exceptions: exceptions,
-        now: now,
-      );
-      if (occurrence == null) return;
-
+    final now = _now();
+    final occurrences = _engine.expandOccurrences(
+      task,
+      from: RecurrenceEngine.calendarDay(now),
+      to: RecurrenceEngine.calendarDay(now.add(recurringScheduleHorizon)),
+      completions: completions,
+      exceptions: exceptions,
+      now: now,
+    );
+    final horizonEnd = now.add(recurringScheduleHorizon);
+    for (final occurrence in occurrences) {
+      if (occurrence.state != OccurrenceState.pending) continue;
+      final reminderAt = todoReminderDateTime(task, occurrence.effectiveDue);
+      if (reminderAt.isAfter(horizonEnd)) continue;
       await _scheduleSingle(
         task,
         occurrence.effectiveDue,
         task.id,
         occurrenceDate: occurrence.occurrenceDate,
-      );
-    } catch (e, stack) {
-      _debugPrintNotificationFailure(
-        'scheduleRecurringReminders failed for ${task.id}',
-        e,
-        stack,
+        body: occurrence.title,
       );
     }
   }
 
-  Future<void> markTaskSynced(String taskId) async {
-    if (!_cloudRemindersAvailable()) {
-      _cloudSyncedTaskIds.remove(taskId);
-      return;
-    }
-    _cloudSyncedTaskIds.add(taskId);
-    await cancelTaskReminders(taskId);
+  Future<void> scheduleRecurringReminders(
+    Task task, {
+    List<TaskCompletion> completions = const [],
+    List<RecurrenceException> exceptions = const [],
+  }) {
+    return _serialize(() async {
+      if (!_initialized) await init();
+      await _cancelTaskReminders(task.id);
+      if (task.isCompleted || task.dueDate == null || !task.isRecurring) return;
+      await _scheduleRecurringReminders(
+        task,
+        completions: completions,
+        exceptions: exceptions,
+      );
+    });
   }
 
   Future<void> cancelOccurrenceReminder(
     String taskId,
     DateTime occurrenceDate,
-  ) async {
-    await _safeCancel(_occurrenceNotificationId(taskId, occurrenceDate));
-    await _cancelPendingWhere(
-      (request) =>
-          taskIdFromNotificationPayload(request.payload) == taskId &&
-          _occurrenceDateFromNotificationPayload(request.payload) ==
-              _formatCalendarDay(occurrenceDate),
-    );
+  ) {
+    return _serialize(() async {
+      await _safeCancel(_occurrenceNotificationId(taskId, occurrenceDate));
+      await _cancelPendingWhere(
+        (request) =>
+            taskIdFromNotificationPayload(request.payload) == taskId &&
+            _occurrenceDateFromNotificationPayload(request.payload) ==
+                _formatCalendarDay(occurrenceDate),
+      );
+    });
   }
 
-  Future<void> cancelTaskReminders(String taskId) async {
+  Future<void> cancelTaskReminders(String taskId) {
+    return _serialize(() => _cancelTaskReminders(taskId));
+  }
+
+  Future<void> _cancelTaskReminders(String taskId) async {
     await _safeCancel(_notificationId(taskId));
-    await _cancelPendingWhere(
+    final pendingRead = await _cancelPendingWhere(
       (request) => taskIdFromNotificationPayload(request.payload) == taskId,
     );
-    // 兼容无法读取 pending notification 的平台，并清理旧版本留下的已展示/过去 occurrence。
+    if (pendingRead) return;
+
+    // 仅在平台无法读取 pending notification 时按稳定 ID 清理遗留 occurrence。
     final today = RecurrenceEngine.calendarDay(_now());
     for (var i = -_cancelLookbackDays; i <= _cancelLookaheadDays; i++) {
-      final day = today.add(Duration(days: i));
-      await _safeCancel(_occurrenceNotificationId(taskId, day));
+      await _safeCancel(
+        _occurrenceNotificationId(taskId, today.add(Duration(days: i))),
+      );
     }
   }
 
-  Future<void> _safeCancel(int id) async {
-    try {
-      await _plugin.cancel(id: id);
-    } catch (e) {
-      // 对不存在通知 ID 的取消操作静默忽略
-      debugPrint('[Tempo] cancel($id) ignored: $e');
-    }
-  }
-
-  Future<void> _cancelPendingWhere(
-    bool Function(PendingNotificationRequest request) matches,
-  ) async {
-    try {
-      final pending = await _plugin.pendingNotificationRequests();
-      for (final request in pending) {
-        if (matches(request)) {
-          await _safeCancel(request.id);
-        }
-      }
-    } catch (e) {
-      debugPrint('[Tempo] pendingNotificationRequests ignored: $e');
-    }
-  }
-
-  Future<void> cancelAll() async {
-    await _plugin.cancelAll();
+  Future<void> cancelAll() {
+    return _serialize(() async {
+      if (!_initialized) await init();
+      await _plugin.cancelAll();
+    });
   }
 
   Future<void> _scheduleSingle(
@@ -312,76 +318,28 @@ class NotificationService {
     DateTime? due,
     String payloadTaskId, {
     DateTime? occurrenceDate,
+    String? body,
   }) async {
     try {
-      if (!_initialized) await init();
-      if (!await isRemindersEnabled()) return;
       if (due == null) return;
-
-      final now = _now();
       final reminderAt = todoReminderDateTime(task, due);
-      if (!reminderAt.isAfter(now)) return;
-
-      final id = occurrenceDate != null
-          ? _occurrenceNotificationId(payloadTaskId, occurrenceDate)
-          : _notificationId(payloadTaskId);
-
+      if (!reminderAt.isAfter(_now())) return;
       await _zonedSchedule(
-        id: id,
+        id: occurrenceDate != null
+            ? _occurrenceNotificationId(payloadTaskId, occurrenceDate)
+            : _notificationId(payloadTaskId),
         title: '待办提醒',
-        body: task.title,
+        body: body ?? task.title,
         scheduledTime: reminderAt,
         payload: _notificationPayload(payloadTaskId, occurrenceDate),
       );
-    } catch (e, stack) {
+    } catch (error, stack) {
       _debugPrintNotificationFailure(
         'schedule reminder failed for $payloadTaskId',
-        e,
+        error,
         stack,
       );
     }
-  }
-
-  void _debugPrintNotificationFailure(
-    String operation,
-    Object error,
-    StackTrace stack,
-  ) {
-    if (!kDebugMode || error.toString().contains('LateInitializationError')) {
-      return;
-    }
-    debugPrint('[Tempo] $operation: $error');
-    debugPrintStack(stackTrace: stack);
-  }
-
-  Future<void> _createAndroidChannel() async {
-    const channel = AndroidNotificationChannel(
-      AppConstants.notificationChannelId,
-      AppConstants.notificationChannelName,
-      description: AppConstants.notificationChannelDesc,
-      importance: Importance.high,
-    );
-
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.createNotificationChannel(channel);
-  }
-
-  Future<AndroidScheduleMode> _androidScheduleMode() async {
-    if (!Platform.isAndroid) {
-      return AndroidScheduleMode.exactAllowWhileIdle;
-    }
-    final android = _plugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >();
-    final canExact = await android?.canScheduleExactNotifications();
-    if (canExact == true) {
-      return AndroidScheduleMode.exactAllowWhileIdle;
-    }
-    return AndroidScheduleMode.inexactAllowWhileIdle;
   }
 
   Future<void> _zonedSchedule({
@@ -391,12 +349,9 @@ class NotificationService {
     required DateTime scheduledTime,
     String? payload,
   }) async {
-    final tzTime = reminderAtToZonedDateTime(scheduledTime);
-    final androidScheduleMode = await _androidScheduleMode();
-
     await _plugin.zonedSchedule(
       id: id,
-      scheduledDate: tzTime,
+      scheduledDate: reminderAtToZonedDateTime(scheduledTime),
       notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
           AppConstants.notificationChannelId,
@@ -408,97 +363,121 @@ class NotificationService {
         ),
         iOS: DarwinNotificationDetails(),
       ),
-      androidScheduleMode: androidScheduleMode,
+      androidScheduleMode: await _androidScheduleMode(),
       title: title,
       body: body,
       payload: payload,
     );
   }
 
-  Future<void> showRemoteReminder({
-    required String reminderKey,
-    required String taskId,
-    required String title,
-    required String body,
-    String? occurrenceDate,
-    String? reminderAt,
-  }) async {
-    if (!await isRemindersEnabled()) return;
-    if (!_initialized) await init();
+  Future<AndroidScheduleMode> _androidScheduleMode() async {
+    if (!Platform.isAndroid) return AndroidScheduleMode.exactAllowWhileIdle;
+    final canExact = await _androidPlugin?.canScheduleExactNotifications();
+    return canExact == true
+        ? AndroidScheduleMode.exactAllowWhileIdle
+        : AndroidScheduleMode.inexactAllowWhileIdle;
+  }
 
-    final payload = jsonEncode({
-      'v': 1,
-      'reminderKey': reminderKey,
-      'taskId': taskId,
-      if (occurrenceDate != null && occurrenceDate.isNotEmpty)
-        'occurrenceDate': occurrenceDate,
-      if (reminderAt != null && reminderAt.isNotEmpty) 'reminderAt': reminderAt,
-    });
-    await _plugin.show(
-      id: stableNotificationIdForKey('remote:$reminderKey'),
-      title: title,
-      body: body,
-      notificationDetails: NotificationDetails(
-        android: AndroidNotificationDetails(
-          AppConstants.notificationChannelId,
-          AppConstants.notificationChannelName,
-          channelDescription: AppConstants.notificationChannelDesc,
-          importance: Importance.high,
-          priority: Priority.high,
-          icon: '@mipmap/ic_launcher',
-          tag: reminderKey,
-        ),
-        iOS: const DarwinNotificationDetails(),
-      ),
-      payload: payload,
+  AndroidFlutterLocalNotificationsPlugin? get _androidPlugin => _plugin
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >();
+
+  Future<void> _createAndroidChannel() async {
+    const channel = AndroidNotificationChannel(
+      AppConstants.notificationChannelId,
+      AppConstants.notificationChannelName,
+      description: AppConstants.notificationChannelDesc,
+      importance: Importance.high,
     );
+    await _androidPlugin?.createNotificationChannel(channel);
+  }
+
+  Future<void> _safeCancel(int id) async {
+    try {
+      await _plugin.cancel(id: id);
+    } catch (error) {
+      debugPrint('[Tempo] cancel($id) ignored: $error');
+    }
+  }
+
+  Future<bool> _cancelPendingWhere(
+    bool Function(PendingNotificationRequest request) matches,
+  ) async {
+    try {
+      final pending = await _plugin.pendingNotificationRequests();
+      for (final request in pending) {
+        if (matches(request)) await _safeCancel(request.id);
+      }
+      return true;
+    } catch (error) {
+      debugPrint('[Tempo] pendingNotificationRequests ignored: $error');
+      return false;
+    }
+  }
+
+  Future<void> _serialize(Future<void> Function() operation) {
+    final completer = Completer<void>();
+    _mutationTail = _mutationTail.then((_) async {
+      try {
+        await operation();
+        completer.complete();
+      } catch (error, stack) {
+        completer.completeError(error, stack);
+      }
+    });
+    return completer.future;
   }
 
   void _onNotificationResponse(NotificationResponse response) {
     final taskId = taskIdFromNotificationPayload(response.payload);
-    if (taskId != null && onNotificationTap != null) {
-      onNotificationTap!(taskId);
-    }
+    if (taskId != null && taskId.isNotEmpty) onNotificationTap?.call(taskId);
   }
 
   int _notificationId(String taskId) =>
       stableNotificationIdForKey('task:$taskId');
 
-  int _occurrenceNotificationId(String taskId, DateTime occurrenceDate) {
-    return stableNotificationIdForKey(
-      'occ:$taskId:${_formatCalendarDay(occurrenceDate)}',
-    );
-  }
+  int _occurrenceNotificationId(String taskId, DateTime occurrenceDate) =>
+      stableNotificationIdForKey(
+        'task:$taskId:occurrence:${_formatCalendarDay(occurrenceDate)}',
+      );
 
-  String _notificationPayload(String taskId, DateTime? occurrenceDate) {
-    final payload = <String, Object?>{'v': 1, 'taskId': taskId};
-    if (occurrenceDate != null) {
-      payload['occurrenceDate'] = _formatCalendarDay(occurrenceDate);
-    }
-    return jsonEncode(payload);
-  }
-
-  String _formatCalendarDay(DateTime date) {
-    final day = RecurrenceEngine.calendarDay(date);
-    final year = day.year.toString().padLeft(4, '0');
-    final month = day.month.toString().padLeft(2, '0');
-    final datePart = day.day.toString().padLeft(2, '0');
-    return '$year-$month-$datePart';
-  }
+  String _notificationPayload(String taskId, DateTime? occurrenceDate) =>
+      jsonEncode({
+        'v': 1,
+        'taskId': taskId,
+        if (occurrenceDate != null)
+          'occurrenceDate': _formatCalendarDay(occurrenceDate),
+      });
 
   String? _occurrenceDateFromNotificationPayload(String? payload) {
     if (payload == null || payload.isEmpty) return null;
     try {
       final decoded = jsonDecode(payload);
       if (decoded is Map<String, dynamic>) {
-        final occurrenceDate = decoded['occurrenceDate'];
-        if (occurrenceDate is String && occurrenceDate.isNotEmpty) {
-          return occurrenceDate;
-        }
+        final value = decoded['occurrenceDate'];
+        return value is String ? value : null;
       }
     } catch (_) {
       return null;
     }
     return null;
+  }
+
+  String _formatCalendarDay(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+
+  void _debugPrintNotificationFailure(
+    String operation,
+    Object error,
+    StackTrace stack,
+  ) {
+    if (!kDebugMode || error.toString().contains('LateInitializationError')) {
+      return;
+    }
+    debugPrint('[Tempo] $operation: $error');
+    debugPrintStack(stackTrace: stack);
   }
 }

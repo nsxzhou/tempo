@@ -18,7 +18,6 @@ import 'features/settings/data/feedback_service.dart';
 import 'features/settings/data/siyuan_pairing_service.dart';
 import 'features/tasks/data/notification_service.dart';
 import 'features/tasks/data/recurrence_repository.dart';
-import 'features/tasks/data/remote_notification_service.dart';
 import 'features/tasks/data/sync_service.dart';
 import 'features/tasks/data/task_background_repository.dart';
 import 'features/tasks/data/task_repository.dart';
@@ -148,8 +147,6 @@ final taskRepositoryProvider = Provider<TaskRepository>((ref) {
       }
     },
     recurrenceRefresh: recurrenceRepo.refreshFromRemote,
-    onTaskSynced: (taskId) =>
-        ref.read(notificationServiceProvider).markTaskSynced(taskId),
   );
 
   unawaited(repository.repairRecurringTasksMissingDueDate());
@@ -320,49 +317,14 @@ final syncServiceProvider = Provider<SyncService>((ref) {
 
 // ── NotificationService ──
 
-final remoteNotificationRegisteredProvider = StateProvider<bool>(
-  (ref) => false,
-);
-
 final notificationServiceProvider = Provider<NotificationService>((ref) {
-  return NotificationService(
-    cloudRemindersAvailable: () =>
-        ref.read(remoteNotificationRegisteredProvider),
-  );
+  return NotificationService();
 });
 
-final remoteNotificationServiceProvider = Provider<RemoteNotificationService>((
+final notificationCapabilityProvider = FutureProvider<NotificationCapability>((
   ref,
-) {
-  final service = RemoteNotificationService(
-    supabase: ref.watch(supabaseProvider),
-    onRegistrationChanged: (registered) {
-      ref.read(remoteNotificationRegisteredProvider.notifier).state =
-          registered;
-    },
-    showForegroundReminder:
-        ({
-          required reminderKey,
-          required taskId,
-          required title,
-          required body,
-          occurrenceDate,
-          reminderAt,
-        }) => ref
-            .read(notificationServiceProvider)
-            .showRemoteReminder(
-              reminderKey: reminderKey,
-              taskId: taskId,
-              title: title,
-              body: body,
-              occurrenceDate: occurrenceDate,
-              reminderAt: reminderAt,
-            ),
-  );
-  ref.onDispose(() {
-    unawaited(service.dispose());
-  });
-  return service;
+) async {
+  return ref.watch(notificationServiceProvider).capability();
 });
 
 // ── TextParseService ──

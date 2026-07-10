@@ -88,7 +88,8 @@ class AppConstants {
 
   // ── SharedPreferences Keys ──
   static const String prefOnboardingCompleted = 'onboarding_completed';
-  static const String prefNotificationEnabled = 'notification_enabled';
+  static const String prefNotificationPermissionExplained =
+      'notification_permission_explained';
   static const String prefThemeId = 'theme_id';
   static const String prefBackgroundImagePath = 'background_image_path';
   static const String prefTaskCardColorPrefix = 'task_card_color_';
@@ -104,7 +105,6 @@ class AppConstants {
   static const String tableSiyuanPairingCodes = 'siyuan_pairing_codes';
   static const String tableSiyuanBindings = 'siyuan_bindings';
   static const String tableFeedback = 'feedback';
-  static const String tableNotificationDevices = 'notification_devices';
 
   // ── 默认列表 ──
   static const String defaultListName = 'Inbox';

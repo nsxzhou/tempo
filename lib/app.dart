@@ -39,13 +39,6 @@ class _TempoAppState extends ConsumerState<TempoApp>
       if (previous == next) return;
       unawaited(_handleUserChanged());
     });
-    ref.listenManual<bool>(remoteNotificationRegisteredProvider, (
-      previous,
-      next,
-    ) {
-      if (previous == next) return;
-      unawaited(_rebuildLocalReminders());
-    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_bootstrapNotifications());
@@ -63,18 +56,9 @@ class _TempoAppState extends ConsumerState<TempoApp>
     });
   }
 
-  Future<void> _syncRemoteNotificationDevice() async {
-    final notificationService = ref.read(notificationServiceProvider);
-    final enabled = await notificationService.isRemindersEnabled();
-    final registered = await ref
-        .read(remoteNotificationServiceProvider)
-        .syncDevice(enabled: enabled);
-    ref.read(remoteNotificationRegisteredProvider.notifier).state = registered;
-  }
-
   Future<void> _handleUserChanged() async {
-    await _syncRemoteNotificationDevice();
     await _rebuildLocalReminders();
+    ref.invalidate(notificationCapabilityProvider);
   }
 
   Future<void> _rebuildLocalReminders() async {
@@ -84,42 +68,27 @@ class _TempoAppState extends ConsumerState<TempoApp>
       return;
     }
     final tasks = await ref.read(taskRepositoryProvider).watchTasks().first;
-    if (tasks.any((task) => task.isRecurring)) {
-      final recurrenceRepository = ref.read(recurrenceRepositoryProvider);
-      final completions = await recurrenceRepository.watchCompletions().first;
-      final exceptions = await recurrenceRepository.watchExceptions().first;
-      await notificationService.rescheduleAllTasks(
-        tasks,
-        completions: completions,
-        exceptions: exceptions,
-      );
-      return;
-    }
-    await notificationService.rescheduleAllTasks(tasks);
+    final recurrenceRepository = ref.read(recurrenceRepositoryProvider);
+    final completions = await recurrenceRepository.watchCompletions().first;
+    final exceptions = await recurrenceRepository.watchExceptions().first;
+    await notificationService.rescheduleAllTasks(
+      tasks,
+      completions: completions,
+      exceptions: exceptions,
+    );
   }
 
   Future<void> _bootstrapNotifications() async {
     try {
       final notificationService = ref.read(notificationServiceProvider);
-      final remoteNotificationService = ref.read(
-        remoteNotificationServiceProvider,
-      );
-      remoteNotificationService.onNotificationTap = _openTaskFromNotification;
       await notificationService.init();
-      final remindersEnabled = await notificationService.isRemindersEnabled();
-      await remoteNotificationService.init(
-        onNotificationTap: _openTaskFromNotification,
-      );
-      await remoteNotificationService.syncDevice(enabled: remindersEnabled);
-      if (!remindersEnabled) return;
-
-      await notificationService.requestPermissions();
-
+      await notificationService.prepareLocalOnlyScheduling();
       await _rebuildLocalReminders();
-    } catch (e, stack) {
+      ref.invalidate(notificationCapabilityProvider);
+    } catch (error, stack) {
       assert(() {
-        if (e is AssertionError) return true;
-        debugPrint('[Tempo] bootstrapNotifications failed: $e');
+        if (error is AssertionError) return true;
+        debugPrint('[Tempo] bootstrapNotifications failed: $error');
         debugPrintStack(stackTrace: stack);
         return true;
       }());
@@ -129,7 +98,8 @@ class _TempoAppState extends ConsumerState<TempoApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      unawaited(_syncRemoteNotificationDevice());
+      ref.invalidate(notificationCapabilityProvider);
+      unawaited(_rebuildLocalReminders());
     }
   }
 

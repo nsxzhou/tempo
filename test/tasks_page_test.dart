@@ -507,6 +507,85 @@ void main() {
 
     await repository.dispose();
   });
+  testWidgets('shows notification recovery banner for scheduled tasks', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      AppConstants.prefNotificationPermissionExplained: true,
+    });
+    final repository = FakeTaskRepository();
+    repository.tasks.add(
+      Task(
+        id: 'scheduled-task',
+        listId: 'inbox',
+        title: '两分钟后提醒',
+        dueDate: DateTime.now().add(const Duration(minutes: 2)),
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ),
+    );
+    final notifications = _CapabilityNotificationService(
+      const NotificationCapability(
+        notificationsAllowed: false,
+        exactAlarmsAllowed: true,
+      ),
+    );
+
+    await _pumpTasksPage(
+      tester,
+      repository: repository,
+      session: FakeStreamingVoiceSession(),
+      parseService: FakeTextParseService(),
+      notificationService: notifications,
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('notification-permission-banner')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('通知权限未开启'), findsOneWidget);
+    await repository.dispose();
+  });
+
+  testWidgets('hides notification banner when capabilities are available', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      AppConstants.prefNotificationPermissionExplained: true,
+    });
+    final repository = FakeTaskRepository();
+    repository.tasks.add(
+      Task(
+        id: 'scheduled-task',
+        listId: 'inbox',
+        title: '两分钟后提醒',
+        dueDate: DateTime.now().add(const Duration(minutes: 2)),
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ),
+    );
+
+    await _pumpTasksPage(
+      tester,
+      repository: repository,
+      session: FakeStreamingVoiceSession(),
+      parseService: FakeTextParseService(),
+      notificationService: _CapabilityNotificationService(
+        const NotificationCapability(
+          notificationsAllowed: true,
+          exactAlarmsAllowed: true,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('notification-permission-banner')),
+      findsNothing,
+    );
+    await repository.dispose();
+  });
 }
 
 Future<void> _settleAnimations(WidgetTester tester) async {
@@ -544,6 +623,10 @@ Future<void> _pumpTasksPage(
         notificationServiceProvider.overrideWithValue(
           notificationService ?? _NoopNotificationService(),
         ),
+        notificationCapabilityProvider.overrideWith((ref) async {
+          return (notificationService ?? _NoopNotificationService())
+              .capability();
+        }),
         taskCompletionsProvider.overrideWith(
           (ref) => Stream.value(completions),
         ),
@@ -611,10 +694,7 @@ VoiceTaskParseResult _voiceResult({double confidence = 0.86}) {
   );
 }
 
-class _NoopNotificationService implements NotificationService {
-  @override
-  void Function(String taskId)? onNotificationTap;
-
+class _NoopNotificationService extends NotificationService {
   @override
   Future<void> cancelTaskReminders(String taskId) async {}
 
@@ -645,28 +725,7 @@ class _NoopNotificationService implements NotificationService {
   Future<void> init() async {}
 
   @override
-  Future<void> markTaskSynced(String taskId) async {
-    await cancelTaskReminders(taskId);
-  }
-
-  @override
-  Future<void> showRemoteReminder({
-    required String reminderKey,
-    required String taskId,
-    required String title,
-    required String body,
-    String? occurrenceDate,
-    String? reminderAt,
-  }) async {}
-
-  @override
   Future<void> cancelAll() async {}
-
-  @override
-  Future<bool> isRemindersEnabled() async => true;
-
-  @override
-  Future<void> setRemindersEnabled(bool enabled) async {}
 
   @override
   Future<void> rescheduleAllTasks(
@@ -686,5 +745,26 @@ class _RecordingNotificationService extends _NoopNotificationService {
     List<RecurrenceException> exceptions = const [],
   }) async {
     recurringCalls.add((task: task, completions: List.of(completions)));
+  }
+}
+
+class _CapabilityNotificationService extends _NoopNotificationService {
+  _CapabilityNotificationService(this.value);
+
+  final NotificationCapability value;
+  bool openedNotificationSettings = false;
+  bool openedExactAlarmSettings = false;
+
+  @override
+  Future<NotificationCapability> capability() async => value;
+
+  @override
+  Future<void> openNotificationSettings() async {
+    openedNotificationSettings = true;
+  }
+
+  @override
+  Future<void> openExactAlarmSettings() async {
+    openedExactAlarmSettings = true;
   }
 }

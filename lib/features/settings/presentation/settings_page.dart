@@ -2,8 +2,8 @@
 // SettingsPage — 设置页(Stripe 派 1:1 还原 prototype SettingsView.tsx)
 // 顶部 TempoUserCard(邮箱 + 注销)
 // 外部集成与同步:思源 / 系统日历
-// 个性化偏好:通知 / 主题
-// 业务:通知开关、注销、登出保留
+// 个性化偏好:主题
+// 业务:注销、登出保留
 // ============================================================
 
 import 'dart:async';
@@ -11,7 +11,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app_providers.dart';
 import '../../../core/constants/app_constants.dart';
@@ -34,28 +33,8 @@ class SettingsPage extends ConsumerStatefulWidget {
 
 class _SettingsPageState extends ConsumerState<SettingsPage>
     with AutomaticKeepAliveClientMixin {
-  bool _notificationEnabled = true;
-
   @override
   bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      unawaited(_loadSettings());
-    });
-  }
-
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    setState(() {
-      _notificationEnabled =
-          prefs.getBool(AppConstants.prefNotificationEnabled) ?? true;
-    });
-  }
 
   void _refreshSiyuanStatus() {
     ref.invalidate(siyuanBindingStatusProvider);
@@ -162,23 +141,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                 color: tokens.fgMuted,
               ),
               const ThemeSettingsSection(),
-              TempoSettingsGroup(
-                margin: const EdgeInsets.fromLTRB(20, 0, 20, 6),
-                borderColor: tokens.borderStrong,
-                dividerColor: tokens.borderSubtle,
-                children: [
-                  TempoPreferenceRow(
-                    icon: LucideIcons.bell,
-                    title: '待办提醒',
-                    subtitle: '具体时间按时提醒，全天任务当天 08:00 提醒',
-                    trailing: Switch(
-                      value: _notificationEnabled,
-                      onChanged: _toggleNotification,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                  ),
-                ],
-              ),
 
               // 反馈入口
               const SizedBox(height: 8),
@@ -205,31 +167,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
         ),
       ),
     );
-  }
-
-  Future<void> _toggleNotification(bool value) async {
-    setState(() => _notificationEnabled = value);
-    final notificationService = ref.read(notificationServiceProvider);
-    final remoteNotificationService = ref.read(
-      remoteNotificationServiceProvider,
-    );
-    await notificationService.setRemindersEnabled(value);
-    final registered = await remoteNotificationService.setRemindersEnabled(
-      value,
-    );
-    ref.read(remoteNotificationRegisteredProvider.notifier).state = registered;
-    if (value) {
-      await notificationService.requestPermissions();
-      final tasks = ref.read(taskListProvider).valueOrNull ?? [];
-      final completions = ref.read(taskCompletionsProvider).valueOrNull ?? [];
-      final exceptions =
-          ref.read(taskRecurrenceExceptionsProvider).valueOrNull ?? [];
-      await notificationService.rescheduleAllTasks(
-        tasks,
-        completions: completions,
-        exceptions: exceptions,
-      );
-    }
   }
 
   Future<void> _handleSiyuanTap(SiyuanBindingStatus status) async {
@@ -295,8 +232,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     );
     if (confirmed != true || !mounted) return;
     try {
-      await ref.read(remoteNotificationServiceProvider).disableCurrentDevice();
-      ref.read(remoteNotificationRegisteredProvider.notifier).state = false;
       await ref.read(notificationServiceProvider).cancelAll();
       await ref.read(authServiceProvider).signOut();
       if (!mounted) return;

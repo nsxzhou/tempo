@@ -265,11 +265,8 @@ VoiceTaskParseResult _voiceResult({double confidence = 0.86}) {
   );
 }
 
-class _RecordingNotificationService implements NotificationService {
+class _RecordingNotificationService extends NotificationService {
   final List<String> scheduledTaskIds = [];
-
-  @override
-  void Function(String taskId)? onNotificationTap;
 
   @override
   Future<void> cancelTaskReminders(String taskId) async {}
@@ -307,28 +304,7 @@ class _RecordingNotificationService implements NotificationService {
   Future<void> init() async {}
 
   @override
-  Future<void> markTaskSynced(String taskId) async {
-    await cancelTaskReminders(taskId);
-  }
-
-  @override
-  Future<void> showRemoteReminder({
-    required String reminderKey,
-    required String taskId,
-    required String title,
-    required String body,
-    String? occurrenceDate,
-    String? reminderAt,
-  }) async {}
-
-  @override
   Future<void> cancelAll() async {}
-
-  @override
-  Future<bool> isRemindersEnabled() async => true;
-
-  @override
-  Future<void> setRemindersEnabled(bool enabled) async {}
 
   @override
   Future<void> rescheduleAllTasks(

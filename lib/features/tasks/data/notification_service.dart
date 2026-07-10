@@ -245,6 +245,10 @@ class NotificationService {
   }
 
   Future<void> markTaskSynced(String taskId) async {
+    if (!_cloudRemindersAvailable()) {
+      _cloudSyncedTaskIds.remove(taskId);
+      return;
+    }
     _cloudSyncedTaskIds.add(taskId);
     await cancelTaskReminders(taskId);
   }

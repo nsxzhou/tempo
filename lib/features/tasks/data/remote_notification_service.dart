@@ -31,12 +31,14 @@ class RemoteNotificationService {
     Stream<RemoteMessage>? foregroundMessages,
     Stream<RemoteMessage>? openedMessages,
     Future<bool> Function()? ensureFirebaseInitialized,
+    void Function(bool registered)? onRegistrationChanged,
   }) : _supabase = supabase,
        _messaging = messaging ?? FirebaseMessaging.instance,
        _showForegroundReminder = showForegroundReminder,
        _foregroundMessages = foregroundMessages ?? FirebaseMessaging.onMessage,
        _openedMessages = openedMessages ?? FirebaseMessaging.onMessageOpenedApp,
-       _ensureFirebase = ensureFirebaseInitialized;
+       _ensureFirebase = ensureFirebaseInitialized,
+       _onRegistrationChanged = onRegistrationChanged;
 
   final SupabaseClient _supabase;
   final FirebaseMessaging _messaging;
@@ -44,6 +46,7 @@ class RemoteNotificationService {
   final Stream<RemoteMessage> _foregroundMessages;
   final Stream<RemoteMessage> _openedMessages;
   final Future<bool> Function()? _ensureFirebase;
+  final void Function(bool registered)? _onRegistrationChanged;
   StreamSubscription<String>? _tokenRefreshSubscription;
   StreamSubscription<RemoteMessage>? _openedSubscription;
   StreamSubscription<RemoteMessage>? _foregroundSubscription;
@@ -77,33 +80,55 @@ class RemoteNotificationService {
       scheduleMicrotask(() => _handleMessageTap(initialMessage));
     }
     _tokenRefreshSubscription = _messaging.onTokenRefresh.listen((token) {
-      unawaited(_upsertToken(token: token, enabled: _lastEnabled));
+      unawaited(_syncRefreshedToken(token));
     });
 
     _initialized = true;
   }
 
-  Future<void> syncDevice({required bool enabled}) async {
+  Future<bool> syncDevice({required bool enabled}) async {
     _lastEnabled = enabled;
     if (!_initialized) await init();
-    if (!_firebaseAvailable) return;
+    if (!_firebaseAvailable) {
+      _onRegistrationChanged?.call(false);
+      return false;
+    }
 
-    final token = await _messaging.getToken();
-    if (token == null || token.isEmpty) return;
-    await _upsertToken(token: token, enabled: enabled);
+    try {
+      final token = await _messaging.getToken();
+      if (token == null || token.isEmpty) {
+        _onRegistrationChanged?.call(false);
+        return false;
+      }
+      final synced = await _upsertToken(token: token, enabled: enabled);
+      final registered = enabled && synced;
+      _onRegistrationChanged?.call(registered);
+      return registered;
+    } catch (e) {
+      _debugRegistrationFailure('get FCM token failed', e);
+      _onRegistrationChanged?.call(false);
+      return false;
+    }
   }
 
-  Future<void> setRemindersEnabled(bool enabled) async {
-    await syncDevice(enabled: enabled);
+  Future<bool> setRemindersEnabled(bool enabled) {
+    return syncDevice(enabled: enabled);
   }
 
   Future<void> disableCurrentDevice() async {
     _lastEnabled = false;
     if (!_initialized) await init();
-    if (!_firebaseAvailable) return;
-    final token = await _messaging.getToken();
-    if (token == null || token.isEmpty) return;
-    await _upsertToken(token: token, enabled: false);
+    if (_firebaseAvailable) {
+      try {
+        final token = await _messaging.getToken();
+        if (token != null && token.isNotEmpty) {
+          await _upsertToken(token: token, enabled: false);
+        }
+      } catch (e) {
+        _debugRegistrationFailure('disable FCM token failed', e);
+      }
+    }
+    _onRegistrationChanged?.call(false);
   }
 
   Future<void> dispose() async {
@@ -129,12 +154,12 @@ class RemoteNotificationService {
     }
   }
 
-  Future<void> _upsertToken({
+  Future<bool> _upsertToken({
     required String token,
     required bool enabled,
   }) async {
     final userId = _supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    if (userId == null) return false;
 
     try {
       final timezone = await FlutterTimezone.getLocalTimezone();
@@ -146,12 +171,23 @@ class RemoteNotificationService {
         'enabled': enabled,
         'last_seen_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'fcm_token');
+      return true;
     } catch (e) {
-      assert(() {
-        debugPrint('[Tempo] sync remote notification token failed: $e');
-        return true;
-      }());
+      _debugRegistrationFailure('sync remote notification token failed', e);
+      return false;
     }
+  }
+
+  Future<void> _syncRefreshedToken(String token) async {
+    final synced = await _upsertToken(token: token, enabled: _lastEnabled);
+    _onRegistrationChanged?.call(_lastEnabled && synced);
+  }
+
+  void _debugRegistrationFailure(String operation, Object error) {
+    assert(() {
+      debugPrint('[Tempo] $operation: $error');
+      return true;
+    }());
   }
 
   Future<void> _handleForegroundMessage(RemoteMessage message) async {

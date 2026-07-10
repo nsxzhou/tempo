@@ -288,6 +288,57 @@ void main() {
       expect(payload['occurrenceDate'], '2026-07-10');
     });
 
+    test(
+      'synced task keeps local reminder when cloud is unavailable',
+      () async {
+        final now = DateTime(2026, 7, 10, 8);
+        service = NotificationService(
+          now: () => now,
+          cloudRemindersAvailable: () => false,
+        );
+        final task = Task(
+          id: 'task-1',
+          listId: 'inbox',
+          title: '本地兜底',
+          dueDate: DateTime(2026, 7, 10, 9),
+          syncPending: false,
+          createdAt: now,
+          updatedAt: now,
+        );
+
+        await service.scheduleTaskReminder(task);
+
+        expect(platform.scheduled, hasLength(1));
+      },
+    );
+
+    test(
+      'sync success keeps local fallback when cloud is unavailable',
+      () async {
+        final now = DateTime(2026, 7, 10, 8);
+        service = NotificationService(
+          now: () => now,
+          cloudRemindersAvailable: () => false,
+        );
+        final task = Task(
+          id: 'task-1',
+          listId: 'inbox',
+          title: '同步但无 FCM',
+          dueDate: DateTime(2026, 7, 10, 9),
+          syncPending: true,
+          createdAt: now,
+          updatedAt: now,
+        );
+        await service.scheduleTaskReminder(task);
+        final cancelledBeforeSync = platform.cancelledIds.length;
+
+        await service.markTaskSynced(task.id);
+
+        expect(platform.scheduled, hasLength(1));
+        expect(platform.cancelledIds, hasLength(cancelledBeforeSync));
+      },
+    );
+
     test('synced cloud task does not keep local reminder', () async {
       final now = DateTime(2026, 7, 10, 8);
       service = NotificationService(

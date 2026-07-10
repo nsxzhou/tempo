@@ -214,7 +214,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
       remoteNotificationServiceProvider,
     );
     await notificationService.setRemindersEnabled(value);
-    await remoteNotificationService.setRemindersEnabled(value);
+    final registered = await remoteNotificationService.setRemindersEnabled(
+      value,
+    );
+    ref.read(remoteNotificationRegisteredProvider.notifier).state = registered;
     if (value) {
       await notificationService.requestPermissions();
       final tasks = ref.read(taskListProvider).valueOrNull ?? [];
@@ -293,6 +296,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     if (confirmed != true || !mounted) return;
     try {
       await ref.read(remoteNotificationServiceProvider).disableCurrentDevice();
+      ref.read(remoteNotificationRegisteredProvider.notifier).state = false;
       await ref.read(notificationServiceProvider).cancelAll();
       await ref.read(authServiceProvider).signOut();
       if (!mounted) return;

@@ -39,6 +39,13 @@ class _TempoAppState extends ConsumerState<TempoApp>
       if (previous == next) return;
       unawaited(_handleUserChanged());
     });
+    ref.listenManual<bool>(remoteNotificationRegisteredProvider, (
+      previous,
+      next,
+    ) {
+      if (previous == next) return;
+      unawaited(_rebuildLocalReminders());
+    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_bootstrapNotifications());
@@ -59,9 +66,10 @@ class _TempoAppState extends ConsumerState<TempoApp>
   Future<void> _syncRemoteNotificationDevice() async {
     final notificationService = ref.read(notificationServiceProvider);
     final enabled = await notificationService.isRemindersEnabled();
-    await ref
+    final registered = await ref
         .read(remoteNotificationServiceProvider)
         .syncDevice(enabled: enabled);
+    ref.read(remoteNotificationRegisteredProvider.notifier).state = registered;
   }
 
   Future<void> _handleUserChanged() async {

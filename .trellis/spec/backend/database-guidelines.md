@@ -234,9 +234,11 @@ FCM payloads, or `notification_deliveries` change.
 
 ### Contracts
 
-- Signed-out or unsynced (`syncPending=true`) tasks may own a local reminder.
-- A signed-in task with `syncPending=false` is cloud-owned and must not retain a
-  local scheduled reminder.
+- Unsynced (`syncPending=true`) tasks own a local reminder.
+- A synced task becomes cloud-owned only after its FCM token is successfully
+  written to `notification_devices`; login state alone is not sufficient.
+- If Firebase initialization, token retrieval, or device upsert fails, synced
+  tasks retain local scheduled reminders.
 - A recurring local fallback schedules only the next pending occurrence.
 - FCM data includes `reminderKey`, `taskId`, `occurrenceDate`, and `reminderAt`.
 - The reminder Edge Function only considers reminders in the previous two
@@ -247,8 +249,9 @@ FCM payloads, or `notification_deliveries` change.
 
 | Condition | Required behavior |
 |---|---|
-| cloud upsert succeeds | persist `syncPending=false`, then cancel local reminder |
-| cloud upsert fails | retain `syncPending=true` and local fallback |
+| task cloud upsert succeeds, FCM registered | persist `syncPending=false`, then cancel local reminder |
+| task cloud upsert succeeds, FCM unavailable | retain the existing local fallback |
+| task cloud upsert fails | retain `syncPending=true` and local fallback |
 | FCM succeeds | mark delivery `sent`; unique key prevents another send |
 | transient FCM failure within 2 minutes | mark `failed`; RPC may claim at most two retries |
 | failure is older than 2 minutes | keep failed record; do not resend |

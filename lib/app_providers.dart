@@ -320,9 +320,14 @@ final syncServiceProvider = Provider<SyncService>((ref) {
 
 // ── NotificationService ──
 
+final remoteNotificationRegisteredProvider = StateProvider<bool>(
+  (ref) => false,
+);
+
 final notificationServiceProvider = Provider<NotificationService>((ref) {
   return NotificationService(
-    cloudRemindersAvailable: () => ref.read(currentUserIdProvider) != null,
+    cloudRemindersAvailable: () =>
+        ref.read(remoteNotificationRegisteredProvider),
   );
 });
 
@@ -331,6 +336,10 @@ final remoteNotificationServiceProvider = Provider<RemoteNotificationService>((
 ) {
   final service = RemoteNotificationService(
     supabase: ref.watch(supabaseProvider),
+    onRegistrationChanged: (registered) {
+      ref.read(remoteNotificationRegisteredProvider.notifier).state =
+          registered;
+    },
     showForegroundReminder:
         ({
           required reminderKey,

@@ -63,6 +63,27 @@ void main() {
     await foreground.close();
     await opened.close();
   });
+
+  test('syncDevice reports unavailable when FCM token is missing', () async {
+    final registrationStates = <bool>[];
+    final service = RemoteNotificationService(
+      supabase: SupabaseClient(
+        'https://example.supabase.co',
+        'test-publishable-key',
+      ),
+      messaging: _FakeFirebaseMessaging(),
+      ensureFirebaseInitialized: () async => true,
+      foregroundMessages: const Stream.empty(),
+      openedMessages: const Stream.empty(),
+      onRegistrationChanged: registrationStates.add,
+    );
+
+    final registered = await service.syncDevice(enabled: true);
+
+    expect(registered, isFalse);
+    expect(registrationStates, [false]);
+    await service.dispose();
+  });
 }
 
 class _FakeFirebaseMessaging implements FirebaseMessaging {
@@ -98,6 +119,12 @@ class _FakeFirebaseMessaging implements FirebaseMessaging {
 
   @override
   Stream<String> get onTokenRefresh => const Stream.empty();
+
+  @override
+  Future<String?> getToken({
+    String? vapidKey,
+    String? serviceWorkerScriptPath,
+  }) async => null;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

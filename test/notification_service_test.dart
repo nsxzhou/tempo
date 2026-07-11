@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +14,17 @@ import 'package:timezone/timezone.dart' as tz;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('android schedule mode degrades when exact alarms are unavailable', () {
+    expect(
+      androidScheduleModeForCapability(false),
+      AndroidScheduleMode.inexactAllowWhileIdle,
+    );
+    expect(
+      androidScheduleModeForCapability(true),
+      AndroidScheduleMode.alarmClock,
+    );
+  });
 
   group('todoReminderDateTime', () {
     test('uses actual time for timed task', () {
@@ -302,6 +314,62 @@ void main() {
       },
     );
 
+    test(
+      'scheduleTaskReminder returns scheduled after pending verification',
+      () async {
+        final task = Task(
+          id: 'verified-task',
+          listId: 'inbox',
+          title: '验证提醒',
+          dueDate: DateTime.now().add(const Duration(hours: 1)),
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        final result = await service.scheduleTaskReminder(task);
+
+        expect(result.status, ReminderScheduleStatus.scheduled);
+        expect(result.notificationId, isNotNull);
+      },
+    );
+
+    test('scheduleTaskReminder reports missing pending entry', () async {
+      platform.addPendingOnSchedule = false;
+      final task = Task(
+        id: 'missing-pending',
+        listId: 'inbox',
+        title: '缺失排程',
+        dueDate: DateTime.now().add(const Duration(hours: 1)),
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      final result = await service.scheduleTaskReminder(task);
+
+      expect(result.status, ReminderScheduleStatus.pendingVerificationFailed);
+      expect(result.needsAttention, isTrue);
+    });
+
+    test(
+      'scheduleTaskReminder preserves platform scheduling failure',
+      () async {
+        platform.scheduleError = PlatformException(code: 'alarm-failed');
+        final task = Task(
+          id: 'platform-failure',
+          listId: 'inbox',
+          title: '平台失败',
+          dueDate: DateTime.now().add(const Duration(hours: 1)),
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        final result = await service.scheduleTaskReminder(task);
+
+        expect(result.status, ReminderScheduleStatus.platformFailure);
+        expect(result.error, contains('alarm-failed'));
+      },
+    );
+
     test('daily recurrence schedules exactly the next 90 reminders', () async {
       final now = DateTime(2026, 7, 10, 8);
       service = NotificationService(now: () => now);
@@ -421,6 +489,8 @@ class _FakeIOSNotificationsPlugin extends IOSFlutterLocalNotificationsPlugin {
   final cancelledIds = <int>[];
   final scheduled = <_ScheduledNotification>[];
   final shown = <_ShownNotification>[];
+  bool addPendingOnSchedule = true;
+  Object? scheduleError;
 
   @override
   Future<bool?> initialize({
@@ -469,6 +539,7 @@ class _FakeIOSNotificationsPlugin extends IOSFlutterLocalNotificationsPlugin {
     DateTimeComponents? matchDateTimeComponents,
     DarwinNotificationDetails? notificationDetails,
   }) async {
+    if (scheduleError case final error?) throw error;
     scheduled.add(
       _ScheduledNotification(
         id: id,
@@ -478,6 +549,8 @@ class _FakeIOSNotificationsPlugin extends IOSFlutterLocalNotificationsPlugin {
         payload: payload,
       ),
     );
-    pending.add(PendingNotificationRequest(id, title, body, payload));
+    if (addPendingOnSchedule) {
+      pending.add(PendingNotificationRequest(id, title, body, payload));
+    }
   }
 }

@@ -1,5 +1,6 @@
 package com.tempo.tempo
 
+import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -32,8 +33,37 @@ class MainActivity : FlutterActivity() {
                     )
                     result.success(null)
                 }
+                "openBackgroundSettings" -> {
+                    openBackgroundSettings()
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }
+    }
+
+    private fun openBackgroundSettings() {
+        val candidates = listOf(
+            Intent().apply {
+                component = ComponentName(
+                    "com.miui.securitycenter",
+                    "com.miui.permcenter.autostart.AutoStartManagementActivity",
+                )
+            },
+            Intent().apply {
+                component = ComponentName(
+                    "com.miui.powerkeeper",
+                    "com.miui.powerkeeper.ui.HiddenAppsConfigActivity",
+                )
+                putExtra("package_name", packageName)
+                putExtra("package_label", applicationInfo.loadLabel(packageManager).toString())
+            },
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:$packageName"),
+            ),
+        )
+        val target = candidates.firstOrNull { it.resolveActivity(packageManager) != null }
+        if (target != null) startActivity(target)
     }
 }

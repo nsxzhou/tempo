@@ -544,7 +544,7 @@ void main() {
       find.byKey(const ValueKey('notification-permission-banner')),
       findsOneWidget,
     );
-    expect(find.textContaining('通知权限未开启'), findsOneWidget);
+    expect(find.textContaining('通知权限或渠道未开启'), findsOneWidget);
     await repository.dispose();
   });
 
@@ -705,18 +705,20 @@ class _NoopNotificationService extends NotificationService {
   ) async {}
 
   @override
-  Future<void> scheduleTaskReminder(
+  Future<ReminderScheduleResult> scheduleTaskReminder(
     Task task, {
     List<TaskCompletion> completions = const [],
     List<RecurrenceException> exceptions = const [],
-  }) async {}
+  }) async =>
+      const ReminderScheduleResult(status: ReminderScheduleStatus.scheduled);
 
   @override
-  Future<void> scheduleRecurringReminders(
+  Future<ReminderScheduleResult> scheduleRecurringReminders(
     Task task, {
     List<TaskCompletion> completions = const [],
     List<RecurrenceException> exceptions = const [],
-  }) async {}
+  }) async =>
+      const ReminderScheduleResult(status: ReminderScheduleStatus.scheduled);
 
   @override
   Future<bool> requestPermissions() async => true;
@@ -732,19 +734,23 @@ class _NoopNotificationService extends NotificationService {
     Iterable<Task> tasks, {
     List<TaskCompletion> completions = const [],
     List<RecurrenceException> exceptions = const [],
-  }) async {}
+  }) async =>
+      const ReminderScheduleResult(status: ReminderScheduleStatus.scheduled);
 }
 
 class _RecordingNotificationService extends _NoopNotificationService {
   final recurringCalls = <({Task task, List<TaskCompletion> completions})>[];
 
   @override
-  Future<void> scheduleRecurringReminders(
+  Future<ReminderScheduleResult> scheduleRecurringReminders(
     Task task, {
     List<TaskCompletion> completions = const [],
     List<RecurrenceException> exceptions = const [],
   }) async {
     recurringCalls.add((task: task, completions: List.of(completions)));
+    return const ReminderScheduleResult(
+      status: ReminderScheduleStatus.scheduled,
+    );
   }
 }
 

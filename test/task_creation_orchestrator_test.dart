@@ -149,6 +149,28 @@ void main() {
       expect(notifications.scheduledTaskIds, ['task-0']);
     });
 
+    test(
+      'task remains created and warns when reminder scheduling fails',
+      () async {
+        notifications.scheduleResult = const ReminderScheduleResult(
+          status: ReminderScheduleStatus.platformFailure,
+          error: 'alarm failed',
+        );
+
+        await orchestrator.enqueueQuickCreate(
+          QuickCreateInput(
+            title: '提醒失败任务',
+            dueDate: DateTime.now().add(const Duration(hours: 1)),
+            skipParse: true,
+          ),
+        );
+
+        expect(repository.tasks, hasLength(1));
+        expect(snackbarMessages.single, contains('任务已保存'));
+        expect(snackbarMessages.single, contains('提醒设置失败'));
+      },
+    );
+
     test('parse result carries isAllDay from LLM', () async {
       parseService.result = VoiceTaskParseResult(
         title: '去吃KFC',
@@ -267,6 +289,9 @@ VoiceTaskParseResult _voiceResult({double confidence = 0.86}) {
 
 class _RecordingNotificationService extends NotificationService {
   final List<String> scheduledTaskIds = [];
+  ReminderScheduleResult scheduleResult = const ReminderScheduleResult(
+    status: ReminderScheduleStatus.scheduled,
+  );
 
   @override
   Future<void> cancelTaskReminders(String taskId) async {}
@@ -278,23 +303,41 @@ class _RecordingNotificationService extends NotificationService {
   ) async {}
 
   @override
-  Future<void> scheduleTaskReminder(
+  Future<ReminderScheduleResult> scheduleTaskReminder(
     Task task, {
     List<TaskCompletion> completions = const [],
     List<RecurrenceException> exceptions = const [],
   }) async {
-    if (task.dueDate == null || task.isCompleted) return;
+    if (task.dueDate == null || task.isCompleted) {
+      return const ReminderScheduleResult(
+        status: ReminderScheduleStatus.skippedCompleted,
+      );
+    }
     scheduledTaskIds.add(task.id);
+    return ReminderScheduleResult(
+      status: scheduleResult.status,
+      taskId: task.id,
+      error: scheduleResult.error,
+    );
   }
 
   @override
-  Future<void> scheduleRecurringReminders(
+  Future<ReminderScheduleResult> scheduleRecurringReminders(
     Task task, {
     List<TaskCompletion> completions = const [],
     List<RecurrenceException> exceptions = const [],
   }) async {
-    if (task.dueDate == null || task.isCompleted) return;
+    if (task.dueDate == null || task.isCompleted) {
+      return const ReminderScheduleResult(
+        status: ReminderScheduleStatus.skippedCompleted,
+      );
+    }
     scheduledTaskIds.add(task.id);
+    return ReminderScheduleResult(
+      status: scheduleResult.status,
+      taskId: task.id,
+      error: scheduleResult.error,
+    );
   }
 
   @override

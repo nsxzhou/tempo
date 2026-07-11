@@ -77,11 +77,19 @@ class _TasksPageState extends ConsumerState<TasksPage>
     final scaffoldBg = ref.watch(scaffoldBackgroundProvider);
     final tasks = ref.watch(taskListProvider).valueOrNull ?? const <Task>[];
     final capability = ref.watch(notificationCapabilityProvider).valueOrNull;
+    final diagnostics = ref.watch(reminderDiagnosticsProvider).valueOrNull;
     final hasScheduledTasks = tasks.any(
       (task) => !task.isCompleted && task.dueDate != null,
     );
+    final diagnosticsNeedsAttention =
+        diagnostics?.lastResult?.needsAttention == true ||
+        (hasScheduledTasks &&
+            diagnostics != null &&
+            diagnostics.pendingCount == 0);
     final showNotificationWarning =
-        hasScheduledTasks && capability != null && !capability.isFullyAvailable;
+        hasScheduledTasks &&
+        ((capability != null && !capability.isFullyAvailable) ||
+            diagnosticsNeedsAttention);
 
     return Scaffold(
       backgroundColor: scaffoldBg,
@@ -114,14 +122,45 @@ class _TasksPageState extends ConsumerState<TasksPage>
                             onChanged: _onSearchChanged,
                           ),
                         ),
+                        SliverToBoxAdapter(
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 16),
+                              child: TextButton.icon(
+                                key: const ValueKey(
+                                  'reminder-diagnostics-button',
+                                ),
+                                onPressed: _showReminderDiagnostics,
+                                icon: const Icon(
+                                  LucideIcons.activity,
+                                  size: 15,
+                                ),
+                                label: const Text('提醒诊断'),
+                              ),
+                            ),
+                          ),
+                        ),
                         if (showNotificationWarning)
                           SliverToBoxAdapter(
                             child: _NotificationPermissionBanner(
                               exactAlarmOnly:
-                                  capability.notificationsAllowed &&
-                                  !capability.exactAlarmsAllowed,
-                              onTap: () =>
-                                  _openNotificationSettings(capability),
+                                  capability?.notificationsAllowed == true &&
+                                  capability?.channelEnabled == true &&
+                                  capability?.exactAlarmsAllowed == false,
+                              message:
+                                  diagnosticsNeedsAttention &&
+                                      capability?.isFullyAvailable == true
+                                  ? '提醒排程异常，点击查看诊断'
+                                  : null,
+                              onTap: () {
+                                if (capability != null &&
+                                    !capability.isFullyAvailable) {
+                                  _openNotificationSettings(capability);
+                                } else {
+                                  _showReminderDiagnostics();
+                                }
+                              },
                             ),
                           ),
                         SliverToBoxAdapter(
@@ -200,6 +239,78 @@ class _TasksPageState extends ConsumerState<TasksPage>
     } else {
       await service.openExactAlarmSettings();
     }
+  }
+
+  Future<void> _showReminderDiagnostics() async {
+    final service = ref.read(notificationServiceProvider);
+    ReminderDiagnostics diagnostics;
+    try {
+      diagnostics = await service.diagnostics();
+    } catch (error) {
+      if (!mounted) return;
+      TempoSnackbar.show(context, message: '读取提醒诊断失败:$error');
+      return;
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('提醒诊断'),
+        content: Text(
+          [
+            '本地时间：${diagnostics.now}',
+            '时区：${diagnostics.timezoneName}',
+            "通知权限：${diagnostics.capability.notificationsAllowed ? '正常' : '未开启'}",
+            "通知渠道：${diagnostics.capability.channelEnabled ? '正常' : '已关闭'}",
+            "精确闹钟：${diagnostics.capability.exactAlarmsAllowed ? '正常' : '不可用（将降级）'}",
+            '待触发提醒：${diagnostics.pendingCount}',
+            "最近结果：${diagnostics.lastResult?.status.name ?? '暂无'}",
+            "错误：${diagnostics.lastResult?.error ?? '无'}",
+          ].join('\n'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              try {
+                await service.showTestNotification();
+                if (dialogContext.mounted) {
+                  TempoSnackbar.show(dialogContext, message: '已发送立即测试通知');
+                }
+              } catch (error) {
+                if (dialogContext.mounted) {
+                  TempoSnackbar.show(dialogContext, message: '测试通知失败:$error');
+                }
+              }
+            },
+            child: const Text('立即测试'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final result = await service.scheduleTestReminder();
+              ref.invalidate(reminderDiagnosticsProvider);
+              if (dialogContext.mounted) {
+                TempoSnackbar.show(
+                  dialogContext,
+                  message: result.isSuccess
+                      ? '两分钟测试提醒已排程'
+                      : '测试排程失败:${result.status.name}',
+                );
+              }
+            },
+            child: const Text('两分钟测试'),
+          ),
+          TextButton(
+            onPressed: service.openBackgroundSettings,
+            child: const Text('后台权限'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+    ref.invalidate(reminderDiagnosticsProvider);
   }
 
   Future<void> _refreshTasks() async {
@@ -374,10 +485,12 @@ class _NotificationPermissionBanner extends StatelessWidget {
   const _NotificationPermissionBanner({
     required this.exactAlarmOnly,
     required this.onTap,
+    this.message,
   });
 
   final bool exactAlarmOnly;
   final VoidCallback onTap;
+  final String? message;
 
   @override
   Widget build(BuildContext context) {
@@ -408,7 +521,10 @@ class _NotificationPermissionBanner extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    exactAlarmOnly ? '精确提醒未开启，点击前往系统设置' : '通知权限未开启，待办可能无法提醒',
+                    message ??
+                        (exactAlarmOnly
+                            ? '精确提醒未开启，点击前往系统设置'
+                            : '通知权限或渠道未开启，待办可能无法提醒'),
                     style: TextStyle(
                       color: tokens.fg,
                       fontSize: 12,

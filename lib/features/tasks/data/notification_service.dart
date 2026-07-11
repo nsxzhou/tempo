@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/extensions/task_filter.dart';
@@ -42,6 +43,12 @@ int stableNotificationIdForKey(String key) {
 }
 
 @visibleForTesting
+AndroidScheduleMode androidScheduleModeForCapability(bool exactAlarmsAllowed) {
+  return exactAlarmsAllowed
+      ? AndroidScheduleMode.alarmClock
+      : AndroidScheduleMode.inexactAllowWhileIdle;
+}
+
 String? taskIdFromNotificationPayload(String? payload) {
   if (payload == null || payload.isEmpty) return null;
   try {
@@ -60,12 +67,66 @@ class NotificationCapability {
   const NotificationCapability({
     required this.notificationsAllowed,
     required this.exactAlarmsAllowed,
+    this.channelEnabled = true,
   });
 
   final bool notificationsAllowed;
   final bool exactAlarmsAllowed;
+  final bool channelEnabled;
 
-  bool get isFullyAvailable => notificationsAllowed && exactAlarmsAllowed;
+  bool get isFullyAvailable =>
+      notificationsAllowed && exactAlarmsAllowed && channelEnabled;
+}
+
+enum ReminderScheduleStatus {
+  scheduled,
+  scheduledInexact,
+  skippedPast,
+  skippedCompleted,
+  notificationsDenied,
+  channelDisabled,
+  pendingVerificationFailed,
+  platformFailure,
+}
+
+class ReminderScheduleResult {
+  const ReminderScheduleResult({
+    required this.status,
+    this.taskId,
+    this.notificationId,
+    this.scheduledAt,
+    this.error,
+  });
+
+  final ReminderScheduleStatus status;
+  final String? taskId;
+  final int? notificationId;
+  final DateTime? scheduledAt;
+  final String? error;
+
+  bool get isSuccess =>
+      status == ReminderScheduleStatus.scheduled ||
+      status == ReminderScheduleStatus.scheduledInexact;
+  bool get needsAttention =>
+      !isSuccess &&
+      status != ReminderScheduleStatus.skippedPast &&
+      status != ReminderScheduleStatus.skippedCompleted;
+}
+
+class ReminderDiagnostics {
+  const ReminderDiagnostics({
+    required this.now,
+    required this.timezoneName,
+    required this.capability,
+    required this.pendingCount,
+    this.lastResult,
+  });
+
+  final DateTime now;
+  final String timezoneName;
+  final NotificationCapability capability;
+  final int pendingCount;
+  final ReminderScheduleResult? lastResult;
 }
 
 class NotificationService {
@@ -90,6 +151,7 @@ class NotificationService {
   final RecurrenceEngine _engine;
   final DateTime Function() _now;
   bool _initialized = false;
+  ReminderScheduleResult? _lastResult;
   Future<void> _mutationTail = Future<void>.value();
 
   void Function(String taskId)? onNotificationTap;
@@ -99,7 +161,7 @@ class NotificationService {
 
     await configureNotificationTimezone();
     const settings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      android: AndroidInitializationSettings('ic_launcher_monochrome'),
       iOS: DarwinInitializationSettings(
         requestAlertPermission: false,
         requestBadgePermission: false,
@@ -150,10 +212,21 @@ class NotificationService {
       );
     }
     final android = _androidPlugin;
+    final channels = await android?.getNotificationChannels();
+    AndroidNotificationChannel? reminderChannel;
+    for (final channel in channels ?? const <AndroidNotificationChannel>[]) {
+      if (channel.id == AppConstants.notificationChannelId) {
+        reminderChannel = channel;
+        break;
+      }
+    }
     return NotificationCapability(
       notificationsAllowed: await android?.areNotificationsEnabled() ?? false,
       exactAlarmsAllowed:
           await android?.canScheduleExactNotifications() ?? false,
+      channelEnabled:
+          reminderChannel != null &&
+          reminderChannel.importance != Importance.none,
     );
   }
 
@@ -165,6 +238,11 @@ class NotificationService {
   Future<void> openExactAlarmSettings() async {
     if (!Platform.isAndroid) return;
     await _settingsChannel.invokeMethod<void>('openExactAlarmSettings');
+  }
+
+  Future<void> openBackgroundSettings() async {
+    if (!Platform.isAndroid) return;
+    await _settingsChannel.invokeMethod<void>('openBackgroundSettings');
   }
 
   Future<int> pendingNotificationCount() async {
@@ -192,19 +270,30 @@ class NotificationService {
     });
   }
 
-  Future<void> scheduleTaskReminder(
+  Future<ReminderScheduleResult> scheduleTaskReminder(
     Task task, {
     List<TaskCompletion> completions = const [],
     List<RecurrenceException> exceptions = const [],
   }) {
-    return _serialize(() async {
+    return _serializeResult(() async {
       if (!_initialized) await init();
       await _cancelTaskReminders(task.id);
-      await _scheduleTaskReminder(
-        task,
-        completions: completions,
-        exceptions: exceptions,
-      );
+      if (task.isCompleted || task.dueDate == null) {
+        return _recordResult(
+          ReminderScheduleResult(
+            status: ReminderScheduleStatus.skippedCompleted,
+            taskId: task.id,
+          ),
+        );
+      }
+      if (task.isRecurring) {
+        return _scheduleRecurringReminders(
+          task,
+          completions: completions,
+          exceptions: exceptions,
+        );
+      }
+      return _scheduleSingle(task, task.dueDate, task.id);
     });
   }
 
@@ -225,7 +314,7 @@ class NotificationService {
     await _scheduleSingle(task, task.dueDate, task.id);
   }
 
-  Future<void> _scheduleRecurringReminders(
+  Future<ReminderScheduleResult> _scheduleRecurringReminders(
     Task task, {
     required List<TaskCompletion> completions,
     required List<RecurrenceException> exceptions,
@@ -240,30 +329,47 @@ class NotificationService {
       now: now,
     );
     final horizonEnd = now.add(recurringScheduleHorizon);
+    ReminderScheduleResult? lastScheduled;
     for (final occurrence in occurrences) {
       if (occurrence.state != OccurrenceState.pending) continue;
       final reminderAt = todoReminderDateTime(task, occurrence.effectiveDue);
       if (reminderAt.isAfter(horizonEnd)) continue;
-      await _scheduleSingle(
+      final result = await _scheduleSingle(
         task,
         occurrence.effectiveDue,
         task.id,
         occurrenceDate: occurrence.occurrenceDate,
         body: occurrence.title,
       );
+      if (result.needsAttention) return result;
+      if (result.isSuccess) lastScheduled = result;
     }
+    return lastScheduled ??
+        _recordResult(
+          ReminderScheduleResult(
+            status: ReminderScheduleStatus.skippedPast,
+            taskId: task.id,
+          ),
+        );
   }
 
-  Future<void> scheduleRecurringReminders(
+  Future<ReminderScheduleResult> scheduleRecurringReminders(
     Task task, {
     List<TaskCompletion> completions = const [],
     List<RecurrenceException> exceptions = const [],
   }) {
-    return _serialize(() async {
+    return _serializeResult(() async {
       if (!_initialized) await init();
       await _cancelTaskReminders(task.id);
-      if (task.isCompleted || task.dueDate == null || !task.isRecurring) return;
-      await _scheduleRecurringReminders(
+      if (task.isCompleted || task.dueDate == null || !task.isRecurring) {
+        return _recordResult(
+          ReminderScheduleResult(
+            status: ReminderScheduleStatus.skippedCompleted,
+            taskId: task.id,
+          ),
+        );
+      }
+      return _scheduleRecurringReminders(
         task,
         completions: completions,
         exceptions: exceptions,
@@ -306,6 +412,57 @@ class NotificationService {
     }
   }
 
+  ReminderScheduleResult _recordResult(ReminderScheduleResult result) {
+    _lastResult = result;
+    return result;
+  }
+
+  Future<ReminderDiagnostics> diagnostics() async {
+    if (!_initialized) await init();
+    return ReminderDiagnostics(
+      now: _now(),
+      timezoneName: tz.local.name,
+      capability: await capability(),
+      pendingCount: (await _plugin.pendingNotificationRequests()).length,
+      lastResult: _lastResult,
+    );
+  }
+
+  Future<void> showTestNotification() async {
+    if (!_initialized) await init();
+    await _plugin.show(
+      id: stableNotificationIdForKey('tempo:test:immediate'),
+      title: 'Tempo 通知测试',
+      body: '如果你看到这条通知，通知渠道可以正常展示。',
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          AppConstants.notificationChannelId,
+          AppConstants.notificationChannelName,
+          channelDescription: AppConstants.notificationChannelDesc,
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: 'ic_launcher_monochrome',
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+    );
+  }
+
+  Future<ReminderScheduleResult> scheduleTestReminder({
+    Duration delay = const Duration(minutes: 2),
+  }) async {
+    final now = _now();
+    final task = Task(
+      id: 'tempo-diagnostic-test',
+      listId: 'diagnostics',
+      title: 'Tempo 两分钟定时提醒测试',
+      dueDate: now.add(delay),
+      createdAt: now,
+      updatedAt: now,
+    );
+    return scheduleTaskReminder(task);
+  }
+
   Future<void> cancelAll() {
     return _serialize(() async {
       if (!_initialized) await init();
@@ -313,31 +470,98 @@ class NotificationService {
     });
   }
 
-  Future<void> _scheduleSingle(
+  Future<ReminderScheduleResult> _scheduleSingle(
     Task task,
     DateTime? due,
     String payloadTaskId, {
     DateTime? occurrenceDate,
     String? body,
   }) async {
+    if (due == null || task.isCompleted) {
+      return _recordResult(
+        ReminderScheduleResult(
+          status: ReminderScheduleStatus.skippedCompleted,
+          taskId: payloadTaskId,
+        ),
+      );
+    }
+    final reminderAt = todoReminderDateTime(task, due);
+    if (!reminderAt.isAfter(_now())) {
+      return _recordResult(
+        ReminderScheduleResult(
+          status: ReminderScheduleStatus.skippedPast,
+          taskId: payloadTaskId,
+          scheduledAt: reminderAt,
+        ),
+      );
+    }
+    final id = occurrenceDate != null
+        ? _occurrenceNotificationId(payloadTaskId, occurrenceDate)
+        : _notificationId(payloadTaskId);
     try {
-      if (due == null) return;
-      final reminderAt = todoReminderDateTime(task, due);
-      if (!reminderAt.isAfter(_now())) return;
+      final capability = await this.capability();
+      if (!capability.notificationsAllowed) {
+        return _recordResult(
+          ReminderScheduleResult(
+            status: ReminderScheduleStatus.notificationsDenied,
+            taskId: payloadTaskId,
+            notificationId: id,
+            scheduledAt: reminderAt,
+          ),
+        );
+      }
+      if (!capability.channelEnabled) {
+        return _recordResult(
+          ReminderScheduleResult(
+            status: ReminderScheduleStatus.channelDisabled,
+            taskId: payloadTaskId,
+            notificationId: id,
+            scheduledAt: reminderAt,
+          ),
+        );
+      }
+      final scheduleMode = androidScheduleModeForCapability(
+        capability.exactAlarmsAllowed,
+      );
       await _zonedSchedule(
-        id: occurrenceDate != null
-            ? _occurrenceNotificationId(payloadTaskId, occurrenceDate)
-            : _notificationId(payloadTaskId),
+        id: id,
         title: '待办提醒',
         body: body ?? task.title,
         scheduledTime: reminderAt,
         payload: _notificationPayload(payloadTaskId, occurrenceDate),
+        androidScheduleMode: scheduleMode,
       );
-    } catch (error, stack) {
-      _debugPrintNotificationFailure(
-        'schedule reminder failed for $payloadTaskId',
-        error,
-        stack,
+      final pending = await _plugin.pendingNotificationRequests();
+      if (!pending.any((request) => request.id == id)) {
+        return _recordResult(
+          ReminderScheduleResult(
+            status: ReminderScheduleStatus.pendingVerificationFailed,
+            taskId: payloadTaskId,
+            notificationId: id,
+            scheduledAt: reminderAt,
+            error: '排程后未在系统 pending 列表中找到通知',
+          ),
+        );
+      }
+      return _recordResult(
+        ReminderScheduleResult(
+          status: capability.exactAlarmsAllowed
+              ? ReminderScheduleStatus.scheduled
+              : ReminderScheduleStatus.scheduledInexact,
+          taskId: payloadTaskId,
+          notificationId: id,
+          scheduledAt: reminderAt,
+        ),
+      );
+    } catch (error) {
+      return _recordResult(
+        ReminderScheduleResult(
+          status: ReminderScheduleStatus.platformFailure,
+          taskId: payloadTaskId,
+          notificationId: id,
+          scheduledAt: reminderAt,
+          error: error.toString(),
+        ),
       );
     }
   }
@@ -348,6 +572,7 @@ class NotificationService {
     required String body,
     required DateTime scheduledTime,
     String? payload,
+    required AndroidScheduleMode androidScheduleMode,
   }) async {
     await _plugin.zonedSchedule(
       id: id,
@@ -359,23 +584,15 @@ class NotificationService {
           channelDescription: AppConstants.notificationChannelDesc,
           importance: Importance.high,
           priority: Priority.high,
-          icon: '@mipmap/ic_launcher',
+          icon: 'ic_launcher_monochrome',
         ),
         iOS: DarwinNotificationDetails(),
       ),
-      androidScheduleMode: await _androidScheduleMode(),
+      androidScheduleMode: androidScheduleMode,
       title: title,
       body: body,
       payload: payload,
     );
-  }
-
-  Future<AndroidScheduleMode> _androidScheduleMode() async {
-    if (!Platform.isAndroid) return AndroidScheduleMode.exactAllowWhileIdle;
-    final canExact = await _androidPlugin?.canScheduleExactNotifications();
-    return canExact == true
-        ? AndroidScheduleMode.exactAllowWhileIdle
-        : AndroidScheduleMode.inexactAllowWhileIdle;
   }
 
   AndroidFlutterLocalNotificationsPlugin? get _androidPlugin => _plugin
@@ -414,6 +631,18 @@ class NotificationService {
       debugPrint('[Tempo] pendingNotificationRequests ignored: $error');
       return false;
     }
+  }
+
+  Future<T> _serializeResult<T>(Future<T> Function() operation) {
+    final completer = Completer<T>();
+    _mutationTail = _mutationTail.then((_) async {
+      try {
+        completer.complete(await operation());
+      } catch (error, stack) {
+        completer.completeError(error, stack);
+      }
+    });
+    return completer.future;
   }
 
   Future<void> _serialize(Future<void> Function() operation) {
@@ -468,16 +697,4 @@ class NotificationService {
       '${date.year.toString().padLeft(4, '0')}-'
       '${date.month.toString().padLeft(2, '0')}-'
       '${date.day.toString().padLeft(2, '0')}';
-
-  void _debugPrintNotificationFailure(
-    String operation,
-    Object error,
-    StackTrace stack,
-  ) {
-    if (!kDebugMode || error.toString().contains('LateInitializationError')) {
-      return;
-    }
-    debugPrint('[Tempo] $operation: $error');
-    debugPrintStack(stackTrace: stack);
-  }
 }

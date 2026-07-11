@@ -235,3 +235,72 @@ Firebase, an Edge Function, or a server Cron.
 Supabase must not contain notification device tokens, delivery ledgers, or a
 reminder Cron/Edge Function. Historical migrations remain immutable; schema
 removal is performed by a later migration.
+
+## Android Local Reminder Delivery Contract
+
+### 1. Scope / Trigger
+
+Apply this contract whenever creating, editing, completing, deleting, rebuilding, or diagnosing a task with a local due-date reminder.
+
+### 2. Signatures
+
+```dart
+Future<ReminderScheduleResult> scheduleTaskReminder(Task task, {...});
+Future<ReminderScheduleResult> scheduleRecurringReminders(Task task, {...});
+Future<ReminderDiagnostics> diagnostics();
+```
+
+`ReminderScheduleResult` must expose a typed status, task/notification identity, scheduled wall-clock time, and sanitized platform error when present.
+
+### 3. Contracts
+
+- A successful Android schedule is not established by `zonedSchedule()` returning alone; the expected stable notification ID must also appear in `pendingNotificationRequests()`.
+- `scheduled` means exact AlarmManager alarm-clock scheduling is available; `scheduledInexact` means the reminder was persisted with an explicit degraded-delivery status.
+- The Android notification icon must be a packaged monochrome drawable referenced by resource name, not the adaptive launcher icon.
+- Task persistence and reminder persistence are separate outcomes. A task remains saved when reminder scheduling fails, while the UI reports the reminder failure.
+
+### 4. Validation & Error Matrix
+
+| Condition | Result | UI behavior |
+|---|---|---|
+| Future reminder + pending ID present | `scheduled` / `scheduledInexact` | Normal success |
+| Reminder time is not future | `skippedPast` | No backfill |
+| Task completed or has no schedulable due date | `skippedCompleted` | No reminder warning |
+| App notifications denied | `notificationsDenied` | Open notification settings |
+| Reminder channel disabled | `channelDisabled` | Open channel settings |
+| Plugin returns but pending ID is absent | `pendingVerificationFailed` | Show diagnostics warning |
+| Platform channel/plugin throws | `platformFailure` | Preserve sanitized error and show diagnostics warning |
+
+### 5. Good / Base / Bad Cases
+
+- **Good:** save task, schedule it, read back the stable ID, and expose exact/inexact status.
+- **Base:** save a past or completed task and intentionally skip scheduling without presenting a platform failure.
+- **Bad:** catch a plugin exception, only `debugPrint` it, and still show the same success message as a verified reminder.
+
+### 6. Tests Required
+
+- Assert successful schedules appear in fake pending requests with the expected stable ID.
+- Assert a missing pending entry becomes `pendingVerificationFailed`.
+- Assert platform exceptions become `platformFailure` with diagnostic context.
+- Assert exact-alarm availability selects `alarmClock`; unavailability selects `inexactAllowWhileIdle`.
+- Build the Android release APK and inspect the merged manifest for permissions/receivers and the packaged resources for the notification drawable.
+
+### 7. Wrong vs Correct
+
+```dart
+// Wrong: release builds silently lose the only failure evidence.
+try {
+  await plugin.zonedSchedule(...);
+} catch (error) {
+  debugPrint('$error');
+}
+
+// Correct: verify platform persistence and propagate a typed result.
+await plugin.zonedSchedule(...);
+final pending = await plugin.pendingNotificationRequests();
+return pending.any((request) => request.id == expectedId)
+    ? const ReminderScheduleResult(status: ReminderScheduleStatus.scheduled)
+    : const ReminderScheduleResult(
+        status: ReminderScheduleStatus.pendingVerificationFailed,
+      );
+```

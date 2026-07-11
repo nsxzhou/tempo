@@ -327,6 +327,12 @@ final notificationCapabilityProvider = FutureProvider<NotificationCapability>((
   return ref.watch(notificationServiceProvider).capability();
 });
 
+final reminderDiagnosticsProvider = FutureProvider<ReminderDiagnostics>((
+  ref,
+) async {
+  return ref.watch(notificationServiceProvider).diagnostics();
+});
+
 // ── TextParseService ──
 
 final textParseServiceProvider = Provider<TextParseService>((ref) {

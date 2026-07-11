@@ -218,9 +218,10 @@ class TaskCreationOrchestrator {
         recurrenceCount: fields.recurrenceCount,
         durationMin: fields.durationMin,
       );
-      final reminderFuture = _notificationService.scheduleTaskReminder(task);
-      _showSuccess(task, voice: false);
-      await reminderFuture;
+      final reminderResult = await _notificationService.scheduleTaskReminder(
+        task,
+      );
+      _showSuccess(task, voice: false, reminderResult: reminderResult);
 
       if (!input.skipParse && resolved == null) {
         _markEnhancementPending(task.id);
@@ -248,9 +249,10 @@ class TaskCreationOrchestrator {
   Future<void> _runVoiceCreate(VoiceTaskParseResult result) async {
     try {
       final task = await _repository.createVoiceTask(result);
-      final reminderFuture = _notificationService.scheduleTaskReminder(task);
-      _showSuccess(task, voice: true);
-      await reminderFuture;
+      final reminderResult = await _notificationService.scheduleTaskReminder(
+        task,
+      );
+      _showSuccess(task, voice: true, reminderResult: reminderResult);
     } catch (e) {
       _showFailure(e);
     }
@@ -408,10 +410,17 @@ class TaskCreationOrchestrator {
     _aiEnhancementTracker?.markFailed(taskId);
   }
 
-  void _showSuccess(Task task, {required bool voice}) {
+  void _showSuccess(
+    Task task, {
+    required bool voice,
+    required ReminderScheduleResult reminderResult,
+  }) {
     final prefix = voice ? '已创建语音任务' : '已创建';
+    final reminderWarning = reminderResult.needsAttention
+        ? '；任务已保存，但提醒设置失败，请打开提醒诊断'
+        : '';
     _showSnackbar(
-      message: '$prefix:${task.title}',
+      message: '$prefix:${task.title}$reminderWarning',
       undoLabel: '撤回',
       onUndo: () async {
         await _repository.deleteTask(task.id);

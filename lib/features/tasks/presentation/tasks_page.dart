@@ -122,25 +122,6 @@ class _TasksPageState extends ConsumerState<TasksPage>
                             onChanged: _onSearchChanged,
                           ),
                         ),
-                        SliverToBoxAdapter(
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 16),
-                              child: TextButton.icon(
-                                key: const ValueKey(
-                                  'reminder-diagnostics-button',
-                                ),
-                                onPressed: _showReminderDiagnostics,
-                                icon: const Icon(
-                                  LucideIcons.activity,
-                                  size: 15,
-                                ),
-                                label: const Text('提醒诊断'),
-                              ),
-                            ),
-                          ),
-                        ),
                         if (showNotificationWarning)
                           SliverToBoxAdapter(
                             child: _NotificationPermissionBanner(

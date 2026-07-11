@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 8
-- **Last Active**: 2026-07-10
+- **Total Sessions**: 9
+- **Last Active**: 2026-07-11
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~284 | Active |
+| `journal-1.md` | ~326 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 9 | 2026-07-11 | 修复 Android 本地待办提醒闭环 | `a81f4e5` | `main` |
 | 8 | 2026-07-10 | 将提醒系统改为完全本地通知 | `196e32d`, `02eac7a`, `3a4ea83` | `main` |
 | 7 | 2026-07-10 | 修复 FCM 注册失败兜底 | `1421370` | `main` |
 | 6 | 2026-07-10 | 修复 Android 云端任务提醒 | `a32e43d`, `eea1314` | `main` |

@@ -45,8 +45,7 @@ class TaskOccurrence {
       effectiveDue: effectiveDue ?? this.effectiveDue,
       title: title ?? this.title,
       state: state ?? this.state,
-      completedAt:
-          clearCompletedAt ? null : (completedAt ?? this.completedAt),
+      completedAt: clearCompletedAt ? null : (completedAt ?? this.completedAt),
     );
   }
 }
@@ -140,7 +139,7 @@ class TaskOccurrenceView {
     if (isSeriesEnded) {
       return seriesTask.copyWith(
         clearDueDate: true,
-        isCompleted: false,
+        isCompleted: true,
         clearCompletedAt: true,
       );
     }
@@ -150,9 +149,7 @@ class TaskOccurrenceView {
       dueDate: occ.effectiveDue,
       title: occ.title,
       isCompleted: completed,
-      completedAt: completed
-          ? (occ.completedAt ?? occ.effectiveDue)
-          : null,
+      completedAt: completed ? (occ.completedAt ?? occ.effectiveDue) : null,
     );
   }
 
@@ -162,8 +159,8 @@ class TaskOccurrenceView {
 /// 重复系列是否已结束（`recurrenceEnd` 当天仍算有效，次日起视为已结束）。
 extension TaskRecurrenceLifecycle on Task {
   bool isRecurrenceEnded(DateTime now) {
-    if (!isRecurring || recurrenceEnd == null) return false;
-    final endDay = RecurrenceEngine.calendarDay(recurrenceEnd!);
+    final endDay = const RecurrenceEngine().seriesEndDate(this);
+    if (endDay == null) return false;
     final today = RecurrenceEngine.calendarDay(now);
     return today.isAfter(endDay);
   }

@@ -22,23 +22,17 @@ class TaskListBuilder {
       if (task.isRecurring) {
         final taskExceptions = exceptions.forTask(task.id, (e) => e.taskId);
         final taskCompletions = completions.forTask(task.id, (c) => c.taskId);
-        final next = _engine.nextCompletableOccurrence(
-          task,
-          exceptions: taskExceptions,
-          completions: taskCompletions,
-          now: current,
-        );
-        if (next != null) {
-          views.add(TaskOccurrenceView(seriesTask: task, occurrence: next));
-        } else if (task.isRecurrenceEnded(current)) {
+        final ended = task.isRecurrenceEnded(current);
+        if (ended) {
+          final endDate =
+              _engine.seriesEndDate(task) ??
+              RecurrenceEngine.calendarDay(current);
           views.add(
             TaskOccurrenceView(
               seriesTask: task,
               occurrence: TaskOccurrence(
                 seriesTaskId: task.id,
-                occurrenceDate: RecurrenceEngine.calendarDay(
-                  task.recurrenceEnd!,
-                ),
+                occurrenceDate: endDate,
                 effectiveDue: null,
                 title: task.title,
               ),
@@ -46,17 +40,27 @@ class TaskListBuilder {
             ),
           );
         } else {
-          // 今日已打完卡：在「全部」列表的已完成区展示，便于发现重复系列并删除。
-          final todayView = resolveOccurrenceView(
-            task: task,
-            contextDate: current,
-            completions: taskCompletions,
+          final next = _engine.nextCompletableOccurrence(
+            task,
             exceptions: taskExceptions,
+            completions: taskCompletions,
             now: current,
           );
-          if (todayView != null &&
-              todayView.occurrence.state == OccurrenceState.completed) {
-            views.add(todayView);
+          if (next != null) {
+            views.add(TaskOccurrenceView(seriesTask: task, occurrence: next));
+          } else {
+            // 今日已打完卡：在「全部」列表的已完成区展示，便于发现重复系列并删除。
+            final todayView = resolveOccurrenceView(
+              task: task,
+              contextDate: current,
+              completions: taskCompletions,
+              exceptions: taskExceptions,
+              now: current,
+            );
+            if (todayView != null &&
+                todayView.occurrence.state == OccurrenceState.completed) {
+              views.add(todayView);
+            }
           }
         }
       } else {
@@ -90,7 +94,11 @@ class TaskListBuilder {
     int monthPadding = 3,
   }) {
     final from = DateTime(centerDate.year, centerDate.month - monthPadding, 1);
-    final to = DateTime(centerDate.year, centerDate.month + monthPadding + 1, 0);
+    final to = DateTime(
+      centerDate.year,
+      centerDate.month + monthPadding + 1,
+      0,
+    );
     final index = <DateTime, List<CalendarTaskEntry>>{};
 
     for (final task in tasks) {
@@ -105,34 +113,42 @@ class TaskListBuilder {
         );
         for (final occ in occs) {
           final day = occ.calendarDay;
-          index.putIfAbsent(day, () => []).add(
-            CalendarTaskEntry(
-              task: task,
-              occurrence: occ,
-              isRecurring: true,
-            ),
-          );
+          index
+              .putIfAbsent(day, () => [])
+              .add(
+                CalendarTaskEntry(
+                  task: task,
+                  occurrence: occ,
+                  isRecurring: true,
+                ),
+              );
         }
       } else if (task.dueDate != null) {
         final day = RecurrenceEngine.calendarDay(task.dueDate!);
         if (!day.isBefore(from) && !day.isAfter(to)) {
-          index.putIfAbsent(day, () => []).add(
-            CalendarTaskEntry(
-              task: task,
-              occurrence: TaskOccurrence(
-                seriesTaskId: task.id,
-                occurrenceDate: day,
-                effectiveDue: task.dueDate,
-                title: task.title,
-                state: task.isCompleted
-                    ? OccurrenceState.completed
-                    : (day.isBefore(RecurrenceEngine.calendarDay(now ?? DateTime.now()))
-                        ? OccurrenceState.missed
-                        : OccurrenceState.pending),
-              ),
-              isRecurring: false,
-            ),
-          );
+          index
+              .putIfAbsent(day, () => [])
+              .add(
+                CalendarTaskEntry(
+                  task: task,
+                  occurrence: TaskOccurrence(
+                    seriesTaskId: task.id,
+                    occurrenceDate: day,
+                    effectiveDue: task.dueDate,
+                    title: task.title,
+                    state: task.isCompleted
+                        ? OccurrenceState.completed
+                        : (day.isBefore(
+                                RecurrenceEngine.calendarDay(
+                                  now ?? DateTime.now(),
+                                ),
+                              )
+                              ? OccurrenceState.missed
+                              : OccurrenceState.pending),
+                  ),
+                  isRecurring: false,
+                ),
+              );
         }
       }
     }

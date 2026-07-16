@@ -26,6 +26,37 @@ void main() {
     );
   }
 
+  test('seriesEndDate uses recurrenceEnd as inclusive boundary', () {
+    final task = dailyTask(
+      due: DateTime(2026, 7, 10, 20),
+      end: DateTime(2026, 7, 15),
+    );
+
+    expect(engine.seriesEndDate(task), DateTime(2026, 7, 15));
+    expect(task.isRecurrenceEnded(DateTime(2026, 7, 15, 23)), isFalse);
+    expect(task.isRecurrenceEnded(DateTime(2026, 7, 16)), isTrue);
+  });
+
+  test('seriesEndDate uses last occurrence for recurrenceCount', () {
+    final task = dailyTask(
+      due: DateTime(2026, 7, 10, 20),
+      rule: 'FREQ=DAILY;INTERVAL=2;COUNT=3',
+      count: 3,
+    );
+
+    expect(engine.seriesEndDate(task), DateTime(2026, 7, 14));
+    expect(task.isRecurrenceEnded(DateTime(2026, 7, 14)), isFalse);
+    expect(task.isRecurrenceEnded(DateTime(2026, 7, 15)), isTrue);
+  });
+
+  test('seriesEndDate is null for unlimited and invalid recurrence', () {
+    expect(engine.seriesEndDate(dailyTask()), isNull);
+    expect(
+      engine.seriesEndDate(dailyTask(rule: 'not-a-valid-rule', count: 3)),
+      isNull,
+    );
+  });
+
   test('expandOccurrences daily for 5 days', () {
     final task = dailyTask(due: DateTime(2026, 6, 1, 20));
     final occs = engine.expandOccurrences(
@@ -169,38 +200,44 @@ void main() {
     expect(next?.state, OccurrenceState.pending);
   });
 
-  test('nextCompletableOccurrence does not return tomorrow after today done', () {
-    final task = dailyTask(due: DateTime(2026, 7, 1, 20));
-    final next = engine.nextCompletableOccurrence(
-      task,
-      completions: [
-        TaskCompletion(
-          taskId: task.id,
-          occurrenceDate: DateTime(2026, 7, 1),
-          completedAt: DateTime(2026, 7, 1, 11),
-        ),
-      ],
-      now: DateTime(2026, 7, 1, 12),
-    );
-    expect(next, isNull);
-  });
+  test(
+    'nextCompletableOccurrence does not return tomorrow after today done',
+    () {
+      final task = dailyTask(due: DateTime(2026, 7, 1, 20));
+      final next = engine.nextCompletableOccurrence(
+        task,
+        completions: [
+          TaskCompletion(
+            taskId: task.id,
+            occurrenceDate: DateTime(2026, 7, 1),
+            completedAt: DateTime(2026, 7, 1, 11),
+          ),
+        ],
+        now: DateTime(2026, 7, 1, 12),
+      );
+      expect(next, isNull);
+    },
+  );
 
-  test('nextCompletableOccurrence returns earliest missed day for backfill', () {
-    final task = dailyTask(due: DateTime(2026, 6, 1, 20));
-    final next = engine.nextCompletableOccurrence(
-      task,
-      completions: [
-        TaskCompletion(
-          taskId: task.id,
-          occurrenceDate: DateTime(2026, 6, 30),
-          completedAt: DateTime(2026, 7, 1, 9),
-        ),
-      ],
-      now: DateTime(2026, 7, 1, 12),
-    );
-    expect(next?.occurrenceDate, DateTime(2026, 7, 1));
-    expect(next?.state, OccurrenceState.pending);
-  });
+  test(
+    'nextCompletableOccurrence returns earliest missed day for backfill',
+    () {
+      final task = dailyTask(due: DateTime(2026, 6, 1, 20));
+      final next = engine.nextCompletableOccurrence(
+        task,
+        completions: [
+          TaskCompletion(
+            taskId: task.id,
+            occurrenceDate: DateTime(2026, 6, 30),
+            completedAt: DateTime(2026, 7, 1, 9),
+          ),
+        ],
+        now: DateTime(2026, 7, 1, 12),
+      );
+      expect(next?.occurrenceDate, DateTime(2026, 7, 1));
+      expect(next?.state, OccurrenceState.pending);
+    },
+  );
 
   test('nextCompletableOccurrence prefers today over past missed', () {
     final task = dailyTask(due: DateTime(2026, 6, 1, 20));

@@ -78,7 +78,11 @@ TaskFilterSnapshot buildTaskFilterSnapshot({
   }
 
   return TaskFilterSnapshot(
-    scopeCounts: TaskScopeCounts.from(searched, now: now, completions: completions),
+    scopeCounts: TaskScopeCounts.from(
+      searched,
+      now: now,
+      completions: completions,
+    ),
     groups: TaskListGroups(active: active, completed: completed),
   );
 }
@@ -98,7 +102,8 @@ bool matchesTaskScope(
   final due = task.dueDate;
   final ended = task.isRecurrenceEnded(now);
   // 判断重复任务今日是否已完成
-  final effectivelyCompleted = task.isCompleted ||
+  final effectivelyCompleted =
+      task.isCompleted ||
       _isRecurringTaskCompletedToday(
         task: task,
         completions: completions,
@@ -381,6 +386,8 @@ class TaskListSection extends ConsumerWidget {
               separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final task = completed[index];
+                final raw = taskMap[task.id];
+                final now = DateTime.now();
                 return RepaintBoundary(
                   child: TaskTile(
                     key: ValueKey('task-${task.id}'),
@@ -391,6 +398,7 @@ class TaskListSection extends ConsumerWidget {
                     onDelete: () => onDelete(task),
                     backgroundImagePath: backgrounds[task.id]?.imagePath,
                     aiEnhancementStatus: aiEnhancementState[task.id],
+                    showEnded: raw?.isRecurrenceEnded(now) ?? false,
                   ),
                 );
               },

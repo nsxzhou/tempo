@@ -32,24 +32,27 @@ void main() {
     expect(view.displayTask.isCompleted, isFalse);
   });
 
-  test('resolveOccurrenceView returns completed state when completion exists', () {
-    final task = dailyTask();
-    final view = builder.resolveOccurrenceView(
-      task: task,
-      contextDate: DateTime(2026, 6, 30),
-      completions: [
-        TaskCompletion(
-          taskId: task.id,
-          occurrenceDate: DateTime(2026, 6, 30),
-          completedAt: DateTime(2026, 7, 1, 9),
-        ),
-      ],
-      now: DateTime(2026, 7, 1),
-    );
+  test(
+    'resolveOccurrenceView returns completed state when completion exists',
+    () {
+      final task = dailyTask();
+      final view = builder.resolveOccurrenceView(
+        task: task,
+        contextDate: DateTime(2026, 6, 30),
+        completions: [
+          TaskCompletion(
+            taskId: task.id,
+            occurrenceDate: DateTime(2026, 6, 30),
+            completedAt: DateTime(2026, 7, 1, 9),
+          ),
+        ],
+        now: DateTime(2026, 7, 1),
+      );
 
-    expect(view!.occurrence.state, OccurrenceState.completed);
-    expect(view.displayTask.isCompleted, isTrue);
-  });
+      expect(view!.occurrence.state, OccurrenceState.completed);
+      expect(view.displayTask.isCompleted, isTrue);
+    },
+  );
 
   test('resolveOccurrenceView returns null when day is not scheduled', () {
     final task = dailyTask(
@@ -84,7 +87,11 @@ void main() {
       final occs = builder.buildSeriesOccurrences(
         task: task,
         completions: [
-          for (final d in [DateTime(2026, 6, 1), DateTime(2026, 6, 3), DateTime(2026, 6, 5)])
+          for (final d in [
+            DateTime(2026, 6, 1),
+            DateTime(2026, 6, 3),
+            DateTime(2026, 6, 5),
+          ])
             TaskCompletion(
               taskId: task.id,
               occurrenceDate: d,
@@ -111,22 +118,68 @@ void main() {
     });
   });
 
-  test('buildListViews shows today-completed recurring task for visibility', () {
-    final task = dailyTask(due: DateTime(2026, 7, 1, 20));
-    final views = builder.buildListViews(
-      tasks: [task],
-      completions: [
-        TaskCompletion(
-          taskId: task.id,
-          occurrenceDate: DateTime(2026, 7, 1),
-          completedAt: DateTime(2026, 7, 1, 11),
-        ),
-      ],
-      now: DateTime(2026, 7, 1, 12),
-    );
-    expect(views, hasLength(1));
-    expect(views.single.displayTask.isCompleted, isTrue);
-  });
+  test(
+    'ended date series projects completed status while keeping missed occurrence facts',
+    () {
+      final task = dailyTask(
+        due: DateTime(2026, 7, 15, 20),
+      ).copyWith(recurrenceEnd: DateTime(2026, 7, 15));
+      final views = builder.buildListViews(
+        tasks: [task],
+        now: DateTime(2026, 7, 16, 12),
+      );
+
+      expect(views, hasLength(1));
+      expect(views.single.isSeriesEnded, isTrue);
+      expect(views.single.displayTask.isCompleted, isTrue);
+
+      final lastOccurrence = builder.resolveOccurrenceView(
+        task: task,
+        contextDate: DateTime(2026, 7, 15),
+        now: DateTime(2026, 7, 16, 12),
+      );
+      expect(lastOccurrence?.occurrence.state, OccurrenceState.missed);
+    },
+  );
+
+  test(
+    'ended count series does not remain overdue after last missed occurrence',
+    () {
+      final task = dailyTask(due: DateTime(2026, 7, 10, 20)).copyWith(
+        recurrenceRule: 'FREQ=DAILY;INTERVAL=2;COUNT=3',
+        recurrenceCount: 3,
+      );
+      final views = builder.buildListViews(
+        tasks: [task],
+        now: DateTime(2026, 7, 15, 12),
+      );
+
+      expect(views, hasLength(1));
+      expect(views.single.isSeriesEnded, isTrue);
+      expect(views.single.occurrence.occurrenceDate, DateTime(2026, 7, 14));
+      expect(views.single.displayTask.isCompleted, isTrue);
+    },
+  );
+
+  test(
+    'buildListViews shows today-completed recurring task for visibility',
+    () {
+      final task = dailyTask(due: DateTime(2026, 7, 1, 20));
+      final views = builder.buildListViews(
+        tasks: [task],
+        completions: [
+          TaskCompletion(
+            taskId: task.id,
+            occurrenceDate: DateTime(2026, 7, 1),
+            completedAt: DateTime(2026, 7, 1, 11),
+          ),
+        ],
+        now: DateTime(2026, 7, 1, 12),
+      );
+      expect(views, hasLength(1));
+      expect(views.single.displayTask.isCompleted, isTrue);
+    },
+  );
 
   test('buildListViews shows unlimited task when today is still pending', () {
     final task = dailyTask(due: DateTime(2026, 7, 1, 20));

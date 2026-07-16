@@ -19,11 +19,7 @@ class TaskDetailPage extends ConsumerStatefulWidget {
   final String taskId;
   final DateTime? occurrenceDate;
 
-  const TaskDetailPage({
-    super.key,
-    required this.taskId,
-    this.occurrenceDate,
-  });
+  const TaskDetailPage({super.key, required this.taskId, this.occurrenceDate});
 
   @override
   ConsumerState<TaskDetailPage> createState() => _TaskDetailPageState();
@@ -248,7 +244,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                       ),
                     )
                   else if (!task.isRecurring ||
-                      !task.isRecurrenceEnded(DateTime.now()))
+                      (recurringView != null && !recurringView.isSeriesEnded))
                     TaskDetailCompleteButton(
                       task: displayTask,
                       isSaving: _isSaving,

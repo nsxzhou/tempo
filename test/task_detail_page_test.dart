@@ -136,6 +136,42 @@ void main() {
     await repository.dispose();
   });
 
+  testWidgets(
+    'ended recurring detail can backfill a selected missed occurrence',
+    (tester) async {
+      final repository = FakeTaskRepository();
+      final now = DateTime.now();
+      final yesterday = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).subtract(const Duration(days: 1));
+      final task = await repository.createTask(
+        title: '结束后补卡',
+        dueDate: yesterday.subtract(const Duration(days: 2)),
+        isAllDay: true,
+        recurrenceRule: 'FREQ=DAILY;INTERVAL=1',
+        recurrenceEnd: yesterday,
+      );
+
+      await _pumpDetailPage(
+        tester,
+        repository: repository,
+        task: task,
+        occurrenceDate: yesterday,
+      );
+
+      await tester.ensureVisible(find.text('标记完成'));
+      await tester.tap(find.text('标记完成'));
+      await tester.pumpAndSettle();
+
+      expect(repository.occurrenceToggles, hasLength(1));
+      expect(repository.occurrenceToggles.single.occurrenceDate, yesterday);
+      expect(repository.occurrenceToggles.single.complete, isTrue);
+      await repository.dispose();
+    },
+  );
+
   testWidgets('ended recurring detail hides complete and end actions', (
     tester,
   ) async {

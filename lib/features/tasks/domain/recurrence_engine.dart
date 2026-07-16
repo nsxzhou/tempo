@@ -10,6 +10,33 @@ class RecurrenceEngine {
 
   static DateTime calendarDay(DateTime dt) => date_utils.calendarDay(dt);
 
+  /// 返回有限重复系列的生命周期边界日。
+  ///
+  /// 截止日期沿用产品现有语义：配置的 [Task.recurrenceEnd] 当天仍算有效，
+  /// 因此系列从次日起结束。次数上限则取 RRULE 生成的最后一次 occurrence。
+  /// 无限重复或规则无法解析时返回 null。
+  DateTime? seriesEndDate(Task task) {
+    if (!task.isRecurring || task.dueDate == null) return null;
+    if (task.recurrenceEnd != null) {
+      return calendarDay(task.recurrenceEnd!);
+    }
+
+    final rule = _buildRule(task);
+    if (rule == null) return null;
+    final count = task.recurrenceCount ?? rule.count;
+    if (count == null || count <= 0) return null;
+
+    final start = task.dueDate!.copyWith(isUtc: true);
+    DateTime? last;
+    var generated = 0;
+    for (final instance in rule.getInstances(start: start)) {
+      last = calendarDay(instance.copyWith(isUtc: false));
+      generated++;
+      if (generated >= count) break;
+    }
+    return last;
+  }
+
   /// 在 [from, to] 窗口内展开 occurrence（含例外处理）
   List<TaskOccurrence> expandOccurrences(
     Task task, {
@@ -31,8 +58,7 @@ class RecurrenceEngine {
       for (final e in exceptions) calendarDay(e.exceptionDate): e,
     };
     final completionMap = <DateTime, DateTime>{
-      for (final c in completions)
-        calendarDay(c.occurrenceDate): c.completedAt,
+      for (final c in completions) calendarDay(c.occurrenceDate): c.completedAt,
     };
 
     final anchor = task.dueDate!;
@@ -59,8 +85,9 @@ class RecurrenceEngine {
       final effectiveDue = _effectiveDue(task, day, ex);
       final title = ex?.overrideTitle ?? task.title;
       final state = _stateFor(day, completionMap.keys.toSet(), today);
-      final completedAt =
-          state == OccurrenceState.completed ? completionMap[day] : null;
+      final completedAt = state == OccurrenceState.completed
+          ? completionMap[day]
+          : null;
 
       results.add(
         TaskOccurrence(
@@ -195,8 +222,9 @@ class RecurrenceEngine {
     final scheduled = occurrences
         .where((o) => !o.occurrenceDate.isAfter(today))
         .toList();
-    final completedCount =
-        scheduled.where((o) => o.state == OccurrenceState.completed).length;
+    final completedCount = scheduled
+        .where((o) => o.state == OccurrenceState.completed)
+        .length;
 
     final seriesTotal = task.recurrenceCount;
     var seriesCompleted = 0;
@@ -257,7 +285,9 @@ class RecurrenceEngine {
       final count = task.recurrenceCount;
 
       if (until != null) {
-        final u = until.toUtc();
+        // RRULE 的 start 使用本地日期/时刻数值伪装为 UTC；截止日也必须
+        // 保留本地日历字段并覆盖整天，否则 UTC 转换会让截止日提前一天。
+        final u = DateTime.utc(until.year, until.month, until.day, 23, 59, 59);
         return RecurrenceRule(
           frequency: parsed.frequency,
           interval: parsed.interval,
@@ -293,11 +323,7 @@ class RecurrenceEngine {
     }
   }
 
-  DateTime? _effectiveDue(
-    Task task,
-    DateTime day,
-    RecurrenceException? ex,
-  ) {
+  DateTime? _effectiveDue(Task task, DateTime day, RecurrenceException? ex) {
     if (ex?.overrideDue != null) return ex!.overrideDue;
     final anchor = task.dueDate;
     if (anchor == null) return null;

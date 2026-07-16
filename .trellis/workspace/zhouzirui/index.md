@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 9
-- **Last Active**: 2026-07-11
+- **Total Sessions**: 10
+- **Last Active**: 2026-07-16
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~326 | Active |
+| `journal-1.md` | ~360 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 10 | 2026-07-16 | 修复重复待办结束状态并分步提交 | `520e5ff`, `d355bdb` | `main` |
 | 9 | 2026-07-11 | 修复 Android 本地待办提醒闭环 | `a81f4e5` | `main` |
 | 8 | 2026-07-10 | 将提醒系统改为完全本地通知 | `196e32d`, `02eac7a`, `3a4ea83` | `main` |
 | 7 | 2026-07-10 | 修复 FCM 注册失败兜底 | `1421370` | `main` |

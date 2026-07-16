@@ -548,44 +548,45 @@ void main() {
     await repository.dispose();
   });
 
-  testWidgets('hides notification banner when capabilities are available', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({
-      AppConstants.prefNotificationPermissionExplained: true,
-    });
-    final repository = FakeTaskRepository();
-    repository.tasks.add(
-      Task(
-        id: 'scheduled-task',
-        listId: 'inbox',
-        title: '两分钟后提醒',
-        dueDate: DateTime.now().add(const Duration(minutes: 2)),
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      ),
-    );
-
-    await _pumpTasksPage(
-      tester,
-      repository: repository,
-      session: FakeStreamingVoiceSession(),
-      parseService: FakeTextParseService(),
-      notificationService: _CapabilityNotificationService(
-        const NotificationCapability(
-          notificationsAllowed: true,
-          exactAlarmsAllowed: true,
+  testWidgets(
+    'hides diagnostics banner when capabilities are available with no pending reminders',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({
+        AppConstants.prefNotificationPermissionExplained: true,
+      });
+      final repository = FakeTaskRepository();
+      repository.tasks.add(
+        Task(
+          id: 'scheduled-task',
+          listId: 'inbox',
+          title: '两分钟后提醒',
+          dueDate: DateTime.now().add(const Duration(minutes: 2)),
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
         ),
-      ),
-    );
-    await tester.pump();
+      );
 
-    expect(
-      find.byKey(const ValueKey('notification-permission-banner')),
-      findsNothing,
-    );
-    await repository.dispose();
-  });
+      await _pumpTasksPage(
+        tester,
+        repository: repository,
+        session: FakeStreamingVoiceSession(),
+        parseService: FakeTextParseService(),
+        notificationService: _CapabilityNotificationService(
+          const NotificationCapability(
+            notificationsAllowed: true,
+            exactAlarmsAllowed: true,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('notification-permission-banner')),
+        findsNothing,
+      );
+      await repository.dispose();
+    },
+  );
 }
 
 Future<void> _settleAnimations(WidgetTester tester) async {
@@ -763,6 +764,14 @@ class _CapabilityNotificationService extends _NoopNotificationService {
 
   @override
   Future<NotificationCapability> capability() async => value;
+
+  @override
+  Future<ReminderDiagnostics> diagnostics() async => ReminderDiagnostics(
+    now: DateTime(2026, 7, 15, 12),
+    timezoneName: 'Asia/Shanghai',
+    capability: value,
+    pendingCount: 0,
+  );
 
   @override
   Future<void> openNotificationSettings() async {
